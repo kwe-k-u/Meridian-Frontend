@@ -1,0 +1,54 @@
+@import './styles/fonts.css';
+
+:root {
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --primary-dark: #0B0041;
+  --secondary: #3ADBAD;
+  --brand-orange: #F98910;
+
+  --text: #6b7280;
+  --text-h: #1a1a2e;
+  --bg: #f5f7fa;
+  --border-grey: #D9D9D9;
+
+  --sans: 'Axiforma', system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.5;
+  color-scheme: light;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--sans);
+  color: var(--text-h);
+}
+
+input, button, textarea, select {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+}

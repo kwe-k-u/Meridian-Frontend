@@ -28,25 +28,25 @@ function RequestReset() {
   }
 
   return (
-    <div className="auth-page">
+    <div className="page">
       {loading && <AuthActionLoading primary="Sending reset link" secondary="Please wait" />}
 
 
-      <div className="auth-container">
+      <div className="form-container">
         <div className="auth-top-right">
           <img src={logoWordmark} alt="Meridian" className="auth-logo-wordmark" />
         </div>
 
-        <div className="auth-form-wrap">
+        <div className="form-wrap">
 
           {!sent ? (
             <>
-              <h1 className="auth-title">Forgot password?</h1>
-              <p className="auth-subtitle">
+              <h1 className="title">Forgot password?</h1>
+              <p className="subtitle">
                 No worries. Enter your email and we'll send you a reset link.
               </p>
-                <form className="auth-form" onSubmit={handleSubmit}>
-                  <div className="auth-field">
+                <form className="form" onSubmit={handleSubmit}>
+                  <div className="field">
                     <label htmlFor="email">Email address</label>
                     <input
                       id="email"
@@ -65,15 +65,15 @@ function RequestReset() {
             </>
             ) : (
               <>
-                <p className="auth-subtitle" style={{ marginBottom: 0 }}>
+                <p className="subtitle" style={{ marginBottom: 0 }}>
                   We've sent a password reset link to{' '}
                   <strong>{email}</strong>. Please check your inbox.
                 </p>
-                <p className="auth-subtitle" style={{ marginTop: 16 }}>
+                <p className="subtitle" style={{ marginTop: 16 }}>
                   Didn't receive the email?{' '}
                   <button
                     type="button"
-                    className="auth-link-btn"
+                    className="link-btn"
                     onClick={() => setSent(false)}
                   >
                     Click to resend
@@ -83,8 +83,8 @@ function RequestReset() {
             )}
         </div>
 
-        <p className="auth-toggle">
-          <Link to="/login" className="auth-link-btn">
+        <p className="toggle-text">
+          <Link to="/login" className="link-btn">
             &larr; Back to sign in
           </Link>
         </p>
@@ -122,24 +122,24 @@ function ResetPassword({ token }: { token: string }) {
   }, [done, countdown, navigate])
 
   return (
-    <div className="auth-page">
+    <div className="page">
       {loading && <AuthActionLoading primary="Resetting password" secondary="Please wait" />}
 
 
-      <div className="auth-container">
+      <div className="form-container">
         <div className="auth-top-right">
           <img src={logoWordmark} alt="Meridian" className="auth-logo-wordmark" />
         </div>
 
-        <div className="auth-form-wrap">
+        <div className="form-wrap">
 
           {!done ? (
             <>
-              <h1 className="auth-title">Reset your password</h1>
-              <p className="auth-subtitle">
+              <h1 className="title">Reset your password</h1>
+              <p className="subtitle">
                 We'll send a reset link to the email associated with your account
               </p>
-              <form className="auth-form" onSubmit={handleSubmit}>
+              <form className="form" onSubmit={handleSubmit}>
                 <div className="password-field-group">
                   <PasswordField
                     id="password"
@@ -179,18 +179,18 @@ function ResetPassword({ token }: { token: string }) {
             </>
           ) : (
             <>
-              <h1 className="auth-title">Password reset successful</h1>
-              <p className="auth-subtitle" style={{ marginBottom: 0 }}>
+              <h1 className="title">Password reset successful</h1>
+              <p className="subtitle" style={{ marginBottom: 0 }}>
                 Redirecting to login in{' '}
-                <span className="auth-countdown">{countdown}</span>{' '}secs...
+                <span className="countdown">{countdown}</span>{' '}secs...
               </p>
             </>
           )}
         </div>
 
         {!done && (
-          <p className="auth-toggle">
-            <Link to="/login" className="auth-link-btn">
+          <p className="toggle-text">
+            <Link to="/login" className="link-btn">
               &larr; Back to sign in
             </Link>
           </p>

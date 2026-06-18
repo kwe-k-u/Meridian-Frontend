@@ -2,14 +2,14 @@ import logoWordmark from '../assets/logo/logo_wordmark.svg'
 
 function AuthActionLoading({ primary, secondary }: { primary?: string; secondary?: string }) {
   return (
-    <div className="auth-loading-overlay">
-      <div className="auth-loading-top-right">
-        <img src={logoWordmark} alt="Meridian" className="auth-loading-logo" />
+    <div className="loading-overlay">
+      <div className="loading-top-right">
+        <img src={logoWordmark} alt="Meridian" className="loading-logo" />
       </div>
-      <div className="auth-loading-center">
-        <div className="auth-loading-spinner" />
-        {primary && <p className="auth-loading-primary">{primary}</p>}
-        {secondary && <p className="auth-loading-secondary">{secondary}</p>}
+      <div className="loading-center">
+        <div className="loading-spinner" />
+        {primary && <p className="loading-primary">{primary}</p>}
+        {secondary && <p className="loading-secondary">{secondary}</p>}
       </div>
     </div>
   )

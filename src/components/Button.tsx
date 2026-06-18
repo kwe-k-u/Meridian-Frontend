@@ -8,7 +8,7 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 function Button({ variant = 'primary', className = '', children, ...rest }: Props) {
   return (
     <button
-      className={`auth-button${variant === 'google' ? ' auth-button-google' : ''} ${className}`}
+      className={`btn${variant === 'google' ? ' btn-outline' : ''} ${className}`}
       {...rest}
     >
       {children}

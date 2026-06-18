@@ -16,7 +16,7 @@ function PasswordField({ id, label, value, onChange, onFocus, onBlur, placeholde
   const [visible, setVisible] = useState(false)
 
   return (
-    <div className="auth-field">
+    <div className="field">
       <label htmlFor={id}>{label}</label>
       <div className="password-wrapper">
         <input

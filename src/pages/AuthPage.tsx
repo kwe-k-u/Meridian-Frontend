@@ -69,7 +69,7 @@ function AuthPage() {
   const stepTitles = ['Create account', 'Set up your company workspace', 'Employee info']
 
   return (
-    <div className="auth-page">
+    <div className="page">
       {loading && (
         <AuthActionLoading
           primary={isLogin ? "We're signing you in..." : 'Creating your account'}
@@ -79,28 +79,28 @@ function AuthPage() {
 
       <ImageCarousel compact={mode === 'signup' && step > 1} />
 
-      <div className="auth-container">
+      <div className="form-container">
         <div className="auth-top-right">
           <img src={logoWordmark} alt="Meridian" className="auth-logo-wordmark" />
         </div>
 
         {isLogin ? (
           <>
-            <div className="auth-form-wrap">
-              <h1 className="auth-title">Sign In</h1>
-              <p className="auth-toggle">
+            <div className="form-wrap">
+              <h1 className="title">Sign In</h1>
+              <p className="toggle-text">
                 Don't have an account?{' '}
                 <button
                   type="button"
-                  className="auth-link-btn"
+                  className="link-btn"
                   onClick={() => switchMode('signup')}
                 >
                   Sign up
                 </button>
               </p>
 
-              <form className="auth-form" onSubmit={handleLogin}>
-                <div className="auth-field">
+              <form className="form" onSubmit={handleLogin}>
+                <div className="field">
                   <label htmlFor="login-email">Email address</label>
                   <input
                     id="login-email"
@@ -121,12 +121,12 @@ function AuthPage() {
                   required
                 />
 
-                <div className="auth-options">
-                  <label className="auth-remember">
+                <div className="options-row">
+                  <label className="remember-me">
                     <input type="checkbox" />
                     <span>Remember me</span>
                   </label>
-                  <Link to="/forgot-password" className="auth-forgot">
+                  <Link to="/forgot-password" className="link-forgot">
                     Forgot password?
                   </Link>
                 </div>
@@ -135,7 +135,7 @@ function AuthPage() {
                   Sign in
                 </Button>
 
-                <div className="auth-divider">
+                <div className="divider">
                   <span>or</span>
                 </div>
 
@@ -149,32 +149,32 @@ function AuthPage() {
           </>
         ) : (
           <>
-            <div className="auth-form-wrap">
+            <div className="form-wrap">
               {step > 1 && (
-                <button type="button" className="auth-back-btn" onClick={() => setStep((s) => s - 1)}>
+                <button type="button" className="back-btn" onClick={() => setStep((s) => s - 1)}>
                   Back
                 </button>
               )}
               <div className="step-content" key={step}>
-                <h1 className="auth-title">{stepTitles[step - 1]}</h1>
+                <h1 className="title">{stepTitles[step - 1]}</h1>
 
-                {step === 1 ?( <p className="auth-subtitle">
+                {step === 1 ?( <p className="subtitle">
                   Already have an account?{' '}
                   <button
                     type="button"
-                    className="auth-link-btn"
+                    className="link-btn"
                     onClick={() => switchMode('login')}
                   >
                     Login
                   </button>
                 </p>)
-                :(<p className="auth-subtitle">
+                :(<p className="subtitle">
                   Tell us a little about your business so we can personalise your workspace.
                 </p>)}
 
                 {step === 1 && (
-                  <form className="auth-form" onSubmit={handleNextStep}>
-                    <div className="auth-field">
+                  <form className="form" onSubmit={handleNextStep}>
+                    <div className="field">
                       <label htmlFor="company-email">Work email</label>
                       <input
                         id="company-email"
@@ -190,7 +190,7 @@ function AuthPage() {
                       Create account
                     </Button>
 
-                    <div className="auth-divider">
+                    <div className="divider">
                       <span>or</span>
                     </div>
 
@@ -202,8 +202,8 @@ function AuthPage() {
                 )}
 
                 {step === 2 && (
-                  <form className="auth-form" onSubmit={handleNextStep}>
-                    <div className="auth-field">
+                  <form className="form" onSubmit={handleNextStep}>
+                    <div className="field">
                       <label htmlFor="company-name">Company name</label>
                       <input
                         id="company-name"
@@ -223,7 +223,7 @@ function AuthPage() {
                       placeholder="Select your primary country of operation"
                     />
 
-                    <div className="auth-field">
+                    <div className="field">
                       <label htmlFor="business-type">Business type</label>
                       <select
                         id="business-type"
@@ -245,8 +245,8 @@ function AuthPage() {
                 )}
 
                 {step === 3 && (
-                  <form className="auth-form" onSubmit={handleSignup}>
-                    <div className="auth-field">
+                  <form className="form" onSubmit={handleSignup}>
+                    <div className="field">
                       <label htmlFor="full-name">Full name</label>
                       <input
                         id="full-name"

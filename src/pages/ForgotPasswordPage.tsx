@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import logoWordmark from '../assets/logo/logo_wordmark.svg'
 import PasswordField from '../components/PasswordField'
+import PasswordStrengthCard from '../components/PasswordStrengthCard'
 import Button from '../components/Button'
 import AuthActionLoading from '../components/AuthActionLoading'
 import '../styles/AuthPage.css'
@@ -95,6 +96,8 @@ function RequestReset() {
 function ResetPassword({ token }: { token: string }) {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordFocused, setPasswordFocused] = useState(false)
+  const [confirmFocused, setConfirmFocused] = useState(false)
   const [done, setDone] = useState(false)
   const [loading, setLoading] = useState(false)
   const [countdown, setCountdown] = useState(7)
@@ -137,25 +140,37 @@ function ResetPassword({ token }: { token: string }) {
                 We'll send a reset link to the email associated with your account
               </p>
               <form className="auth-form" onSubmit={handleSubmit}>
-                <PasswordField
-                  id="password"
-                  label="New password"
-                  value={password}
-                  onChange={setPassword}
-                  placeholder="Enter new password"
-                  required
-                  minLength={8}
-                />
+                <div className="password-field-group">
+                  <PasswordField
+                    id="password"
+                    label="New password"
+                    value={password}
+                    onChange={setPassword}
+                    onFocus={() => setPasswordFocused(true)}
+                    onBlur={() => setPasswordFocused(false)}
+                    placeholder="Enter new password"
+                    required
+                    minLength={8}
+                  />
 
-                <PasswordField
-                  id="confirmPassword"
-                  label="Confirm new password"
-                  value={confirmPassword}
-                  onChange={setConfirmPassword}
-                  placeholder="Repeat new password"
-                  required
-                  minLength={8}
-                />
+                  <PasswordStrengthCard password={password} focused={passwordFocused} />
+                </div>
+
+                <div className="password-field-group">
+                  <PasswordField
+                    id="confirmPassword"
+                    label="Confirm new password"
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    onFocus={() => setConfirmFocused(true)}
+                    onBlur={() => setConfirmFocused(false)}
+                    placeholder="Repeat new password"
+                    required
+                    minLength={8}
+                  />
+
+                  <PasswordStrengthCard password={confirmPassword} focused={confirmFocused} match={password} />
+                </div>
 
                 <Button type="submit" disabled={!password || !confirmPassword || password !== confirmPassword || loading}>
                   {loading ? 'Resetting...' : 'Reset password'}

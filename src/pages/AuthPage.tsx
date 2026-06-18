@@ -4,6 +4,7 @@ import logoWordmark from '../assets/logo/logo_wordmark.svg'
 import ImageCarousel from '../components/ImageCarousel'
 import SearchableSelect from '../components/SearchableSelect'
 import PasswordField from '../components/PasswordField'
+import PasswordStrengthCard from '../components/PasswordStrengthCard'
 import GoogleIcon from '../components/GoogleIcon'
 import Button from '../components/Button'
 import AuthActionLoading from '../components/AuthActionLoading'
@@ -25,6 +26,8 @@ function AuthPage() {
   const [fullName, setFullName] = useState('')
   const [signupPassword, setSignupPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordFocused, setPasswordFocused] = useState(false)
+  const [confirmFocused, setConfirmFocused] = useState(false)
 
   const isLogin = mode === 'login'
 
@@ -255,25 +258,37 @@ function AuthPage() {
                       />
                     </div>
 
-                    <PasswordField
-                      id="signup-password"
-                      label="Password"
-                      value={signupPassword}
-                      onChange={setSignupPassword}
-                      placeholder="Create a password"
-                      required
-                      minLength={8}
-                    />
+                    <div className="password-field-group">
+                      <PasswordField
+                        id="signup-password"
+                        label="Password"
+                        value={signupPassword}
+                        onChange={setSignupPassword}
+                        onFocus={() => setPasswordFocused(true)}
+                        onBlur={() => setPasswordFocused(false)}
+                        placeholder="Create a password"
+                        required
+                        minLength={8}
+                      />
 
-                    <PasswordField
-                      id="confirm-password"
-                      label="Confirm password"
-                      value={confirmPassword}
-                      onChange={setConfirmPassword}
-                      placeholder="Repeat your password"
-                      required
-                      minLength={8}
-                    />
+                      <PasswordStrengthCard password={signupPassword} focused={passwordFocused} />
+                    </div>
+
+                    <div className="password-field-group">
+                      <PasswordField
+                        id="confirm-password"
+                        label="Confirm password"
+                        value={confirmPassword}
+                        onChange={setConfirmPassword}
+                        onFocus={() => setConfirmFocused(true)}
+                        onBlur={() => setConfirmFocused(false)}
+                        placeholder="Repeat your password"
+                        required
+                        minLength={8}
+                      />
+
+                      <PasswordStrengthCard password={confirmPassword} focused={confirmFocused} match={signupPassword} />
+                    </div>
 
                     <Button type="submit" disabled={!fullName || !signupPassword || !confirmPassword || signupPassword !== confirmPassword || loading}>
                       {loading ? 'Creating account...' : 'Create account'}

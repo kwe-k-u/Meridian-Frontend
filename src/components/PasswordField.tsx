@@ -5,12 +5,14 @@ interface Props {
   label: string
   value: string
   onChange: (value: string) => void
+  onFocus?: () => void
+  onBlur?: () => void
   placeholder?: string
   required?: boolean
   minLength?: number
 }
 
-function PasswordField({ id, label, value, onChange, placeholder, required, minLength }: Props) {
+function PasswordField({ id, label, value, onChange, onFocus, onBlur, placeholder, required, minLength }: Props) {
   const [visible, setVisible] = useState(false)
 
   return (
@@ -23,6 +25,8 @@ function PasswordField({ id, label, value, onChange, placeholder, required, minL
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onFocus={onFocus}
+          onBlur={onBlur}
           required={required}
           minLength={minLength}
         />

@@ -9,6 +9,8 @@ import GoogleIcon from '../components/GoogleIcon'
 import Button from '../components/Button'
 import AuthActionLoading from '../components/AuthActionLoading'
 import { countries, businessTypes } from '../constants/auth'
+import { ApiService } from '../services/api-service'
+import { signInWithGoogle } from '../services/firebase'
 import '../styles/AuthPage.css'
 
 function AuthPage() {
@@ -28,6 +30,7 @@ function AuthPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordFocused, setPasswordFocused] = useState(false)
   const [confirmFocused, setConfirmFocused] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
 
   const isLogin = mode === 'login'
 
@@ -49,9 +52,16 @@ function AuthPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMessage('')
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    setLoading(false)
+    try {
+      const response = await ApiService.loginUser({ email, password })
+      console.log('Login successful:', response)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to log in.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleNextStep = (e: React.FormEvent) => {
@@ -61,9 +71,38 @@ function AuthPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMessage('')
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    setLoading(false)
+    try {
+      const response = await ApiService.registerCompany({
+        email: companyEmail,
+        company_name: companyName,
+        country,
+        business_type: businessType,
+        username: fullName,
+        password: signupPassword,
+        password_confirmation: confirmPassword,
+      })
+      console.log('Signup successful:', response)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to register company.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setErrorMessage('')
+    setLoading(true)
+    try {
+      const idToken = await signInWithGoogle()
+      const response = await ApiService.googleLogin(idToken)
+      console.log('Google sign-in successful:', response)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to sign in with Google.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const stepTitles = ['Create account', 'Set up your company workspace', 'Employee info']
@@ -107,7 +146,7 @@ function AuthPage() {
                     type="email"
                     placeholder="you@example.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); setErrorMessage('') }}
                     required
                   />
                 </div>
@@ -116,7 +155,7 @@ function AuthPage() {
                   id="login-password"
                   label="Password"
                   value={password}
-                  onChange={setPassword}
+                  onChange={(val) => { setPassword(val); setErrorMessage('') }}
                   placeholder="Enter your password"
                   required
                 />
@@ -131,6 +170,8 @@ function AuthPage() {
                   </Link>
                 </div>
 
+                {errorMessage && <div className="error-message">{errorMessage}</div>}
+
                 <Button type="submit" disabled={loading}>
                   Sign in
                 </Button>
@@ -139,9 +180,9 @@ function AuthPage() {
                   <span>or</span>
                 </div>
 
-                <Button type="button" variant="google">
+                <Button type="button" variant="google" onClick={handleGoogleSignIn}>
                   <GoogleIcon />
-                  Sign in with Google
+                  Continue with Google
                 </Button>
               </form>
             </div>
@@ -194,9 +235,9 @@ function AuthPage() {
                       <span>or</span>
                     </div>
 
-                    <Button type="button" variant="google">
+                    <Button type="button" variant="google" onClick={handleGoogleSignIn}>
                       <GoogleIcon />
-                      Sign in with Google
+                      Continue with Google
                     </Button>
                   </form>
                 )}
@@ -253,7 +294,7 @@ function AuthPage() {
                         type="text"
                         placeholder="John Doe"
                         value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
+                        onChange={(e) => { setFullName(e.target.value); setErrorMessage('') }}
                         required
                       />
                     </div>
@@ -263,7 +304,7 @@ function AuthPage() {
                         id="signup-password"
                         label="Password"
                         value={signupPassword}
-                        onChange={setSignupPassword}
+                        onChange={(val) => { setSignupPassword(val); setErrorMessage('') }}
                         onFocus={() => setPasswordFocused(true)}
                         onBlur={() => setPasswordFocused(false)}
                         placeholder="Create a password"
@@ -279,7 +320,7 @@ function AuthPage() {
                         id="confirm-password"
                         label="Confirm password"
                         value={confirmPassword}
-                        onChange={setConfirmPassword}
+                        onChange={(val) => { setConfirmPassword(val); setErrorMessage('') }}
                         onFocus={() => setConfirmFocused(true)}
                         onBlur={() => setConfirmFocused(false)}
                         placeholder="Repeat your password"
@@ -289,6 +330,8 @@ function AuthPage() {
 
                       <PasswordStrengthCard password={confirmPassword} focused={confirmFocused} match={signupPassword} />
                     </div>
+
+                    {errorMessage && <div className="error-message">{errorMessage}</div>}
 
                     <Button type="submit" disabled={!fullName || !signupPassword || !confirmPassword || signupPassword !== confirmPassword || loading}>
                       {loading ? 'Creating account...' : 'Create account'}

@@ -1,4 +1,5 @@
 @import './styles/fonts.css';
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
 
 :root {
   --primary: #6366f1;
@@ -12,14 +13,14 @@
   --bg: #f5f7fa;
   --border-grey: #D9D9D9;
 
-  --sans: 'Axiforma', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --sans: 'Poppins', 'Axiforma', system-ui, 'Segoe UI', Roboto, sans-serif;
 
   font-family: var(--sans);
   font-size: 16px;
   line-height: 1.5;
   color-scheme: light;
   color: var(--text);
-  background: var(--bg);
+  background: #F4F5F8;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -52,3 +53,35 @@ input, button, textarea, select {
 a {
   color: inherit;
 }
+
+/* ---- Meridian app animations ---- */
+
+@keyframes mpulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .45; transform: scale(.82); }
+}
+
+@keyframes mspin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes mrise {
+  from { transform: translateY(9px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes mbar {
+  from { width: 6%; }
+  to { width: 96%; }
+}
+
+@keyframes mfloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+/* scrollbar styles */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #D9DCE4; border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: #C2C6D2; background-clip: content-box; }
+::-webkit-scrollbar:horizontal { height: 8px; }

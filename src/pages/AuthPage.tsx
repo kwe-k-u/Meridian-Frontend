@@ -96,6 +96,7 @@ function AuthPage() {
     setLoading(true)
     try {
       const idToken = await signInWithGoogle()
+      console.log("Google Id token", idToken);
       const response = await ApiService.googleLogin(idToken)
       console.log('Google sign-in successful:', response)
     } catch (error) {

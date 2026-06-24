@@ -65,11 +65,11 @@ function RequestReset() {
             </>
             ) : (
               <>
-                <p className="subtitle" style={{ marginBottom: 0 }}>
+                <p className="subtitle mb-0">
                   We've sent a password reset link to{' '}
                   <strong>{email}</strong>. Please check your inbox.
                 </p>
-                <p className="subtitle" style={{ marginTop: 16 }}>
+                <p className="subtitle mt-16">
                   Didn't receive the email?{' '}
                   <button
                     type="button"
@@ -180,7 +180,7 @@ function ResetPassword({ token }: { token: string }) {
           ) : (
             <>
               <h1 className="title">Password reset successful</h1>
-              <p className="subtitle" style={{ marginBottom: 0 }}>
+              <p className="subtitle mb-0">
                 Redirecting to login in{' '}
                 <span className="countdown">{countdown}</span>{' '}secs...
               </p>

@@ -1,0 +1,322 @@
+.gim-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  font-family: var(--font-sans);
+}
+
+.gim-card {
+  background: #fff;
+  border-radius: 16px;
+  width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+
+.gim-header {
+  padding: 24px 24px 0;
+}
+
+.gim-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--text-heading);
+}
+
+.gim-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.gim-step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.gim-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.gim-step-dot.active {
+  background: var(--primary);
+}
+
+.gim-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 20px 24px 8px;
+}
+
+.gim-trip-list {
+  overflow-y: auto;
+  padding: 0 12px;
+  flex: 1;
+}
+
+.gim-trip-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border: 1px solid transparent;
+}
+
+.gim-trip-item:hover {
+  background: #F8F9FF;
+  border-color: #E4E9FF;
+}
+
+.gim-trip-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.gim-trip-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.gim-trip-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.gim-trip-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.gim-trip-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.gim-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 24px;
+}
+
+.gim-create-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  margin: 0 12px 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  transition: all 0.15s;
+  width: auto;
+}
+
+.gim-create-btn:hover {
+  background: #F4F7FF;
+  border-color: var(--primary);
+}
+
+.gim-create-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.gim-footer {
+  padding: 12px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.gim-cancel-btn {
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.gim-cancel-btn:hover {
+  background: #F8F9FF;
+}
+
+.gim-empty {
+  text-align: center;
+  padding: 32px 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* --- step 2: questionnaire --- */
+
+.gim-questions {
+  padding: 8px 24px 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.gim-q-group {
+  margin-bottom: 20px;
+}
+
+.gim-q-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin-bottom: 8px;
+}
+
+.gim-q-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gim-q-chip {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.gim-q-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #F4F7FF;
+}
+
+.gim-q-chip.selected {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.gim-q-chip.selected:hover {
+  background: #2455D6;
+  border-color: #2455D6;
+}
+
+.gim-q-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  color: var(--text);
+  resize: vertical;
+  min-height: 72px;
+  box-sizing: border-box;
+}
+
+.gim-q-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.gim-selected-trip-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  margin-bottom: 4px;
+}
+
+.gim-selected-trip-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.gim-selected-trip-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.gim-back-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.gim-back-btn:hover {
+  background: #F8F9FF;
+}
+
+.gim-next-btn {
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: none;
+  background: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+}
+
+.gim-next-btn:hover {
+  background: #2455D6;
+}

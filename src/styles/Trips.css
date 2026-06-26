@@ -1,0 +1,234 @@
+.trips-container {
+  padding: 0 32px;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.filter-pill {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 20px;
+}
+
+.filter-pill:nth-child(1) {
+  background: #EEF0F4;
+  color: #5B6172;
+  border-color: var(--border-light);
+}
+
+.filter-pill:nth-child(1).active {
+  background: #5B6172;
+  color: #fff;
+}
+
+.filter-pill:nth-child(2) {
+  background: #EAF0FF;
+  color: var(--primary);
+  border-color: #C4D2FF;
+}
+
+.filter-pill:nth-child(2).active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.filter-pill:nth-child(3) {
+  background: #FFF3E0;
+  color: #B7791F;
+  border-color: #F5DDB0;
+}
+
+.filter-pill:nth-child(3).active {
+  background: #B7791F;
+  color: #fff;
+}
+
+.filter-pill:nth-child(4) {
+  background: #F0EBFF;
+  color: #6B46C1;
+  border-color: #D4C4F0;
+}
+
+.filter-pill:nth-child(4).active {
+  background: #6B46C1;
+  color: #fff;
+}
+
+.filter-pill:nth-child(5) {
+  background: #E3F7EF;
+  color: #0E9F6E;
+  border-color: #B8E6D4;
+}
+
+.filter-pill:nth-child(5).active {
+  background: #0E9F6E;
+  color: #fff;
+}
+
+.filter-pill:nth-child(6) {
+  background: var(--primary-dark);
+  color: #fff;
+  border-color: #2D2B5E;
+}
+
+.filter-pill:nth-child(6).active {
+  background: #fff;
+  color: var(--primary-dark);
+}
+
+.trips-grid {
+  display: grid;
+  grid-template-columns: 2.4fr 1.3fr 1.4fr 1fr 1fr;
+}
+
+.trips-header {
+  background: var(--bg);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+}
+
+.trips-header-cell {
+  padding: 12px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.trips-header-cell-right {
+  text-align: right;
+}
+
+.trips-row {
+  padding: 12px 16px;
+  cursor: pointer;
+  background: var(--bg-card);
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.trips-row:last-child {
+  border-bottom: none;
+}
+
+.trips-row:hover {
+  background: var(--bg);
+}
+
+.trip-cell {
+  padding: 0 8px;
+}
+
+.trip-name-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+}
+
+.trip-avatar-wrap {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+}
+
+.trip-cover {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-md);
+}
+
+.trip-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 18px;
+}
+
+.trip-text-group {
+  min-width: 0;
+}
+
+.trip-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trip-dates {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trip-traveler-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.trip-traveler-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-heading);
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trip-destination {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trip-status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.trip-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  line-height: 20px;
+  text-align: right;
+}

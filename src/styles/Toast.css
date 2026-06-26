@@ -1,0 +1,22 @@
+.toast-wrapper {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  animation: mrise 0.25s ease-out;
+}
+
+.toast-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--primary-dark);
+  color: #fff;
+  border-radius: var(--radius-lg);
+  padding: 12px 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+}

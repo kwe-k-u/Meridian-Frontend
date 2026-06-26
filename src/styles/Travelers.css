@@ -1,0 +1,33 @@
+.travelers-page {
+  padding: 24px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: var(--font-sans);
+}
+
+.travelers-table-header {
+  grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
+}
+
+.travelers-table-row {
+  grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
+}
+
+.traveler-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0;
+}
+
+.traveler-cell-text {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.traveler-value-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}

@@ -5,6 +5,7 @@ import PasswordField from '../components/PasswordField'
 import PasswordStrengthCard from '../components/PasswordStrengthCard'
 import Button from '../components/Button'
 import AuthActionLoading from '../components/AuthActionLoading'
+import { ApiService } from '../services/api-service'
 import '../styles/AuthPage.css'
 
 function ForgotPasswordPage() {
@@ -19,12 +20,21 @@ function RequestReset() {
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  const [errorMessage, setErrorMessage] = useState('')
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMessage('')
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    setLoading(false)
-    setSent(true)
+    try {
+      await ApiService.requestPasswordReset({ email })
+      sessionStorage.setItem('resetEmail', email)
+      setSent(true)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to request reset link.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -57,6 +67,8 @@ function RequestReset() {
                       required
                     />
                   </div>
+
+                  {errorMessage && <div className="error-message">{errorMessage}</div>}
 
                   <Button type="submit" disabled={!email || loading}>
                     {loading ? 'Sending...' : 'Send Reset Link'}
@@ -100,15 +112,25 @@ function ResetPassword({ token }: { token: string }) {
   const [confirmFocused, setConfirmFocused] = useState(false)
   const [done, setDone] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
   const [countdown, setCountdown] = useState(7)
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMessage('')
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    setLoading(false)
-    setDone(true)
+    try {
+      const email = sessionStorage.getItem('resetEmail')
+      if (!email) throw new Error('Session expired. Please request a new reset link.')
+      await ApiService.resetPassword({ email, token, password , password_confirmation: confirmPassword})
+      sessionStorage.removeItem('resetEmail')
+      setDone(true)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to reset password.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -171,6 +193,8 @@ function ResetPassword({ token }: { token: string }) {
 
                   <PasswordStrengthCard password={confirmPassword} focused={confirmFocused} match={password} />
                 </div>
+
+                {errorMessage && <div className="error-message">{errorMessage}</div>}
 
                 <Button type="submit" disabled={!password || !confirmPassword || password !== confirmPassword || loading}>
                   {loading ? 'Resetting...' : 'Reset password'}

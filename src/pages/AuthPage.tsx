@@ -55,7 +55,7 @@ function AuthPage() {
     setErrorMessage('')
     setLoading(true)
     try {
-      const response = await ApiService.loginUser({ email, password })
+      const response = await ApiService.loginUser({ email, password,  password_confirmation: confirmPassword })
       console.log('Login successful:', response)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to log in.')

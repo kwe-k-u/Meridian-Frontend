@@ -46,6 +46,7 @@ export class ApiService {
   public static async loginUser(loginData: {
     email: string;
     password: string;
+    password_confirmation: string;
   }): Promise<any> {
     const endpoint = `${ApiService.BASE_URL}/auth/login`;
 
@@ -68,7 +69,7 @@ export class ApiService {
 
     try {
       const response = await axios.post(endpoint, { id_token: idToken })
-      
+
       return response.data
     } catch (error) {
       console.error('Error during Google sign-in:', error)
@@ -103,6 +104,8 @@ export class ApiService {
 	email: string;
 	token: string;
 	password: string;
+  password_confirmation: string;
+
   }) : Promise<any> {
 	const endpoint = `${ApiService.BASE_URL}/auth/reset-password`;
 

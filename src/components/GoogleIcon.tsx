@@ -1,3 +1,6 @@
+// ── GoogleIcon ───────────────────────────────────────────────
+// Purpose: Renders the Google logo SVG used inside the Google sign-in button.
+// Props: none
 function GoogleIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">

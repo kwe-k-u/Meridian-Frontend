@@ -1,3 +1,7 @@
+// ── Firebase Service ────────────────────────────────────────
+// Initializes Firebase with env-based config and exposes Google sign-in via popup.
+// Only provides the idToken which is then exchanged with the backend for a JWT.
+
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import {
   getAuth,
@@ -16,6 +20,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
+// ── App Initialization ──
+// Singleton pattern: initializes Firebase once and caches the app instance.
 let app: FirebaseApp | null = null
 
 function getFirebaseApp(): FirebaseApp {
@@ -25,6 +31,8 @@ function getFirebaseApp(): FirebaseApp {
   return app
 }
 
+// ── Google Sign-In ──
+// Opens a Google sign-in popup, requests email+profile scopes, and returns the idToken.
 export async function signInWithGoogle(): Promise<string> {
   const auth = getAuth(getFirebaseApp())
   const provider = new GoogleAuthProvider()

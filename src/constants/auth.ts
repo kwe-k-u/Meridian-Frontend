@@ -1,3 +1,6 @@
+// ── Auth Constants ───────────────────────────────────────────
+// Static data used in auth-related forms: country select and business type select options.
+
 export const countries = [
   'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola',
   'Antigua and Barbuda', 'Argentina', 'Armenia', 'Australia', 'Austria',

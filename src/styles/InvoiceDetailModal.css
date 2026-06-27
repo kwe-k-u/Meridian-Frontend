@@ -1,3 +1,6 @@
+/* ── InvoiceDetailModal ── Styles for the Invoice Detail modal (header, amount card, breakdown, payments, schedule) */
+
+/* ── Backdrop ── */
 .inv-backdrop {
   position: fixed;
   inset: 0;
@@ -10,6 +13,7 @@
   justify-content: center;
 }
 
+/* ── Card Container ── */
 .inv-card {
   width: 100%;
   max-width: 520px;
@@ -21,6 +25,7 @@
   max-height: 90vh;
 }
 
+/* ── Header ── */
 .inv-header {
   display: flex;
   align-items: center;
@@ -77,6 +82,7 @@
   padding: 24px;
 }
 
+/* ── Amount Card & Progress ── */
 .inv-amount-card {
   background: #F4F7FF;
   border-radius: 14px;
@@ -145,6 +151,7 @@
   border-radius: 3px;
 }
 
+/* ── Info Grid (Billed To, Trip) ── */
 .inv-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -238,6 +245,7 @@
   margin: 0 0 12px;
 }
 
+/* ── Line Items Breakdown ── */
 .inv-breakdown {
   margin-bottom: 24px;
 }
@@ -259,6 +267,7 @@
   font-weight: 600;
 }
 
+/* ── Total ── */
 .inv-total-line {
   display: flex;
   justify-content: space-between;
@@ -268,6 +277,7 @@
   color: var(--text-heading);
 }
 
+/* ── Payments ── */
 .inv-payments {
   margin-bottom: 24px;
 }
@@ -311,6 +321,7 @@
   flex-shrink: 0;
 }
 
+/* ── Payment Schedule ── */
 .inv-schedule-item {
   display: flex;
   align-items: center;
@@ -352,6 +363,7 @@
   flex-shrink: 0;
 }
 
+/* ── Footer Buttons ── */
 .inv-footer {
   display: flex;
   gap: 10px;

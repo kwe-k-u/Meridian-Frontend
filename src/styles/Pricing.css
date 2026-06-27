@@ -1,3 +1,6 @@
+/* ── Pricing ── Styles for the Pricing page (current plan, toggle, plan cards, features) */
+
+/* ── Container ── */
 .pricing-container {
   padding: 24px 32px;
   max-width: 1100px;
@@ -5,6 +8,7 @@
   font-family: 'Inter', sans-serif;
 }
 
+/* ── Current Plan Card ── */
 .current-plan-card {
   background: #fff;
   border: 1px solid #ECEDF2;
@@ -53,6 +57,7 @@
   cursor: pointer;
 }
 
+/* ── Plans Heading ── */
 .pricing-heading {
   font-size: 24px;
   font-weight: 700;
@@ -61,6 +66,7 @@
   text-align: center;
 }
 
+/* ── Billing Toggle ── */
 .toggle-row {
   display: flex;
   justify-content: center;
@@ -89,6 +95,7 @@
   cursor: default;
 }
 
+/* ── Plan Cards ── */
 .plans-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -24,6 +24,9 @@ function getStrength(password: string): StrengthInfo {
   return { label: 'Very strong', level: 4, color: '#16a34a' }
 }
 
+// ── PasswordStrengthCard ─────────────────────────────────────
+// Purpose: Displays password strength meter (Weak → Very strong) and optional match indicator.
+// Props: password: string; focused: boolean; match?: string — confirm password to compare
 function PasswordStrengthCard({ password, focused, match }: Props) {
   const strength = getStrength(password)
 

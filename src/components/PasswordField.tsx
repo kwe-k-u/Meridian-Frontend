@@ -12,6 +12,9 @@ interface Props {
   minLength?: number
 }
 
+// ── PasswordField ────────────────────────────────────────────
+// Purpose: Password input with a show/hide toggle button.
+// Props: id, label, value, onChange, onFocus?, onBlur?, placeholder?, required?, minLength?
 function PasswordField({ id, label, value, onChange, onFocus, onBlur, placeholder, required, minLength }: Props) {
   const [visible, setVisible] = useState(false)
 

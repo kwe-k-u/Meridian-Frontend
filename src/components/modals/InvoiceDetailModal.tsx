@@ -2,6 +2,9 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../contexts/AppContext';
 import '../../styles/InvoiceDetailModal.css';
 
+// ── InvoiceDetailModal ───────────────────────────────────────
+// Purpose: Modal showing full invoice details — breakdown, payments, schedule — with action buttons.
+// Props: none (reads invoice ID from AppContext)
 export default function InvoiceDetailModal() {
   const navigate = useNavigate();
   const {

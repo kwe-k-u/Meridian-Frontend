@@ -1,3 +1,8 @@
+// ── AppContext ──────────────────────────────────────────────
+// Global application state context providing modal visibility flags, trip builder data,
+// financial data, channel connection flow, notifications, and various getters for mock data.
+// All state is managed via useState/useCallback with useMemo for the context value.
+
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
 import type {
   BuilderTab, BillingPeriod, ConnectStep, SettingsTab,
@@ -433,6 +438,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const getSettingsTabs = useCallback(() => {
     return [
+      { key: 'profile' as SettingsTab, label: 'Profile' },
       { key: 'workspace' as SettingsTab, label: 'Workspace' },
       { key: 'team' as SettingsTab, label: 'Team' },
       { key: 'roles' as SettingsTab, label: 'Roles' },

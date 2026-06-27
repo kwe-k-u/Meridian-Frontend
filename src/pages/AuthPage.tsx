@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import logoWordmark from '../assets/logo/logo_wordmark.svg'
 import ImageCarousel from '../components/ImageCarousel'
 import SearchableSelect from '../components/SearchableSelect'
@@ -13,7 +14,14 @@ import { ApiService } from '../services/api-service'
 import { signInWithGoogle } from '../services/firebase'
 import '../styles/AuthPage.css'
 
+// ── AuthPage ──────────────────────────────────────────────────
+// Purpose: Login and multi-step signup (company info → profile → password).
+// State: mode (login/signup), step (1-3), form fields, error, loading.
+// API: ApiService.loginUser, ApiService.registerCompany, ApiService.googleLogin.
+
 function AuthPage() {
+  const navigate = useNavigate()
+  const auth = useAuth()
   const [mode, setMode] = useState<'login' | 'signup'>('signup')
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState(1)
@@ -33,6 +41,8 @@ function AuthPage() {
   const [errorMessage, setErrorMessage] = useState('')
 
   const isLogin = mode === 'login'
+
+  // ── Event handlers ──
 
   const resetSignup = () => {
     setStep(1)
@@ -55,8 +65,9 @@ function AuthPage() {
     setErrorMessage('')
     setLoading(true)
     try {
-      const response = await ApiService.loginUser({ email, password,  password_confirmation: confirmPassword })
-      console.log('Login successful:', response)
+      const response = await ApiService.loginUser({ email, password })
+      auth.login(response)
+      navigate('/app/dashboard')
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to log in.')
     } finally {
@@ -83,7 +94,12 @@ function AuthPage() {
         password: signupPassword,
         password_confirmation: confirmPassword,
       })
-      console.log('Signup successful:', response)
+      if (response.access_token) {
+        auth.login(response)
+        navigate('/app/dashboard')
+      } else {
+        navigate('/login')
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to register company.')
     } finally {
@@ -96,9 +112,9 @@ function AuthPage() {
     setLoading(true)
     try {
       const idToken = await signInWithGoogle()
-      console.log("Google Id token", idToken);
       const response = await ApiService.googleLogin(idToken)
-      console.log('Google sign-in successful:', response)
+      auth.login(response)
+      navigate('/app/dashboard')
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to sign in with Google.')
     } finally {
@@ -107,6 +123,8 @@ function AuthPage() {
   }
 
   const stepTitles = ['Create account', 'Set up your company workspace', 'Employee info']
+
+  // ── Render ──
 
   return (
     <div className="page">

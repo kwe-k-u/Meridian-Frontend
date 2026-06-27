@@ -5,6 +5,9 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode
 }
 
+// ── Button ───────────────────────────────────────────────────
+// Purpose: Reusable button with primary and google (outline) variants.
+// Props: variant?: 'primary' | 'google'; children: ReactNode; + all HTML button attrs
 function Button({ variant = 'primary', className = '', children, ...rest }: Props) {
   return (
     <button

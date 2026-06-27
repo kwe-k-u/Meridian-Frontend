@@ -1,3 +1,6 @@
+/* ── Topbar ── Styles for the top navigation bar (title, search, notification actions) */
+
+/* ── Topbar Container ── */
 .topbar {
   height: 68px;
   position: sticky;
@@ -15,6 +18,7 @@
   flex-shrink: 0;
 }
 
+/* ── Title ── */
 .topbar-title {
   min-width: 200px;
 }
@@ -32,6 +36,7 @@
   line-height: 18px;
 }
 
+/* ── Search ── */
 .topbar-search {
   flex: 1;
   display: flex;
@@ -58,6 +63,7 @@
   font-family: var(--font-sans);
 }
 
+/* ── Actions & Notifications ── */
 .topbar-actions {
   display: flex;
   align-items: center;

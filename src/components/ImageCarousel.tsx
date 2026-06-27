@@ -25,6 +25,9 @@ const slides: Slide[] = [
   },
 ]
 
+// ── ImageCarousel ────────────────────────────────────────────
+// Purpose: Auto-rotating hero image carousel with navigation arrows and dots; supports compact mode.
+// Props: compact?: boolean — hides controls and shows first slide only
 function ImageCarousel({ compact }: { compact?: boolean }) {
   const [current, setCurrent] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval>>()

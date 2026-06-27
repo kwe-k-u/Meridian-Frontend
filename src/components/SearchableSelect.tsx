@@ -8,6 +8,9 @@ interface Props {
   placeholder?: string
 }
 
+// ── SearchableSelect ─────────────────────────────────────────
+// Purpose: Combobox-like input with text filtering and dropdown list.
+// Props: label: string; options: string[]; value: string; onChange: (value) => void; placeholder?: string
 function SearchableSelect({ label, options, value, onChange, placeholder }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState(value)

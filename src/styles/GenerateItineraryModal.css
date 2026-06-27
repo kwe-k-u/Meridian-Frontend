@@ -1,3 +1,6 @@
+/* ── GenerateItineraryModal ── Styles for the Generate Itinerary modal (step 1 trip list, step 2 questionnaire) */
+
+/* ── Backdrop ── */
 .gim-backdrop {
   position: fixed;
   inset: 0;
@@ -9,6 +12,7 @@
   font-family: var(--font-sans);
 }
 
+/* ── Card Container ── */
 .gim-card {
   background: #fff;
   border-radius: 16px;
@@ -19,6 +23,7 @@
   box-shadow: 0 20px 60px rgba(0,0,0,0.15);
 }
 
+/* ── Header ── */
 .gim-header {
   padding: 24px 24px 0;
 }
@@ -63,6 +68,7 @@
   padding: 20px 24px 8px;
 }
 
+/* ── Trip List (Step 1) ── */
 .gim-trip-list {
   overflow-y: auto;
   padding: 0 12px;
@@ -163,6 +169,7 @@
   flex-shrink: 0;
 }
 
+/* ── Footer & Buttons ── */
 .gim-footer {
   padding: 12px 24px;
   border-top: 1px solid var(--border);
@@ -193,7 +200,7 @@
   font-size: 13px;
 }
 
-/* --- step 2: questionnaire --- */
+/* ── Questionnaire (Step 2) ── */
 
 .gim-questions {
   padding: 8px 24px 0;
@@ -265,6 +272,7 @@
   border-color: var(--primary);
 }
 
+/* ── Selected Trip Info ── */
 .gim-selected-trip-info {
   display: flex;
   align-items: center;

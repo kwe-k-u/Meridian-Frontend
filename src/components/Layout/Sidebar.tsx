@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import logoM from '../../assets/logo/logo_m.svg';
 import '../../styles/Sidebar.css';
 
@@ -16,14 +17,31 @@ const bottomItems = [
   { label: 'Plans & billing', icon: 'M7 7h10v2l-2 3h2l-3 5h-2l-2-4-2 3H6l3-5H7V7z', path: '/app/pricing' },
 ];
 
+// ── Sidebar ──────────────────────────────────────────────────
+// Purpose: Main navigation sidebar with nav links, bottom items, and user profile section with logout.
+// Props: none (reads auth context for user info)
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth();
 
   const isActive = (path: string) => {
     if (path === '/app/dashboard') return location.pathname === '/app/dashboard';
     return location.pathname.startsWith(path);
   };
+
+  const defaultCompany = user?.companies?.find(c => c.pivot.is_default);
+  const displayName = user?.display_name ?? 'User';
+  const companyName = defaultCompany?.company_name ?? '';
+  const role = defaultCompany?.pivot.role ?? '';
+
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0])
+    .join('')
+    .toUpperCase();
 
   return (
     <div className="sidebar">
@@ -74,14 +92,14 @@ export default function Sidebar() {
         ))}
       </div>
 
-      <div className="sidebar-profile">
+      <div className="sidebar-profile" onClick={logout}>
         <div className="profile-avatar">
-          KA
+          {initials || '?'}
         </div>
         <div className="profile-info">
-          <div className="profile-name">Kweku Ansah</div>
+          <div className="profile-name">{displayName}</div>
           <div className="profile-role">
-            Super admin · Oasis Travel
+            {role ? `${role}${companyName ? ` · ${companyName}` : ''}` : 'Signed in'}
           </div>
         </div>
         <svg className="profile-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

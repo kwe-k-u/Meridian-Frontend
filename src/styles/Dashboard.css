@@ -1,4 +1,4 @@
-/* Dashboard page */
+/* ── Dashboard ── Styles for the dashboard page (view toggle, greeting, onboarding, hero, stats, panels, feed) */
 .dashboard-page {
   padding: 32px 40px;
   max-width: 1280px;
@@ -7,6 +7,7 @@
   color: #15161B;
 }
 
+/* ── View Toggle ── */
 .dashboard-view-toggle {
   display: flex;
   align-items: center;
@@ -36,6 +37,7 @@
   font-weight: 600;
 }
 
+/* ── Greeting ── */
 .dashboard-greeting {
   font-size: 28px;
   font-weight: 700;
@@ -43,6 +45,7 @@
   letter-spacing: -0.3px;
 }
 
+/* ── Onboarding Cards ── */
 .dashboard-onboard-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -129,6 +132,7 @@
   cursor: pointer;
 }
 
+/* ── Progress Section ── */
 .dashboard-progress-section {
   margin-bottom: 28px;
 }
@@ -166,6 +170,7 @@
   transition: width 0.4s;
 }
 
+/* ── Workspace Tours ── */
 .dashboard-works-title {
   font-size: 20px;
   font-weight: 700;
@@ -231,6 +236,7 @@
   color: #fff;
 }
 
+/* ── Hero Section ── */
 .dashboard-hero-section {
   border-radius: 16px;
   overflow: hidden;
@@ -273,6 +279,7 @@
   cursor: pointer;
 }
 
+/* ── Stats Grid ── */
 .dashboard-stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -306,6 +313,7 @@
   font-weight: 500;
 }
 
+/* ── Activity Panels ── */
 .dashboard-panels {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -1,3 +1,6 @@
+/* ── Sidebar ── Styles for the main navigation sidebar (logo, nav items, profile) */
+
+/* ── Sidebar Container ── */
 .sidebar {
   width: 248px;
   height: 100vh;
@@ -11,6 +14,7 @@
   font-family: var(--font-sans);
 }
 
+/* ── Top Section (Logo) ── */
 .sidebar-top {
   padding: 24px 20px 0;
 }
@@ -34,6 +38,7 @@
   color: var(--text-heading);
 }
 
+/* ── Navigation ── */
 .sidebar-nav {
   display: flex;
   flex-direction: column;
@@ -86,6 +91,7 @@
   min-height: 0;
 }
 
+/* ── Bottom Items ── */
 .sidebar-bottom {
   padding: 0 20px;
   margin-bottom: 8px;
@@ -105,6 +111,7 @@
   transition: all 0.15s;
 }
 
+/* ── Profile Section ── */
 .sidebar-profile {
   margin: 0 14px 14px;
   padding: 10px 12px;

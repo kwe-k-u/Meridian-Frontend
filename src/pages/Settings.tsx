@@ -1,133 +1,324 @@
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext'
-import type { SettingsTab } from '../types/app'
+import { useAuth } from '../contexts/AuthContext'
+import { ApiService } from '../services/api-service'
+import type { SettingsTab, CompanyResponse, CompanyUser } from '../types/app'
 import '../styles/Settings.css'
+
+// ── Settings ───────────────────────────────────────────────────
+// Purpose: Tabbed settings page with Profile, Workspace, Team & Seats,
+//          Roles, Channels, and Notification sub-panels.
+// State: displayName, phone, saving (in EditProfile); company/team from API.
+// API: updateProfile (AuthContext), getCompany/updateCompany, sendInvitation.
+
+const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
+  { key: 'profile', label: 'Profile' },
+  { key: 'workspace', label: 'Workspace' },
+  { key: 'team', label: 'Team & Seats' },
+  { key: 'roles', label: 'Roles' },
+  { key: 'channels', label: 'Channels' },
+  { key: 'notifications', label: 'Notifications' },
+];
+
+// ── TabBar ─────────────────────────────────────────────────────
 
 function TabBar({ currentTab }: { currentTab: SettingsTab }) {
   const navigate = useNavigate();
-  const ctx = useApp()
-  const settingsTabs = ctx.getSettingsTabs()
-
   return (
     <div className="tab-bar">
-      {settingsTabs.map((t) => (
-        <button key={t.key} className={`tab-btn${currentTab === t.key ? ' active' : ''}`} onClick={() => navigate('/app/settings/' + t.key)}>
+      {SETTINGS_TABS.map((t) => (
+        <button
+          key={t.key}
+          className={`tab-btn${currentTab === t.key ? ' active' : ''}`}
+          onClick={() => navigate('/app/settings/' + t.key)}
+        >
           {t.label}
         </button>
       ))}
     </div>
-  )
+  );
 }
 
+// ── Workspace ──────────────────────────────────────────────────
+// Fetches the user's default company and allows updating name/country/city.
+
 function Workspace() {
+  const { user } = useAuth();
+  const { toastAction } = useApp();
+
+  const defaultCompany: CompanyResponse | null = useMemo(() => {
+    if (!user?.companies?.length) return null;
+    const def = user.companies.find(c => c.pivot.is_default) ?? user.companies[0];
+    return def as unknown as CompanyResponse;
+  }, [user]);
+
+  const [loading, setLoading] = useState(true);
+  const [company, setCompany] = useState<CompanyResponse | null>(null);
+  const [name, setName] = useState('');
+  const [country, setCountry] = useState('');
+  const [city, setCity] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!defaultCompany) { setLoading(false); return; }
+    ApiService.getCompany(defaultCompany.company_id)
+      .then(c => { setCompany(c); setName(c.company_name); setCountry(c.country ?? ''); setCity(c.city_of_operation ?? ''); })
+      .catch(() => toastAction('Failed to load company'))
+      .finally(() => setLoading(false));
+  }, [defaultCompany]);
+
+  const handleSave = async () => {
+    if (!company) return;
+    setSaving(true);
+    try {
+      const updated = await ApiService.updateCompany(company.company_id, {
+        company_name: name,
+        country: country || undefined,
+        city_of_operation: city || undefined,
+      });
+      setCompany(updated);
+      toastAction('Company settings saved');
+    } catch {
+      toastAction('Failed to save company settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="settings-section"><p>Loading workspace settings...</p></div>;
+  if (!company) return <div className="settings-section"><p>No company found. Contact support.</p></div>;
+
   return (
     <div className="settings-section">
-      <div className="logo-area">Upload logo</div>
       <div className="field-row">
         <label className="field-label">Company name</label>
-        <input className="field-input" defaultValue="Oasis Travel Agency" />
-      </div>
-      <div className="field-row">
-        <label className="field-label">Company URL</label>
-        <input className="field-input" defaultValue="oasistravel.com" />
+        <input className="field-input" value={name} onChange={e => setName(e.target.value)} />
       </div>
       <div className="row-2">
         <div className="field-row">
-          <label className="field-label">Region</label>
-          <select className="field-select" defaultValue="Africa">
-            <option>Africa</option>
-            <option>Europe</option>
-            <option>Asia</option>
-            <option>Americas</option>
-          </select>
+          <label className="field-label">Country / Region</label>
+          <input className="field-input" value={country} onChange={e => setCountry(e.target.value)} placeholder="e.g. Ghana" />
         </div>
         <div className="field-row">
-          <label className="field-label">Currency</label>
-          <select className="field-select" defaultValue="GHS">
-            <option>GHS</option>
-            <option>USD</option>
-            <option>EUR</option>
-            <option>GBP</option>
-          </select>
-        </div>
-      </div>
-      <div className="row-2">
-        <div className="field-row">
-          <label className="field-label">Timezone</label>
-          <select className="field-select" defaultValue="Africa/Accra">
-            <option>Africa/Accra</option>
-            <option>Europe/London</option>
-            <option>America/New_York</option>
-          </select>
-        </div>
-        <div className="field-row">
-          <label className="field-label">Language</label>
-          <select className="field-select" defaultValue="English">
-            <option>English</option>
-            <option>French</option>
-            <option>Spanish</option>
-          </select>
+          <label className="field-label">City of operation</label>
+          <input className="field-input" value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Accra" />
         </div>
       </div>
       <div className="btn-row btn-row-end">
-        <button className="btn-cancel">Cancel</button>
-        <button className="btn-save">Save</button>
+        <button className="btn-cancel" onClick={() => { setName(company.company_name); setCountry(company.country ?? ''); setCity(company.city_of_operation ?? ''); }}>
+          Cancel
+        </button>
+        <button className="btn-save" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
       </div>
     </div>
-  )
+  );
 }
 
+// ── Team & Seats ──────────────────────────────────────────────
+// Fetches company users from the API and renders the team table with invite flow.
+
 function TeamAndSeats() {
-  const ctx = useApp()
-  const { team, seatsUsed, seatsTotal } = ctx.getTeamData()
+  const { user } = useAuth();
+  const { toastAction } = useApp();
+  const defaultCompanyId = useMemo(() => {
+    const def = user?.companies?.find(c => c.pivot.is_default) ?? user?.companies?.[0];
+    return def?.company_id ?? null;
+  }, [user]);
+
+  const [team, setTeam] = useState<CompanyUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+
+  const fetchTeam = () => {
+    if (!defaultCompanyId) { setLoading(false); return; }
+    ApiService.getCompanyUsers(defaultCompanyId)
+      .then(c => setTeam(c.users ?? []))
+      .catch(() => toastAction('Failed to load team'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchTeam(); }, [defaultCompanyId]);
+
+  const handleInvite = async () => {
+    if (!inviteEmail.trim() || !defaultCompanyId || !user) return;
+    setInviting(true);
+    try {
+      await ApiService.sendInvitation({
+        company_id: defaultCompanyId,
+        invited_by: user.user_id,
+        email: inviteEmail.trim(),
+        role: 'agent',
+      });
+      toastAction(`Invitation sent to ${inviteEmail.trim()}`);
+      setInviteEmail('');
+      setShowInvite(false);
+    } catch {
+      toastAction('Failed to send invitation');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const seatsTotal = 5;
+  const seatsUsed = team.length;
+
+  if (loading) return <div className="settings-section-wide"><p>Loading team data...</p></div>;
 
   return (
     <div className="settings-section-wide">
       <div className="seat-section">
         <p className="seat-label">Seat usage</p>
-        <div className="bar-outer"><div className="bar-inner" style={{ width: `${(seatsUsed / seatsTotal) * 100}%` }} /></div>
+        <div className="bar-outer"><div className="bar-inner" style={{ width: `${Math.min((seatsUsed / seatsTotal) * 100, 100)}%` }} /></div>
         <p className="seat-meta">{seatsUsed} of {seatsTotal} seats used</p>
-        <div className="btn-row">
-          <button className="btn-outline-settings" onClick={ctx.addSeats}>Add seats</button>
-          <button className="btn-outline-settings">Compare plans</button>
-        </div>
       </div>
+
       <div className="table-card">
         <div className="th-row">
           <span className="th-text">Member</span>
           <span className="th-text">Role</span>
-          <span className="th-text">Last active</span>
+          <span className="th-text">Status</span>
           <span className="th-text"></span>
         </div>
-        {team.map((m, i) => (
-          <div key={i} className="tr">
-            <div className="avatar-row">
-              <div className="avatar-circle-sm" style={{ background: m.avatarBg }}>{m.initials}</div>
-              <div className="name-block">
-                <p className="name-text">{m.name} {m.you && <span className="you-label">(you)</span>}</p>
-                <p className="email-text">{m.email}</p>
+        {team.map((m) => {
+          const isYou = m.user_id === user?.user_id;
+          const initials = (m.display_name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+          const colors: Record<string, string> = { 'super-admin': '#16143A', admin: '#2B63F6', agent: '#0E9F6E', finance: '#B7791F' };
+          const bgColors: Record<string, string> = { 'super-admin': '#EEF0F4', admin: '#EAF0FF', agent: '#E3F7EF', finance: '#FFF3E0' };
+          const role = m.pivot.role || 'agent';
+          return (
+            <div key={m.user_id} className="tr">
+              <div className="avatar-row">
+                <div className="avatar-circle-sm" style={{ background: bgColors[role] ?? '#EEF0F4' }}>{initials}</div>
+                <div className="name-block">
+                  <p className="name-text">{m.display_name} {isYou && <span className="you-label">(you)</span>}</p>
+                  <p className="email-text">{m.email}</p>
+                </div>
               </div>
+              <span className="role-pill" style={{ background: bgColors[role] ?? '#EEF0F4', color: colors[role] ?? '#5B6172' }}>{role}</span>
+              <span className="active-text">{m.pivot.is_enabled ? 'Active' : 'Inactive'}</span>
+              <button className="menu-btn">⋯</button>
             </div>
-            <span className="role-pill" style={{ background: m.roleBg, color: m.roleFg }}>{m.role}</span>
-            <span className="active-text">{m.active}</span>
-            <button className="menu-btn" onClick={m.menu}>⋯</button>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      <button className="invite-btn" onClick={ctx.inviteTeammate}>Invite teammate</button>
+
+      {showInvite ? (
+        <div className="invite-row">
+          <input
+            className="field-input invite-input"
+            value={inviteEmail}
+            onChange={e => setInviteEmail(e.target.value)}
+            placeholder="colleague@example.com"
+          />
+          <button className="btn-save" onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}>
+            {inviting ? 'Sending...' : 'Send'}
+          </button>
+          <button className="btn-cancel" onClick={() => { setShowInvite(false); setInviteEmail(''); }}>Cancel</button>
+        </div>
+      ) : (
+        <button className="invite-btn" onClick={() => setShowInvite(true)}>Invite teammate</button>
+      )}
     </div>
-  )
+  );
 }
 
+// ── Roles ──────────────────────────────────────────────────────
+// Computes role cards from the user list returned by the company API.
+
 function Roles() {
-  const ctx = useApp()
-  const { roles } = ctx.getTeamData()
+  const { user } = useAuth();
+  const defaultCompanyId = useMemo(() => {
+    const def = user?.companies?.find(c => c.pivot.is_default) ?? user?.companies?.[0];
+    return def?.company_id ?? null;
+  }, [user]);
+
+  const [team, setTeam] = useState<CompanyUser[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!defaultCompanyId) { setLoading(false); return; }
+    ApiService.getCompanyUsers(defaultCompanyId)
+      .then(c => setTeam(c.users ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [defaultCompanyId]);
+
+  const roleDefs = useMemo(() => {
+    const countByRole: Record<string, number> = {};
+    team.forEach(m => {
+      const r = m.pivot.role || 'agent';
+      countByRole[r] = (countByRole[r] || 0) + 1;
+    });
+
+    return [
+      {
+        name: 'Super Admin',
+        count: countByRole['super-admin'] ?? 0,
+        countLabel: `${countByRole['super-admin'] ?? 0} member${(countByRole['super-admin'] ?? 0) !== 1 ? 's' : ''}`,
+        desc: 'Full access to all company settings, billing, and team management.',
+        icon: '★',
+        iconBg: '#16143A',
+        perms: [
+          { label: 'Manage workspace', color: '#0E9F6E', icon: '' },
+          { label: 'Billing & subscriptions', color: '#0E9F6E', icon: '' },
+          { label: 'Invite & remove members', color: '#0E9F6E', icon: '' },
+          { label: 'View all trips & data', color: '#0E9F6E', icon: '' },
+        ],
+      },
+      {
+        name: 'Admin',
+        count: countByRole['admin'] ?? 0,
+        countLabel: `${countByRole['admin'] ?? 0} member${(countByRole['admin'] ?? 0) !== 1 ? 's' : ''}`,
+        desc: 'Can manage trips, customers, and most settings except billing.',
+        icon: '◆',
+        iconBg: '#EAF0FF',
+        perms: [
+          { label: 'Manage trips & customers', color: '#0E9F6E', icon: '' },
+          { label: 'View reports', color: '#0E9F6E', icon: '' },
+          { label: 'Invite agents', color: '#0E9F6E', icon: '' },
+        ],
+      },
+      {
+        name: 'Agent',
+        count: countByRole['agent'] ?? 0,
+        countLabel: `${countByRole['agent'] ?? 0} member${(countByRole['agent'] ?? 0) !== 1 ? 's' : ''}`,
+        desc: 'Day-to-day trip management and itinerary building.',
+        icon: '●',
+        iconBg: '#E3F7EF',
+        perms: [
+          { label: 'Create & edit trips', color: '#0E9F6E', icon: '' },
+          { label: 'Build itineraries', color: '#0E9F6E', icon: '' },
+          { label: 'Communicate with travelers', color: '#0E9F6E', icon: '' },
+        ],
+      },
+      {
+        name: 'Finance',
+        count: countByRole['finance'] ?? 0,
+        countLabel: `${countByRole['finance'] ?? 0} member${(countByRole['finance'] ?? 0) !== 1 ? 's' : ''}`,
+        desc: 'Financial operations — invoices, payments, and reports.',
+        icon: '■',
+        iconBg: '#FFF3E0',
+        perms: [
+          { label: 'View & send invoices', color: '#0E9F6E', icon: '' },
+          { label: 'Record payments', color: '#0E9F6E', icon: '' },
+          { label: 'Financial reports', color: '#0E9F6E', icon: '' },
+        ],
+      },
+    ];
+  }, [team]);
+
+  if (loading) return <div className="settings-section-wide"><p>Loading roles...</p></div>;
 
   return (
     <div className="settings-section-wide">
       <p className="roles-desc">Roles control what team members can see and do. Assign permissions per role, not per person.</p>
       <div className="roles-grid">
-        {roles.map((r, i) => (
+        {roleDefs.map((r, i) => (
           <div key={i} className="card-padded">
             <div className="card-head">
               <div className="icon-box" style={{ background: r.iconBg }}>{r.icon}</div>
@@ -140,7 +331,7 @@ function Roles() {
             <ul className="perm-list">
               {r.perms.map((p, j) => (
                 <li key={j} className="perm-item">
-                  <span className="perm-icon" style={{ borderColor: p.color, color: p.color }}>{p.icon === 'M20 6 9 17l-5-5' ? '✓' : '✗'}</span>
+                  <span className="perm-icon" style={{ borderColor: p.color, color: p.color }}>✓</span>
                   {p.label}
                 </li>
               ))}
@@ -149,12 +340,23 @@ function Roles() {
         ))}
       </div>
     </div>
-  )
+  );
 }
 
+// ── Channels Section ──────────────────────────────────────────
+// Placeholder UI for connected communication channels.
+// Uses AppContext openConnect flow for the connect modal.
+
 function ChannelsSection() {
-  const ctx = useApp()
-  const { channels } = ctx.getTeamData()
+  const ctx = useApp();
+
+  // Static channel list — no dedicated backend API yet.
+  const channels = [
+    { name: 'Email', sub: 'Connect your business email', icon: '@', iconBg: '#EAF0FF', connected: false, btnLabel: 'Connect', btnBg: '#2B63F6', btnBorder: 'transparent', btnFg: '#fff', action: ctx.openConnect },
+    { name: 'WhatsApp', sub: 'Send quotes and updates', icon: 'WA', iconBg: '#E3F7EF', connected: false, btnLabel: 'Connect', btnBg: '#2B63F6', btnBorder: 'transparent', btnFg: '#fff', action: ctx.openConnect },
+    { name: 'SMS', sub: 'Text message notifications', icon: '✉', iconBg: '#FFF3E0', connected: false, btnLabel: 'Connect', btnBg: '#2B63F6', btnBorder: 'transparent', btnFg: '#fff', action: ctx.openConnect },
+    { name: 'Slack', sub: 'Team notifications & alerts', icon: 'S', iconBg: '#EEF0F4', connected: false, btnLabel: 'Connect', btnBg: '#2B63F6', btnBorder: 'transparent', btnFg: '#fff', action: ctx.openConnect },
+  ];
 
   return (
     <div className="settings-section">
@@ -180,40 +382,141 @@ function ChannelsSection() {
         ))}
       </div>
     </div>
-  )
+  );
 }
 
+// ── Notifications ─────────────────────────────────────────────
+// Local state toggles for notification preferences.
+
 function Notifications() {
-  const ctx = useApp()
-  const { notifSettings } = ctx.getTeamData()
+  const [settings, setSettings] = useState({
+    email_notifs: true,
+    sms_notifs: false,
+    trip_updates: true,
+    marketing: false,
+  });
+
+  const notifItems = [
+    { key: 'email_notifs' as const, title: 'Email notifications', desc: 'Receive trip updates via email' },
+    { key: 'sms_notifs' as const, title: 'SMS notifications', desc: 'Get text messages for urgent updates' },
+    { key: 'trip_updates' as const, title: 'Trip updates', desc: 'Daily summary of trip status changes' },
+    { key: 'marketing' as const, title: 'Marketing emails', desc: 'Product updates and feature announcements' },
+  ];
+
+  const toggle = (key: keyof typeof settings) => {
+    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   return (
     <div className="settings-section">
       <div className="notif-list">
-        {notifSettings.map((n, i) => (
-          <div key={i} className="notif-item">
-            <div className="text-block">
-              <p className="item-title">{n.title}</p>
-              <p className="item-desc">{n.desc}</p>
+        {notifItems.map((n) => {
+          const isOn = settings[n.key];
+          return (
+            <div key={n.key} className="notif-item">
+              <div className="text-block">
+                <p className="item-title">{n.title}</p>
+                <p className="item-desc">{n.desc}</p>
+              </div>
+              <button className="toggle-track" style={{ background: isOn ? '#2B63F6' : '#DDE0E8' }} onClick={() => toggle(n.key)}>
+                <div className="toggle-knob" style={{ left: isOn ? '18px' : '2px' }} />
+              </button>
             </div>
-            <button className="toggle-track" style={{ background: n.trackBg }} onClick={n.toggle}>
-              <div className="toggle-knob" style={{ left: n.knobX }} />
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
-  )
+  );
 }
+
+// ── EditProfile ───────────────────────────────────────────────
+// Allows updating the current user's display name and phone via AuthContext.
+
+function EditProfile() {
+  const { user, updateProfile } = useAuth();
+  const { toastAction } = useApp();
+  const [displayName, setDisplayName] = useState(user?.display_name ?? '');
+  const [phone, setPhone] = useState(user?.phone ?? '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDisplayName(user?.display_name ?? '');
+    setPhone(user?.phone ?? '');
+  }, [user]);
+
+  const initials = (user?.display_name ?? 'U')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0])
+    .join('')
+    .toUpperCase();
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateProfile({ display_name: displayName, phone: phone || null });
+      toastAction('Profile updated');
+    } catch {
+      toastAction('Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="settings-section">
+      <div className="profile-avatar-area">
+        <div className="profile-avatar-lg">{initials}</div>
+        <div>
+          <div className="profile-avatar-name">{user?.display_name ?? 'User'}</div>
+          <div className="profile-avatar-email">{user?.email ?? ''}</div>
+        </div>
+      </div>
+      <div className="field-row">
+        <label className="field-label">Display name</label>
+        <input
+          className="field-input"
+          value={displayName}
+          onChange={e => setDisplayName(e.target.value)}
+        />
+      </div>
+      <div className="field-row">
+        <label className="field-label">Email</label>
+        <input className="field-input" value={user?.email ?? ''} disabled />
+      </div>
+      <div className="field-row">
+        <label className="field-label">Phone</label>
+        <input
+          className="field-input"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          placeholder="+233 50 000 0000"
+        />
+      </div>
+      <div className="btn-row btn-row-end">
+        <button className="btn-cancel" onClick={() => { setDisplayName(user?.display_name ?? ''); setPhone(user?.phone ?? ''); }}>
+          Cancel
+        </button>
+        <button className="btn-save" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Settings (main) ────────────────────────────────────────────
 
 export default function Settings() {
   const { tab } = useParams<{ tab: string }>();
-  const currentTab: SettingsTab = (tab as SettingsTab) || 'team';
+  const currentTab: SettingsTab = (tab as SettingsTab) || 'profile';
 
   return (
     <div className="settings-page">
       <TabBar currentTab={currentTab} />
       <div className="settings-content">
+        {currentTab === 'profile' && <EditProfile />}
         {currentTab === 'workspace' && <Workspace />}
         {currentTab === 'team' && <TeamAndSeats />}
         {currentTab === 'roles' && <Roles />}
@@ -221,5 +524,5 @@ export default function Settings() {
         {currentTab === 'notifications' && <Notifications />}
       </div>
     </div>
-  )
+  );
 }

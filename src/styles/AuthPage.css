@@ -1,3 +1,5 @@
+/* ── AuthPage ── Styles for the authentication page (logo, carousel, password strength tooltip, error messages) */
+
 @import './core.css';
 
 /* ---- auth page specific: top-right logo ---- */

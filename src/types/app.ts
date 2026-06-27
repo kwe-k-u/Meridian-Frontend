@@ -1,3 +1,7 @@
+// ── App Types ────────────────────────────────────────────────
+// Core type definitions for the Meridian frontend: domain entities, API response shapes,
+// UI state types, and data transfer interfaces used across components and services.
+
 export type Screen = 'dashboard' | 'trips' | 'tripDetail' | 'messages' | 'travelers' | 'financials' | 'pricing' | 'settings' | 'help' | 'guide';
 
 export type TripStatus = 'Draft' | 'AI drafting' | 'Awaiting review' | 'Shared' | 'Changes requested' | 'Confirmed' | 'Booked' | 'Completed';
@@ -8,12 +12,13 @@ export type BillingPeriod = 'monthly' | 'annual';
 
 export type ChannelType = 'whatsapp' | 'gmail' | 'instagram';
 
-export type SettingsTab = 'workspace' | 'team' | 'roles' | 'channels' | 'notifications';
+export type SettingsTab = 'profile' | 'workspace' | 'team' | 'roles' | 'channels' | 'notifications';
 
 export type ConnectStep = 'pick' | 'auth' | 'sync' | 'done';
 
 export type RoleType = 'Super admin' | 'Agent' | 'Finance' | 'Read-only';
 
+// ── Domain Types ──
 export interface DayBlock {
   kind: string;
   kindColor: string;
@@ -126,6 +131,7 @@ export interface StatusBanner {
   showOptions: boolean;
 }
 
+// ── Trip & Itinerary Types ──
 export interface Flight {
   code: string;
   airline: string;
@@ -188,6 +194,7 @@ export interface Message {
   bubbleBorder?: string;
 }
 
+// ── Conversation Types ──
 export interface Conversation {
   name: string;
   ch: string;
@@ -216,6 +223,7 @@ export interface Conversation {
   openLinkedTrip?: () => void;
 }
 
+// ── Financial Types ──
 export interface FinStat {
   label: string;
   value: string;
@@ -275,6 +283,7 @@ export interface InvoiceDetail {
   openTrip: () => void;
 }
 
+// ── Plan, Traveler, Team Types ──
 export interface Plan {
   name: string;
   tag: string;
@@ -351,6 +360,7 @@ export interface NotifSetting {
   toggle: () => void;
 }
 
+// ── Guides & Onboarding Types ──
 export interface OnboardingTask {
   slot: string;
   icon: string;
@@ -401,6 +411,7 @@ export interface GuideArticle {
   nextOpen: () => void;
 }
 
+// ── Agent Feed & Channel Connect Types ──
 export interface AgentFeedItem {
   iconEl: string;
   iconBg: string;
@@ -433,4 +444,243 @@ export interface ConnectChannelView {
   reviewLabel: string;
   moreLabel: string;
   contacts: { name: string; initials: string; avatarBg: string; source: string; tag: string; tagBg: string; tagFg: string }[];
+}
+
+// ── API Response Types ──
+export interface ApiPaginatedResponse<T> {
+  data: T[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
+export interface CustomerResponse {
+  customer_id: string;
+  company_id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  nationality: string | null;
+  date_of_birth: string | null;
+  passport_number: string | null;
+  notes: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  company?: { company_id: string; company_name: string };
+  trips?: { trip_id: string; trip_name: string }[];
+}
+
+export interface TransactionResponse {
+  transaction_id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  payment_method: string | null;
+  transaction_reference: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+  client_name: string | null;
+  subscription_payment?: {
+    transaction_id: string;
+    subscription_id: string;
+    company_id: string;
+    initiated_by: string | null;
+  } | null;
+  trip_payment?: {
+    transaction_id: string;
+    trip_id: string;
+    notes: string | null;
+    trip?: { trip_id: string; trip_name: string; company_id: string; customers?: { first_name: string; last_name: string }[] };
+  } | null;
+}
+
+export interface ItineraryResponse {
+  itinerary_id: string;
+  trip_id: string;
+  created_by: string | null;
+  itinerary_name: string;
+  description: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  trip?: { trip_id: string; trip_name: string; company_id: string };
+  created_by_user?: { user_id: string; display_name: string };
+  itinerary_days?: ItineraryDayResponse[];
+  itinerary_flights?: ItineraryFlightResponse[];
+  itinerary_accommodation?: ItineraryAccommodationResponse[];
+}
+
+export interface ItineraryDayResponse {
+  itinerary_day_id: string;
+  itinerary_id: string;
+  day_number: number;
+  date: string | null;
+  title: string | null;
+  description: string | null;
+  location: string | null;
+  destinations?: {
+    destination_id: string;
+    cost: string | null;
+    currency: string | null;
+    activities: string | null;
+    booking_url: string | null;
+    destination?: { destination_id: string; name: string; country: string };
+  }[];
+}
+
+export interface ItineraryFlightResponse {
+  flight_id: string;
+  itinerary_id: string;
+  airline: string | null;
+  flight_number: string | null;
+  departure_airport: string | null;
+  arrival_airport: string | null;
+  departure_datetime: string | null;
+  arrival_datetime: string | null;
+  cost: number | null;
+  currency: string | null;
+  booking_reference: string | null;
+  booking_url: string | null;
+  status: string;
+}
+
+export interface ItineraryAccommodationResponse {
+  accommodation_id: string;
+  itinerary_id: string;
+  accommodation_name: string;
+  address: string | null;
+  check_in_date: string | null;
+  check_out_date: string | null;
+  room_type: string | null;
+  cost: number | null;
+  currency: string | null;
+  booking_reference: string | null;
+  booking_url: string | null;
+  status: string;
+}
+
+export interface TripResponse {
+  trip_id: string;
+  company_id: string;
+  created_by: string | { user_id: string; display_name: string } | null;
+  trip_name: string;
+  description: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  budget: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  company?: { company_id: string; company_name: string };
+  customers?: { customer_id: string; first_name: string; last_name: string; pivot: { role: string } }[];
+  itineraries?: ItineraryResponse[];
+}
+
+export interface DestinationResponse {
+  destination_id: string;
+  name: string;
+  country: string;
+  url: string | null;
+}
+
+export interface DashboardResponse {
+  user: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  revenue: {
+    amount: number;
+    previous_cmp: number;
+  };
+  outstanding: {
+    amount: number;
+    count: number;
+  };
+  paid_out: {
+    amount: number;
+    next_payout: string;
+  };
+  refunds: {
+    amount: number;
+    count: number;
+  };
+  latest_trips: DashboardTrip[];
+  ai_handled_tasks: number;
+  pending_review_tasks: number;
+}
+
+export interface TripCostResponse {
+  trip_id: string;
+  currency: string;
+  itinerary_costs: {
+    flights: number;
+    accommodation: number;
+    activities: number;
+    subtotal: number;
+    service_fee: number;
+    total: number;
+  };
+  payments: {
+    transaction_id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    payment_method: string | null;
+    paid_at: string | null;
+    notes: string | null;
+  }[];
+  summary: {
+    total_cost: number;
+    total_paid: number;
+    total_pending: number;
+    outstanding: number;
+  };
+}
+
+// ── Dashboard Types ──
+export interface DashboardTrip {
+  trip_id: string;
+  trip_name: string;
+  status: string;
+  start_date: string;
+  end_date: string;
+}
+
+// ── Company / Team Types ──
+export interface CompanyUser {
+  user_id: string;
+  firebase_uid: string | null;
+  email: string;
+  display_name: string;
+  phone: string | null;
+  avatar_url: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  pivot: {
+    user_id: string;
+    company_id: string;
+    role: string;
+    is_default: number;
+    is_enabled: number;
+    joined_at: string;
+  };
+}
+
+export interface CompanyResponse {
+  company_id: string;
+  company_name: string;
+  country: string | null;
+  city_of_operation: string | null;
+  status: number;
+  created_at: string;
+  updated_at: string;
+  users: CompanyUser[];
 }

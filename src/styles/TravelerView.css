@@ -1,3 +1,6 @@
+/* ── TravelerView ── Styles for the traveler-facing itinerary view (header, hero, day timeline, footer) */
+
+/* ── Page Container ── */
 .tv {
   min-height: 100vh;
   background: var(--bg-card);
@@ -7,6 +10,7 @@
   flex-direction: column;
 }
 
+/* ── Header ── */
 .tv__header {
   display: flex;
   align-items: center;
@@ -59,6 +63,7 @@
   font-family: var(--font-sans);
 }
 
+/* ── Hero Section ── */
 .tv__hero {
   margin: 28px 0;
   border-radius: var(--radius-xl);
@@ -91,6 +96,7 @@
   margin: 0;
 }
 
+/* ── Info Cards ── */
 .tv__info-row {
   display: flex;
   gap: 12px;
@@ -118,6 +124,7 @@
   font-size: 12px;
 }
 
+/* ── Day Timeline ── */
 .tv__section-title {
   font-size: 20px;
   font-weight: 700;
@@ -248,6 +255,7 @@
   margin-top: 2px;
 }
 
+/* ── Footer & Actions ── */
 .tv__footer {
   border-top: 1px solid var(--border);
   background: var(--bg-card);

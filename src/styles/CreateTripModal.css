@@ -1,3 +1,6 @@
+/* ── CreateTripModal ── Styles for the Create Trip modal (backdrop, card, form, loading/success states) */
+
+/* ── Backdrop ── */
 .ctm-backdrop {
   position: fixed;
   inset: 0;
@@ -10,6 +13,7 @@
   justify-content: center;
 }
 
+/* ── Card & Layout ── */
 .ctm-card {
   width: 100%;
   max-width: 520px;
@@ -30,6 +34,7 @@
   justify-content: flex-end;
 }
 
+/* ── Header ── */
 .ctm-badge {
   display: inline-flex;
   align-items: center;
@@ -56,6 +61,7 @@
   margin: 0 0 24px;
 }
 
+/* ── Form Fields ── */
 .ctm-field-group {
   display: flex;
   flex-direction: column;
@@ -88,6 +94,32 @@
   min-height: 76px;
 }
 
+.ctm-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #F4F6FA;
+  border: 1px solid #E8EBF0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--text-heading);
+  line-height: 1.5;
+  outline: none;
+  transition: border-color .2s;
+  font-family: inherit;
+}
+
+.ctm-input:focus {
+  border-color: var(--primary);
+  background: #fff;
+}
+
+.ctm-textarea {
+  resize: vertical;
+  min-height: 76px;
+}
+
+/* ── Buttons ── */
 .ctm-btn-secondary {
   padding: 10px 20px;
   border-radius: 10px;
@@ -115,6 +147,7 @@
   gap: 12px;
 }
 
+/* ── Loading State ── */
 .ctm-centered {
   display: flex;
   flex-direction: column;
@@ -188,6 +221,7 @@
   flex-shrink: 0;
 }
 
+/* ── Success State ── */
 .ctm-success-icon {
   width: 56px;
   height: 56px;

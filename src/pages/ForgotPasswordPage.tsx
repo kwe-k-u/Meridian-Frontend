@@ -8,6 +8,12 @@ import AuthActionLoading from '../components/AuthActionLoading'
 import { ApiService } from '../services/api-service'
 import '../styles/AuthPage.css'
 
+// ── ForgotPasswordPage ─────────────────────────────────────────
+// Purpose: Two sub-views — RequestReset (email input) and ResetPassword
+//          (new password form with token from URL).
+// State: email, sent, loading, password fields, countdown.
+// API: ApiService.requestPasswordReset, ApiService.resetPassword.
+
 function ForgotPasswordPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')

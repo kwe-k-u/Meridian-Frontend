@@ -1,3 +1,6 @@
+/* ── Help ── Styles for the Help Center page (hero, featured article, guide cards) */
+
+/* ── Hero & Search ── */
 .help-hero {
   background: linear-gradient(135deg, #1B1B2F, #2D2B5E);
   border-radius: var(--radius-xl);
@@ -26,6 +29,7 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* ── Featured Article ── */
 .help-featured-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -101,6 +105,7 @@
   align-self: flex-start;
 }
 
+/* ── Guide Cards Grid ── */
 .help-all-head {
   font-size: 22px;
   font-weight: 700;

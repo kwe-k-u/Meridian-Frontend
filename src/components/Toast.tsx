@@ -2,6 +2,9 @@ import React from 'react';
 import { useApp } from '../contexts/AppContext';
 import '../styles/Toast.css';
 
+// ── Toast ────────────────────────────────────────────────────
+// Purpose: Animated toast notification that reads from AppContext and auto-dismisses.
+// Props: none (reads `toast` string from useApp context)
 export default function Toast() {
   const { toast } = useApp();
 

@@ -10,6 +10,9 @@ const budgetOptions = ['Budget', 'Mid-range', 'Luxury', 'No preference'];
 const styleOptions = ['Adventure', 'Relaxation', 'Cultural', 'Mixed'];
 const priorityOptions = ['Flights', 'Accommodation', 'Activities', 'Dining', 'Experiences'];
 
+// ── GenerateItineraryModal ───────────────────────────────────
+// Purpose: Modal to pick a draft trip and set traveler preferences (budget, style, priorities) before generating itinerary.
+// Props: none (reads/writes state from AppContext and navigates on generate)
 export default function GenerateItineraryModal() {
   const navigate = useNavigate();
   const { genItinOpen, closeGenItin, openCreate, getTripsData } = useApp();

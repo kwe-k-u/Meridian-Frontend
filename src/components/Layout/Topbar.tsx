@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { useApp } from '../../contexts/AppContext';
 import '../../styles/Topbar.css';
 
+// ── usePageInfo ──────────────────────────────────────────────
+// Purpose: Determines page title and subtitle from the current route path.
 function usePageInfo() {
   const loc = useLocation();
   const path = loc.pathname;
@@ -24,6 +26,9 @@ function usePageInfo() {
   return ['', ''];
 }
 
+// ── Topbar ──────────────────────────────────────────────────
+// Purpose: Top bar showing page title/subtitle, search input, and action buttons (generate itinerary, new trip).
+// Props: none (uses context for actions)
 export default function Topbar() {
   const [pageTitle, pageSub] = usePageInfo();
   const { openCreate, openGenItin, toastAction } = useApp();

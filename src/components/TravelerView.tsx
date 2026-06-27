@@ -4,6 +4,9 @@ import { useApp } from '../contexts/AppContext';
 import logoM from '../assets/logo/logo_m.svg';
 import '../styles/TravelerView.css';
 
+// ── TravelerView ─────────────────────────────────────────────
+// Purpose: Read-only traveler-facing trip view with day-by-day itinerary, accept/request-change actions.
+// Props: none (reads tripId from URL params and data from AppContext)
 export default function TravelerView() {
   const { tripId } = useParams<{ tripId: string }>();
   const navigate = useNavigate();

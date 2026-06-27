@@ -1,3 +1,5 @@
+/* ── MainLayout ── Styles for the main app layout (sidebar + content + body) */
+
 .main-layout {
   display: flex;
   min-height: 100vh;

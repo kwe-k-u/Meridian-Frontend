@@ -2,6 +2,12 @@ import { useNavigate } from 'react-router-dom'
 import { useApp } from '../contexts/AppContext'
 import '../styles/Help.css'
 
+// ── Help ───────────────────────────────────────────────────────
+// Purpose: Help center landing page showing featured guide and grid
+//          of all guide cards.
+// State: None (data from AppContext).
+// API: None (data from AppContext).
+
 export default function Help() {
   const navigate = useNavigate()
   const ctx = useApp()

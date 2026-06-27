@@ -1,3 +1,8 @@
+// ── App Constants ────────────────────────────────────────────
+// Mock data and helper functions powering the entire Meridian frontend.
+// Provides hardcoded trips, conversations, invoices, guide articles, channel connection
+// flows, and other placeholder data used throughout the UI during development/demo.
+
 import type {
   Day, DayBlock, Conversation, Message, TripItem, TripDetailData, CostItem, TripOption,
   Flight, Stay, Activity, CallLog, CallDetail, FinStat, ChartBar, InvoiceItem, InvoiceDetail,

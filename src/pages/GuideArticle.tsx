@@ -2,6 +2,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext'
 import '../styles/GuideArticle.css'
 
+// ── GuideArticle ───────────────────────────────────────────────
+// Purpose: Displays a single help guide/article with sections, tips,
+//          and a video hero, fetched from AppContext by guideId.
+// State: None (reads guideId from URL params).
+// API: None (data from AppContext).
+
 export default function GuideArticle() {
   const { guideId } = useParams<{ guideId: string }>();
   const navigate = useNavigate();

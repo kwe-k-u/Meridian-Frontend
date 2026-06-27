@@ -10,6 +10,9 @@ import InvoiceDetailModal from '../modals/InvoiceDetailModal';
 import GenerateItineraryModal from '../modals/GenerateItineraryModal';
 import '../../styles/MainLayout.css';
 
+// ── MainLayout ──────────────────────────────────────────────
+// Purpose: Wraps authenticated app pages with Sidebar, Topbar, and renders modals/toast from context.
+// Props: none (uses Outlet for nested routes)
 export default function MainLayout() {
   const { toast, createOpen, genItinOpen, connectOpen, invoiceOpen } = useApp();
 

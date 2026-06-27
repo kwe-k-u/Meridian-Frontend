@@ -145,6 +145,9 @@ const acctOptions = [
   { name: 'Personal', email: 'kweku.ansah@gmail.com' },
 ];
 
+// ── ConnectChannelModal ──────────────────────────────────────
+// Purpose: Multi-step modal to connect an external messaging channel (WhatsApp/Gmail/Instagram).
+// Props: none (reads/writes all step state from AppContext)
 export default function ConnectChannelModal() {
   const {
     connectOpen, connectStep, connectChannel, ccPickList, ccAuth, ccSync, ccDone,

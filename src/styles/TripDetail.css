@@ -1,4 +1,5 @@
-/* TripDetail page */
+/* ── TripDetail ── Styles for the Trip Detail page (hero, brief, builder, itinerary, flights, stays, activities, calls, sidebar) */
+/* ── Page & Card Layout ── */
 .td-page {
   background: #F7F8FA;
   min-height: 100vh;
@@ -16,6 +17,7 @@
   background: var(--bg-card);
   overflow: hidden;
 }
+/* ── Back Button ── */
 .td-back-btn {
   background: none;
   border: none;
@@ -30,6 +32,7 @@
   gap: 4px;
   line-height: 20px;
 }
+/* ── Hero Banner ── */
 .td-hero-banner {
   height: 108px;
   position: relative;
@@ -116,6 +119,7 @@
   flex-shrink: 0;
   margin-left: 24px;
 }
+/* ── Tip Banner ── */
 .td-tip-banner {
   border-radius: 12px;
   padding: 14px 20px;
@@ -175,6 +179,7 @@
   color: #fff;
   font-weight: 600;
 }
+/* ── Options & AI Picks ── */
 .td-options-label {
   font-size: 14px;
   font-weight: 500;
@@ -257,6 +262,7 @@
   font-weight: 500;
   color: var(--text-muted);
 }
+/* ── Drafting State ── */
 .td-drafting-state {
   text-align: center;
   padding: 80px 0;
@@ -305,6 +311,7 @@
   text-decoration: underline;
   line-height: 20px;
 }
+/* ── Brief Section ── */
 .td-brief-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -372,12 +379,14 @@
   flex-direction: column;
   gap: 8px;
 }
+/* ── Builder Layout & Tabs ── */
 .td-builder-layout {
   display: grid;
   grid-template-columns: 1fr 320px;
   gap: 24px;
   align-items: start;
 }
+/* ── Tabs Bar ── */
 .td-tabs-bar {
   display: flex;
   border-bottom: 1px solid var(--border);
@@ -404,6 +413,7 @@
 .td-tab-content {
   padding: 24px;
 }
+/* ── Day Timeline (Itinerary) ── */
 .td-day-row {
   display: flex;
   gap: 16px;
@@ -615,6 +625,7 @@
   width: 100%;
   line-height: 20px;
 }
+/* ── Flights Tab ── */
 .td-flights-desc {
   font-size: 14px;
   color: var(--text);
@@ -697,6 +708,7 @@
   line-height: 16px;
   flex-shrink: 0;
 }
+/* ── Stays Tab ── */
 .td-stays-desc {
   font-size: 14px;
   color: var(--text);
@@ -785,6 +797,7 @@
   cursor: pointer;
   line-height: 18px;
 }
+/* ── Activities Tab ── */
 .td-acts-desc {
   font-size: 14px;
   color: var(--text);
@@ -844,6 +857,7 @@
   cursor: pointer;
   line-height: 18px;
 }
+/* ── Call Logs Tab ── */
 .td-calls-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -983,6 +997,7 @@
   margin-bottom: 8px;
   line-height: 18px;
 }
+/* ── Right Sidebar (Cost & Agent) ── */
 .td-sticky-sidebar {
   position: sticky;
   top: 32px;
@@ -1144,4 +1159,150 @@
   cursor: pointer;
   line-height: 20px;
   white-space: nowrap;
+}
+.td-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Edit Mode ── */
+.td-edit-input {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #DDE0E8;
+  background: #fff;
+  color: #15161B;
+  outline: none;
+  line-height: 20px;
+}
+.td-edit-input:focus {
+  border-color: #2B63F6;
+  box-shadow: 0 0 0 2px rgba(43,99,246,0.1);
+}
+.td-edit-name {
+  font-size: 20px;
+  font-weight: 700;
+  padding: 6px 10px;
+  flex: 1;
+}
+.td-edit-date {
+  width: 140px;
+}
+.td-edit-budget {
+  width: 120px;
+}
+.td-edit-desc {
+  flex: 1;
+  min-width: 200px;
+  resize: vertical;
+}
+.td-edit-meta-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.td-edit-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #8A90A2;
+  font-weight: 500;
+}
+.td-edit-desc-label {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Payments Breakdown ── */
+.td-cost-divider {
+  height: 1px;
+  background: #ECEDF2;
+  margin: 12px 0;
+}
+.td-cost-pay-heading {
+  font-size: 12px;
+  font-weight: 700;
+  color: #15161B;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+  line-height: 18px;
+}
+.td-pay-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 5px 0;
+  gap: 8px;
+}
+.td-pay-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.td-pay-method {
+  font-size: 13px;
+  font-weight: 500;
+  color: #15161B;
+  line-height: 18px;
+}
+.td-pay-status {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-transform: capitalize;
+}
+.td-pay-status[data-status="completed"] {
+  color: #0E9F6E;
+}
+.td-pay-status[data-status="pending"] {
+  color: #B7791F;
+}
+.td-pay-status[data-status="failed"] {
+  color: #D64545;
+}
+.td-pay-date {
+  font-size: 11px;
+  color: #AEB3C2;
+  line-height: 16px;
+}
+.td-pay-amount {
+  font-size: 13px;
+  font-weight: 600;
+  color: #15161B;
+  line-height: 18px;
+  flex-shrink: 0;
+}
+.td-summary-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.td-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #5B6172;
+  line-height: 20px;
+}
+.td-summary-row span:last-child {
+  font-weight: 600;
+}
+.td-summary-paid {
+  color: #0E9F6E;
+}
+.td-summary-pending {
+  color: #B7791F;
+}
+.td-summary-outstanding {
+  font-weight: 700;
+  color: #15161B;
+  border-top: 1px solid #ECEDF2;
+  padding-top: 6px;
+  margin-top: 4px;
 }

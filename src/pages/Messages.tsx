@@ -2,6 +2,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext'
 import '../styles/Messages.css';
 
+// ── Messages ───────────────────────────────────────────────────
+// Purpose: Three-panel messaging inbox — conversation list (left),
+//          chat view (center), linked trip / action points (right).
+// State: convoId from URL params; active conversation derived.
+// API: None (data from AppContext).
+
 const filterPills = ['All', '\uD83D\uDCAC WhatsApp', '\u2709\uFE0F']
 
 export default function Messages() {

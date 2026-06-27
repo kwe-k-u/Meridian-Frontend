@@ -1,7 +1,11 @@
+/* ── Trips ── Styles for the Trips list page (filter bar, table/grid, rows) */
+
+/* ── Container ── */
 .trips-container {
   padding: 0 32px;
 }
 
+/* ── Filter Bar ── */
 .filter-bar {
   display: flex;
   gap: 8px;
@@ -84,11 +88,13 @@
   color: var(--primary-dark);
 }
 
+/* ── Table Grid ── */
 .trips-grid {
   display: grid;
   grid-template-columns: 2.4fr 1.3fr 1.4fr 1fr 1fr;
 }
 
+/* ── Header Row ── */
 .trips-header {
   background: var(--bg);
   border-radius: var(--radius-md) var(--radius-md) 0 0;
@@ -109,6 +115,7 @@
   text-align: right;
 }
 
+/* ── Trip Rows ── */
 .trips-row {
   padding: 12px 16px;
   cursor: pointer;

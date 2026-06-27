@@ -1,5 +1,8 @@
 import logoWordmark from '../assets/logo/logo_wordmark.svg'
 
+// ── AuthActionLoading ───────────────────────────────────────
+// Purpose: Full-screen loading overlay shown during auth actions (login, registration).
+// Props: primary?: string — main message; secondary?: string — subtext message
 function AuthActionLoading({ primary, secondary }: { primary?: string; secondary?: string }) {
   return (
     <div className="loading-overlay">

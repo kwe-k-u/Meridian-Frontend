@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../contexts/AppContext';
 import '../../styles/CreateTripModal.css';
@@ -17,15 +18,27 @@ const keyframes = `
 }
 `;
 
+// ── CreateTripModal ──────────────────────────────────────────
+// Purpose: Multi-step modal for creating a new trip with name, request, travelers, and dates.
+// Props: none (reads/writes state from AppContext)
 export default function CreateTripModal() {
   const navigate = useNavigate();
   const { createOpen, createStep, createFromConvo, closeCreate, startSearch } = useApp();
+  const [tripName, setTripName] = useState('');
+  const [request, setRequest] = useState('');
+  const [travelers, setTravelers] = useState('');
+  const [when, setWhen] = useState('');
 
   if (!createOpen) return null;
 
   const cs1 = createStep === 1;
   const cs2 = createStep === 2;
   const cs3 = createStep === 3;
+
+  const handleGenerate = () => {
+    if (!tripName.trim()) return;
+    startSearch();
+  };
 
   const handleOpenCreatedTrip = () => {
     closeCreate();
@@ -51,25 +64,55 @@ export default function CreateTripModal() {
                 <div className="ctm-field-group">
                   <div className="ctm-field">
                     <span className="ctm-label">Trip name</span>
-                    <div className="ctm-field-box">Asante–Mensah Honeymoon</div>
+                    <input
+                      className="ctm-input"
+                      type="text"
+                      placeholder="e.g. Asante–Mensah Honeymoon"
+                      value={tripName}
+                      onChange={e => setTripName(e.target.value)}
+                    />
                   </div>
                   <div className="ctm-field">
                     <span className="ctm-label">Request</span>
-                    <div className="ctm-field-box ctm-field-box--tall">10-day honeymoon in early October...</div>
+                    <textarea
+                      className="ctm-input ctm-textarea"
+                      placeholder="e.g. 10-day honeymoon in early October..."
+                      rows={3}
+                      value={request}
+                      onChange={e => setRequest(e.target.value)}
+                    />
                   </div>
                   <div className="ctm-field">
                     <span className="ctm-label">Travelers</span>
-                    <div className="ctm-field-box">2 adults</div>
+                    <input
+                      className="ctm-input"
+                      type="text"
+                      placeholder="e.g. 2 adults"
+                      value={travelers}
+                      onChange={e => setTravelers(e.target.value)}
+                    />
                   </div>
                   <div className="ctm-field">
                     <span className="ctm-label">When</span>
-                    <div className="ctm-field-box">4 – 14 Oct 2026</div>
+                    <input
+                      className="ctm-input"
+                      type="text"
+                      placeholder="e.g. 4 – 14 Oct 2026"
+                      value={when}
+                      onChange={e => setWhen(e.target.value)}
+                    />
                   </div>
                 </div>
               </div>
               <div className="ctm-footer">
                 <button className="ctm-btn-secondary" onClick={closeCreate}>Cancel</button>
-                <button className="ctm-btn-primary" onClick={startSearch}>Generate with Meridian</button>
+                <button
+                  className="ctm-btn-primary"
+                  onClick={handleGenerate}
+                  style={{ opacity: tripName.trim() ? 1 : 0.5 }}
+                >
+                  Generate with Meridian
+                </button>
               </div>
             </>
           )}

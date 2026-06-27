@@ -1,6 +1,12 @@
 import { useApp } from '../contexts/AppContext'
 import '../styles/Pricing.css'
 
+// ── Pricing ────────────────────────────────────────────────────
+// Purpose: Displays current plan info, billing toggle (monthly/annual),
+//          and a grid of available plans with features.
+// State: billing period from AppContext.
+// API: None (data from AppContext).
+
 export default function Pricing() {
   const ctx = useApp()
   const {

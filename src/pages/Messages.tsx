@@ -102,6 +102,8 @@ function CenterPanel({ convo }: { convo: any }) {
           </div>
         </div>
         {convo.hasTrip && convo.linkName ? (
+          // Always navigates to mock trip index 0 regardless of which conversation/trip is
+          // actually linked \u2014 convoData() doesn't carry a real trip id/index to open instead.
           <button onClick={() => navigate('/app/trips/0')} className="msgs-open-trip-btn">
             Open trip &nbsp;\u2197
           </button>

@@ -10,10 +10,16 @@ import '../styles/Dashboard.css';
 //          stats/trips/agent feed (established users).
 // State: dashboardData, loading, onboarded toggle.
 // API: ApiService.getDashboard.
+//
+// The "New user view" / "Established view" toggle at the top is a manual demo switch
+// (ctx.onboarded from AppContext) — it's not derived from whether the user has actually
+// created any trips, so a real account with real trips could still flip back to the
+// onboarding checklist view.
 
 const fmtCurrency = (n: number) => 'GHS ' + n.toLocaleString('en-US');
 
-const fmtDate = (d: string) => {
+const fmtDate = (d: string | null) => {
+  if (!d) return 'TBD';
   const dt = new Date(d + 'T00:00:00');
   return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
@@ -142,9 +148,7 @@ function Dashboard() {
   const totalCount = onboardTasks.length;
   const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
-  const userName = dashboardData?.user?.name?.split(' ')[0]
-    ?? dashboardData?.user?.display_name?.split(' ')[0]
-    ?? 'Travel Agent';
+  const userName = dashboardData?.user?.display_name?.split(' ')[0] ?? 'Travel Agent';
 
   // ── Render ──
 
@@ -169,6 +173,10 @@ function Dashboard() {
           </button>
         </div>
       </div>
+
+      {loading && !dashboardData && (
+        <div className="dashboard-loading">Loading your dashboard…</div>
+      )}
 
       {!onboarded ? (
         <>
@@ -282,7 +290,7 @@ function Dashboard() {
                   </button>
                 </div>
               ) : (
-                tripsInMotion.slice(0, 4).map((t, i) => (
+                tripsInMotion.slice(0, 4).map((t) => (
                   <div
                     key={t.id}
                     onClick={() => navigate(`/app/trips/${t.id}`)}

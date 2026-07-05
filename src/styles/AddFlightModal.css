@@ -1,0 +1,141 @@
+/* ── AddFlightModal / AddStayModal ── Search UI shared by both flight and stay search */
+
+.afm-modal {
+  width: 560px;
+}
+.afm-mode-row {
+  display: flex;
+  gap: 6px;
+  padding: 0 24px;
+  margin-top: 12px;
+}
+.afm-search-btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #2B63F6;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 20px;
+  margin-top: 4px;
+}
+.afm-search-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.afm-error {
+  color: #D64545;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+.afm-empty {
+  color: #8A90A2;
+  font-size: 13px;
+  text-align: center;
+  padding: 16px 0;
+}
+.afm-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+.afm-result-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #DDE0E8;
+  border-radius: 8px;
+}
+.afm-result-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.afm-result-info {
+  flex: 1;
+  min-width: 0;
+}
+.afm-result-route {
+  font-size: 14px;
+  font-weight: 600;
+  color: #15161B;
+}
+.afm-result-meta {
+  font-size: 12px;
+  color: #8A90A2;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.afm-result-price-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.afm-result-price {
+  font-size: 14px;
+  font-weight: 700;
+  color: #15161B;
+  white-space: nowrap;
+}
+.afm-select-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  background: #13B981;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.afm-select-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Stay-specific result card (hotel thumbnail + rating) ── */
+.afm-stay-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #DDE0E8;
+  border-radius: 8px;
+}
+.afm-stay-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #F0EBFF;
+}
+.afm-stay-info {
+  flex: 1;
+  min-width: 0;
+}
+.afm-stay-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #15161B;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.afm-stay-meta {
+  font-size: 12px;
+  color: #8A90A2;
+  margin-top: 2px;
+}

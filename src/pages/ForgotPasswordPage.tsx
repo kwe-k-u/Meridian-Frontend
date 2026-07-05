@@ -14,6 +14,13 @@ import '../styles/AuthPage.css'
 // State: email, sent, loading, password fields, countdown.
 // API: ApiService.requestPasswordReset, ApiService.resetPassword.
 
+// Same route renders two completely different flows depending on whether a `?token=` query
+// param is present: no token → the "enter your email" request form; a token (from the email
+// link the backend would send) → the "set a new password" form. Since the reset-password
+// backend call needs both the email and the token but the emailed link only carries the
+// token, RequestReset stashes the email in sessionStorage so ResetPassword can read it back
+// (see the `resetEmail` key below) — this only works if both steps happen in the same browser
+// tab/session, which is a reasonable assumption for a same-device password reset flow.
 function ForgotPasswordPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')

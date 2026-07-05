@@ -30,7 +30,7 @@ const slides: Slide[] = [
 // Props: compact?: boolean — hides controls and shows first slide only
 function ImageCarousel({ compact }: { compact?: boolean }) {
   const [current, setCurrent] = useState(0)
-  const timerRef = useRef<ReturnType<typeof setInterval>>()
+  const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   const startTimer = useCallback(() => {
     if (compact) return

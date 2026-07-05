@@ -72,6 +72,9 @@ export default function InvoiceDetailModal() {
               <div className="inv-trip-info">
                 <span className="inv-trip-name">{invoice.trip}</span>
                 <span className="inv-trip-agent">Agent: {invoice.agent}</span>
+                {/* Always opens mock trip index 0 — invoicesData() in constants/app.ts tracks
+                    a tripIdx per invoice (see getFinancialData's tripDetail() helper) but it
+                    isn't used here. */}
                 <button className="inv-trip-link" onClick={() => navigate('/app/trips/0')}>
                   Open trip →
                 </button>

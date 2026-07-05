@@ -2,18 +2,30 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { ApiService } from '../services/api-service';
-import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse } from '../types/app';
+import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse } from '../types/app';
 import AddItemModal from '../components/modals/AddItemModal';
+import AddFlightModal from '../components/modals/AddFlightModal';
+import AddStayModal from '../components/modals/AddStayModal';
+import AssignTravelerModal from '../components/modals/AssignTravelerModal';
+import EditTripModal from '../components/modals/EditTripModal';
 import '../styles/TripDetail.css';
 
 // ── TripDetail ─────────────────────────────────────────────────
 // Purpose: Full trip workspace — hero banner, itinerary builder with
 //          tabs (Itinerary/Flights/Stays/Activities/Calls), option selector,
 //          cost summary sidebar, and agent activity feed.
-// State: apiTrip, tripCosts, editing fields, activeOption, builderTab,
-//        addItemDay, updatingStatus.
-// API: ApiService.getTrip, .getTripCosts, .updateTrip, .updateTripStatus,
-//      .createItinerary, .addItineraryDay, .removeItineraryDay.
+// State: apiTrip, tripCosts, editTripOpen, activeOption, builderTab,
+//        addItemDay, addFlightOpen, addingDay, generatingItinerary, updatingStatus.
+// API: ApiService.getTrip, .getTripCosts, .updateTripStatus, .generateItinerary,
+//      .createItinerary, .addItineraryDay, .removeItineraryDay, .removeFlight (add/edit flows
+//      for the trip itself, flights, stays, destinations, and the traveler are all delegated
+//      to EditTripModal/AddFlightModal/AddStayModal/AddItemModal/AssignTravelerModal, which
+//      call ApiService themselves).
+//
+// The route param `tripId` can be either a real backend trip_id (a string like "TRP_...")
+// or a legacy numeric mock trip index (e.g. "0", "3") — `isRealId`/`tid` below is how nearly
+// every piece of derived state in this file branches between "fetch real data" and "render
+// one of the hardcoded demo trips from constants/app.ts" behavior.
 
 // ── Helper functions / transformers ──
 
@@ -26,13 +38,24 @@ const blockKindMeta: Record<string, { icon: string; iconBg: string; kindColor: s
   Venue: { icon: '🏢', iconBg: '#EAF0FF', kindColor: '#2B63F6' },
 };
 
+// Maps the backend's lowercase item_type (DestinationItemType enum) to the capitalized
+// blockKindMeta key used for display — defaults to Activity for legacy rows saved before
+// item_type existed (see the 2026_07_05_080154 migration's column default).
+const itemTypeKind: Record<string, string> = {
+  activity: 'Activity',
+  dining: 'Dining',
+  transfer: 'Transfer',
+  venue: 'Venue',
+};
+
 function dayToBlocks(day: NonNullable<ItineraryResponse['itinerary_days']>[number]): DayBlock[] {
   const blocks: DayBlock[] = [];
   if (day.destinations) {
     day.destinations.forEach(d => {
-      const meta = blockKindMeta.Activity;
+      const kind = itemTypeKind[d.item_type ?? ''] ?? 'Activity';
+      const meta = blockKindMeta[kind] ?? blockKindMeta.Activity;
       blocks.push({
-        kind: 'Activity',
+        kind,
         kindColor: meta.kindColor,
         icon: meta.icon,
         iconBg: meta.iconBg,
@@ -133,7 +156,11 @@ export default function TripDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const ctx = useApp();
+  // A real trip_id is a prefixed string like "TRP_..." (never all-digits), so "does the
+  // param look like a plain number" is how we tell real trips apart from mock trip indices.
   const isRealId = tripId ? !/^\d+$/.test(tripId) : false;
+  // `tid` is only meaningful for mock trips (passed to ctx.getTripDetail/getDays as the
+  // index into constants/app.ts's demo trip array) — it's 0 and unused whenever isRealId is true.
   const tid = tripId ? (isRealId ? 0 : parseInt(tripId, 10)) : 0;
   const { activeOption, setActiveOption, builderTab, setBuilderTab, activeCall, setActiveCall } = ctx;
 
@@ -153,48 +180,52 @@ export default function TripDetail() {
 
   const [tripCosts, setTripCosts] = useState<TripCostResponse | null>(null);
 
-  useEffect(() => {
+  const refreshCosts = useCallback(() => {
     if (!tripId) return;
     ApiService.getTripCosts(tripId).then(setTripCosts).catch(() => {});
   }, [tripId]);
 
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editStartDate, setEditStartDate] = useState('');
-  const [editEndDate, setEditEndDate] = useState('');
-  const [editBudget, setEditBudget] = useState('');
-  const [editDescription, setEditDescription] = useState('');
+  useEffect(() => { refreshCosts(); }, [refreshCosts]);
+
+  const [editTripOpen, setEditTripOpen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [addItemDay, setAddItemDay] = useState<number | null>(null);
+  const [addFlightOpen, setAddFlightOpen] = useState(false);
+  const [addStayOpen, setAddStayOpen] = useState(false);
+  const [assignTravelerOpen, setAssignTravelerOpen] = useState(false);
+  const [editingStartCity, setEditingStartCity] = useState(false);
+  const [startCityDraft, setStartCityDraft] = useState('');
+  const [addingDay, setAddingDay] = useState(false);
+  const [generatingItinerary, setGeneratingItinerary] = useState(false);
+  const [removingDayId, setRemovingDayId] = useState<string | null>(null);
+  const [removingItinerary, setRemovingItinerary] = useState(false);
+  const [apiCalls, setApiCalls] = useState<CallResponse[]>([]);
+  const [newCallTitle, setNewCallTitle] = useState('');
+  const [addingCall, setAddingCall] = useState(false);
+  const [newActionItemText, setNewActionItemText] = useState('');
+  const [savingActionItem, setSavingActionItem] = useState(false);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [payingWithMoolre, setPayingWithMoolre] = useState(false);
 
-  const refreshTrip = useCallback(() => {
+  // Real calls for this trip (Calls tab) — kept separate from the trip/itinerary fetch above
+  // since calls aren't nested under TripResponse.
+  const refreshCalls = useCallback(() => {
+    if (!tripId || !isRealId) return;
+    ApiService.getCalls(tripId).then(res => setApiCalls(res.data)).catch(() => {});
+  }, [tripId, isRealId]);
+
+  useEffect(() => { refreshCalls(); }, [refreshCalls]);
+
+  const refreshTrip = useCallback(async () => {
     if (!tripId) return;
-    ApiService.getTrip(tripId).then(setApiTrip);
+    const trip = await ApiService.getTrip(tripId);
+    setApiTrip(trip);
+    return trip;
   }, [tripId]);
 
-  const startEditing = () => {
-    setEditName(apiTrip?.trip_name ?? td.name);
-    setEditStartDate(apiTrip?.start_date ?? '');
-    setEditEndDate(apiTrip?.end_date ?? '');
-    setEditBudget(apiTrip?.budget ?? '');
-    setEditDescription(apiTrip?.description ?? '');
-    setEditing(true);
-  };
-
-  const cancelEditing = () => setEditing(false);
-
-  const saveEditing = async () => {
-    if (!tripId || !apiTrip) return;
-    await ApiService.updateTrip(tripId, {
-      trip_name: editName,
-      start_date: editStartDate || undefined,
-      end_date: editEndDate || undefined,
-      budget: editBudget || undefined,
-      description: editDescription || undefined,
-    });
-    setEditing(false);
-    refreshTrip();
-  };
 
   const handleStatusTransition = async (status: string) => {
     if (!tripId || !apiTrip) return;
@@ -207,9 +238,30 @@ export default function TripDetail() {
     }
   };
 
+  // Kicks off itinerary generation. For a real trip this calls the backend (which sleeps ~4s
+  // and returns a templated itinerary — see TripController::generateItinerary), showing the
+  // `generatingItinerary` loading state below for the duration; for a mock trip it falls back
+  // to the old client-only fake "drafting" animation (ctx.generateOptions()).
+  const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string }) => {
+    if (!tripId || !isRealId) {
+      ctx.generateOptions();
+      return;
+    }
+    setGeneratingItinerary(true);
+    try {
+      await ApiService.generateItinerary(tripId, prefs);
+      await refreshTrip();
+    } finally {
+      setGeneratingItinerary(false);
+    }
+  }, [tripId, isRealId, ctx, refreshTrip]);
+
   const { td: mockTd, tb: mockTb } = ctx.getTripDetail(tid, activeOption);
 
   // ── Derived data ──
+  // tripTd/tripTb overlay real apiTrip fields onto the mock td/tb (same pattern as
+  // AppContext's apiTripToTripDetail/apiTripToStatusBanner) so the render below doesn't need
+  // separate real/mock branches — it just always reads `td`/`tb`.
 
   const tripTd = useMemo(() => {
     if (!apiTrip) return mockTd;
@@ -264,19 +316,36 @@ export default function TripDetail() {
   const td = tripTd;
   const tb = tripTb;
 
-  const selectedItinerary = useMemo(() => {
-    if (!apiTrip?.itineraries || apiTrip.itineraries.length === 0) return null;
+  // Maps the active option letter (A/B/C/D/E) to an index into apiTrip.itineraries. Each
+  // itinerary the backend generates becomes the next letter in order (see
+  // TripController::generateItinerary's `$optionLetter`), so this only needs array position,
+  // not any special id-matching.
+  const selectedItineraryIndex = useMemo(() => {
+    if (!apiTrip?.itineraries || apiTrip.itineraries.length === 0) return -1;
     const idx = ['A', 'B', 'C', 'D', 'E'].indexOf(activeOption);
-    return apiTrip.itineraries[idx >= 0 && idx < apiTrip.itineraries.length ? idx : 0] ?? null;
+    return idx >= 0 && idx < apiTrip.itineraries.length ? idx : 0;
   }, [apiTrip, activeOption]);
+
+  const selectedItinerary = useMemo(() => {
+    if (selectedItineraryIndex < 0 || !apiTrip?.itineraries) return null;
+    return apiTrip.itineraries[selectedItineraryIndex] ?? null;
+  }, [apiTrip, selectedItineraryIndex]);
 
   const hasApiData = selectedItinerary != null
     && (selectedItinerary.itinerary_days?.length ?? 0) > 0;
 
+  // Cost summary sidebar data, in priority order:
+  // 1) the real /trips/{id}/costs response for the currently-selected itinerary (preferred —
+  //    matches TripController::costs()'s server-side totals including payments/outstanding),
+  // 2) a client-side recomputation from the selected itinerary's raw flights/accommodation/
+  //    destinations (used if tripCosts hasn't loaded yet, e.g. right after generating),
+  // 3) null, falling back further to the mock td.costs in the `costs` variable below.
   const computedCosts = useMemo(() => {
-    if (tripCosts) {
-      const ic = tripCosts.itinerary_costs;
-      const c = tripCosts.currency;
+    // The costs endpoint returns one cost breakdown per itinerary, in the same order
+    // as apiTrip.itineraries, so we match by index rather than itinerary_id.
+    const ic = tripCosts?.itineraries[selectedItineraryIndex] ?? tripCosts?.itineraries[0];
+    if (ic) {
+      const c = ic.currency;
       const fmt = (n: number) => `${c} ${n.toLocaleString()}`;
       return {
         rows: [
@@ -286,15 +355,16 @@ export default function TripDetail() {
         ],
         fee: `Service fee (5%) ${fmt(ic.service_fee)}`,
         total: fmt(ic.total),
-        payments: tripCosts.payments,
-        summary: tripCosts.summary,
+        currency: c,
+        payments: tripCosts?.payments ?? [],
+        summary: tripCosts?.summary,
       };
     }
     if (selectedItinerary) {
       const flightsCost = (selectedItinerary.itinerary_flights ?? []).reduce((s, f) => s + (f.cost ?? 0), 0);
       const staysCost = (selectedItinerary.itinerary_accommodation ?? []).reduce((s, a) => s + (a.cost ?? 0), 0);
       const activitiesCost = (selectedItinerary.itinerary_days ?? []).reduce((sum, d) =>
-        sum + (d.destinations ?? []).reduce((s2, dst) => s2 + (dst.cost ?? 0), 0), 0);
+        sum + (d.destinations ?? []).reduce((s2, dst) => s2 + Number(dst.cost ?? 0), 0), 0);
       const currency = selectedItinerary.itinerary_flights?.[0]?.currency ?? selectedItinerary.itinerary_accommodation?.[0]?.currency ?? 'GHS';
       const fmt = (n: number) => `${currency} ${n.toLocaleString()}`;
       const subTotal = flightsCost + staysCost + activitiesCost;
@@ -308,17 +378,20 @@ export default function TripDetail() {
         ],
         fee: `Service fee (5%) ${fmt(fee)}`,
         total: fmt(total),
+        currency,
+        payments: [] as TripCostResponse['payments'],
+        summary: undefined as TripCostResponse['summary'] | undefined,
       };
     }
     return null;
-  }, [tripCosts, selectedItinerary]);
+  }, [tripCosts, selectedItinerary, selectedItineraryIndex]);
 
   const costs = computedCosts?.rows ?? td.costs ?? [];
   const costTotal = computedCosts?.total ?? td.total ?? '';
   const costFee = computedCosts?.fee ?? 'Service fee charged to traveller';
   const payments = computedCosts?.payments ?? [];
   const costSummary = computedCosts?.summary ?? null;
-  const costCurrency = tripCosts?.currency ?? 'GHS';
+  const costCurrency = computedCosts?.currency ?? 'GHS';
 
   const rawDays = hasApiData && selectedItinerary?.itinerary_days
     ? itineraryDaysToDays(selectedItinerary.itinerary_days)
@@ -328,13 +401,17 @@ export default function TripDetail() {
 
   // ── Event handlers ──
 
+  // Removes a single destination/activity block from a day. For a real trip, this calls the
+  // scoped removeDestinationFromDay endpoint — it must NOT call removeItineraryDay, which
+  // would delete the whole day (and every other destination on it) instead of just this one.
   const handleRemoveBlock = (di: number, bi: number) => {
     if (selectedItinerary?.itinerary_days?.[di]?.destinations) {
       const dst = selectedItinerary.itinerary_days[di].destinations!;
-      if (dst[bi]?.destination_id) {
+      const destinationId = dst[bi]?.destination_id;
+      if (destinationId) {
         const dayId = selectedItinerary.itinerary_days[di].itinerary_day_id;
         if (dayId) {
-          ApiService.removeItineraryDay(dayId).then(() => refreshTrip());
+          ApiService.removeDestinationFromDay(dayId, destinationId).then(() => refreshTrip());
           return;
         }
       }
@@ -342,6 +419,170 @@ export default function TripDetail() {
     ctx.removeBlock(di, bi);
   };
 
+  // Appends the next-numbered day to the selected itinerary. Falls back to the mock-only
+  // ctx.addBlock() if there's no real trip/itinerary yet to add a day to.
+  const handleAddDay = async () => {
+    if (!apiTrip || !selectedItinerary) {
+      ctx.addBlock((ctx.getDays(tid, activeOption)?.length ?? 0) - 1);
+      return;
+    }
+    setAddingDay(true);
+    try {
+      const nextNum = (selectedItinerary.itinerary_days?.length ?? 0) + 1;
+      await ApiService.addItineraryDay(selectedItinerary.itinerary_id, {
+        day_number: nextNum,
+        date: apiTrip.start_date ? apiTrip.start_date.split('T')[0] : undefined,
+        title: `Day ${nextNum}`,
+      });
+      await refreshTrip();
+    } finally {
+      setAddingDay(false);
+    }
+  };
+
+  const handleRemoveFlight = async (idx: number) => {
+    const flight = selectedItinerary?.itinerary_flights?.[idx];
+    if (flight?.flight_id) {
+      await ApiService.removeFlight(flight.flight_id);
+      refreshTrip();
+    }
+  };
+
+  const handleRemoveAccommodation = async (idx: number) => {
+    const accommodation = selectedItinerary?.itinerary_accommodation?.[idx];
+    if (accommodation?.accommodation_id) {
+      await ApiService.removeAccommodation(accommodation.accommodation_id);
+      refreshTrip();
+    }
+  };
+
+  // Saves the selected itinerary's start_city (see AddFlightModal/AddStayModal, which default
+  // their search fields from it) — a no-op if the value hasn't actually changed.
+  const handleSaveStartCity = async () => {
+    setEditingStartCity(false);
+    if (!selectedItinerary) return;
+    const trimmed = startCityDraft.trim();
+    if (trimmed === (selectedItinerary.start_city ?? '')) return;
+    await ApiService.updateItinerary(selectedItinerary.itinerary_id, { start_city: trimmed });
+    refreshTrip();
+  };
+
+  // Deletes an entire day (and everything on it) from the selected itinerary.
+  const handleRemoveDay = async (dayId: string) => {
+    if (!window.confirm('Remove this day and everything on it? This cannot be undone.')) return;
+    setRemovingDayId(dayId);
+    try {
+      await ApiService.removeItineraryDay(dayId);
+      await refreshTrip();
+    } finally {
+      setRemovingDayId(null);
+    }
+  };
+
+  // Deletes an entire itinerary option (e.g. "Option B"). Resets the active option back to
+  // 'A' afterwards since the deleted option's letter/index may no longer exist.
+  const handleRemoveItinerary = async (itineraryId: string) => {
+    if (!window.confirm('Delete this itinerary option? This cannot be undone.')) return;
+    setRemovingItinerary(true);
+    try {
+      await ApiService.deleteItinerary(itineraryId);
+      setActiveOption('A');
+      await refreshTrip();
+    } finally {
+      setRemovingItinerary(false);
+    }
+  };
+
+  // Logs a new call against this trip (Calls tab).
+  const handleAddCall = async () => {
+    if (!apiTrip || !newCallTitle.trim()) return;
+    setAddingCall(true);
+    try {
+      await ApiService.createCall({
+        trip_id: apiTrip.trip_id,
+        title: newCallTitle.trim(),
+        started_at: new Date().toISOString(),
+      });
+      setNewCallTitle('');
+      refreshCalls();
+    } finally {
+      setAddingCall(false);
+    }
+  };
+
+  const handleEndCall = async (callId: string) => {
+    await ApiService.endCall(callId);
+    refreshCalls();
+  };
+
+  const handleAddActionItem = async (callId: string) => {
+    if (!newActionItemText.trim()) return;
+    setSavingActionItem(true);
+    try {
+      await ApiService.addCallActionItem(callId, newActionItemText.trim());
+      setNewActionItemText('');
+      refreshCalls();
+    } finally {
+      setSavingActionItem(false);
+    }
+  };
+
+  // Toggles an action item between pending and checked (done).
+  const handleToggleActionItem = async (itemId: string, currentStatus: string) => {
+    const next = currentStatus === 'checked' ? 'pending' : 'checked';
+    await ApiService.updateCallActionItem(itemId, { status: next });
+    refreshCalls();
+  };
+
+  // Records a payment against this trip (cost summary sidebar). Marked completed
+  // immediately — this app has no separate pending-payment-then-confirm flow yet.
+  const handleRecordPayment = async () => {
+    if (!apiTrip) return;
+    const amount = Number(paymentAmount);
+    if (!paymentAmount.trim() || Number.isNaN(amount) || amount <= 0) return;
+    setSavingPayment(true);
+    try {
+      // Backend validates amount as a whole integer (no decimals) — round rather than reject.
+      await ApiService.recordTripPayment({
+        trip_id: apiTrip.trip_id,
+        amount: Math.round(amount),
+        currency: costCurrency,
+        payment_method: paymentMethod.trim() || undefined,
+        status: 'completed',
+      });
+      setPaymentAmount('');
+      setPaymentMethod('');
+      setShowPaymentForm(false);
+      refreshCosts();
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  // Starts a real mobile-money collection via Moolre (see MoolrePaymentController): creates a
+  // pending transaction server-side and redirects the browser to Moolre's hosted checkout
+  // page. On success the browser navigates away, so there's no "finally" to reset the loading
+  // state — it only needs resetting if the request itself fails before any redirect happens.
+  const handlePayWithMoolre = async () => {
+    if (!apiTrip) return;
+    const amount = Number(paymentAmount);
+    if (!paymentAmount.trim() || Number.isNaN(amount) || amount <= 0) return;
+    setPayingWithMoolre(true);
+    try {
+      const checkout = await ApiService.initiateMoolreTripPayment(apiTrip.trip_id, Math.round(amount));
+      window.location.href = checkout.authorization_url;
+    } catch {
+      ctx.toastAction('Could not start the Moolre payment.');
+      setPayingWithMoolre(false);
+    }
+  };
+
+  // "+ Add item to this day" button. If the day already exists as a real backend row, this
+  // just opens AddItemModal (which does the actual API call once the user fills the form).
+  // If there's no real trip data at all yet — no itinerary, sometimes not even a day row for
+  // this slot — it lazily creates whatever's missing first (an itinerary, then a day), then
+  // opens the modal, so a brand-new trip can go straight from "no itinerary" to "adding an
+  // activity" without a separate explicit "create itinerary" step.
   const handleAddBlock = async (di: number) => {
     const day = selectedItinerary?.itinerary_days?.[di];
 
@@ -410,11 +651,15 @@ export default function TripDetail() {
   const agentFeed = ctx.getAgentFeed();
 
   useEffect(() => {
-    const state = location.state as { triggerGenerate?: boolean } | null;
+    const state = location.state as {
+      triggerGenerate?: boolean;
+      travelerPrefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string };
+    } | null;
     if (state?.triggerGenerate) {
-      ctx.generateOptions();
+      handleGenerateItinerary(state.travelerPrefs);
       window.history.replaceState({}, '');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const tripAgent = ['Kweku Ansah', 'Adwoa Mensah', 'Yaw Boateng', 'Efua Osei'][tid % 4];
@@ -434,7 +679,11 @@ export default function TripDetail() {
   const tabCalls = builderTab === 'calls';
 
   const handleGenerateOptions = () => {
-    ctx.openGenItin();
+    if (isRealId) {
+      handleGenerateItinerary();
+    } else {
+      ctx.openGenItin();
+    }
   };
 
   const handleMessageTraveler = () => {
@@ -456,6 +705,7 @@ export default function TripDetail() {
           cover: ['#2B63F6', '#13B981', '#EB8C2B', '#8B5CF6', '#EC4899'][i % 5],
           rec: i === 0,
           onClick: () => setActiveOption(letter),
+          itineraryId: it.itinerary_id,
         };
       });
     }
@@ -492,88 +742,53 @@ export default function TripDetail() {
           <div className="td-hero-body">
             <div className="td-hero-left">
               <div className="td-hero-title-row">
-                {editing ? (
-                  <input
-                    className="td-edit-input td-edit-name"
-                    value={editName}
-                    onChange={e => setEditName(e.target.value)}
-                    placeholder="Trip name"
-                  />
-                ) : (
-                  <h1 className="td-hero-title">{td.name}</h1>
-                )}
+                <h1 className="td-hero-title">{td.name}</h1>
                 <span className="td-hero-status" style={{ background: td.statusBg, color: td.statusFg }}>
                   {td.status}
                 </span>
               </div>
               <div className="td-hero-meta">
-                {editing ? (
-                  <div className="td-edit-meta-row">
-                    <label className="td-edit-label">
-                      Start:
-                      <input
-                        type="date" className="td-edit-input td-edit-date"
-                        value={editStartDate} onChange={e => setEditStartDate(e.target.value)}
-                      />
-                    </label>
-                    <label className="td-edit-label">
-                      End:
-                      <input
-                        type="date" className="td-edit-input td-edit-date"
-                        value={editEndDate} onChange={e => setEditEndDate(e.target.value)}
-                      />
-                    </label>
-                    <label className="td-edit-label">
-                      Budget:
-                      <input
-                        className="td-edit-input td-edit-budget"
-                        value={editBudget} onChange={e => setEditBudget(e.target.value)}
-                        placeholder="e.g. 50000"
-                      />
-                    </label>
-                  </div>
-                ) : (
-                  <>
-                    <span>{td.traveler}</span>
-                    <span className="td-hero-dot" />
-                    <span>{td.where}</span>
-                    <span className="td-hero-dot" />
-                    <span>{td.dates}</span>
-                    <span className="td-hero-dot" />
-                    <span className="td-hero-value">{td.value}</span>
-                  </>
+                <span>{td.traveler}</span>
+                {apiTrip && (
+                  <button
+                    onClick={() => setAssignTravelerOpen(true)}
+                    className="td-traveler-change-btn"
+                  >
+                    {apiTrip.customers?.[0] ? 'Change' : '+ Assign traveler'}
+                  </button>
                 )}
+                <span className="td-hero-dot" />
+                <span>{td.where}</span>
+                <span className="td-hero-dot" />
+                <span>{td.dates}</span>
+                <span className="td-hero-dot" />
+                <span className="td-hero-value">{td.value}</span>
               </div>
             </div>
             <div className="td-hero-actions">
-              {editing && (
+              {apiTrip && (
                 <>
-                  <label className="td-edit-label td-edit-desc-label">
-                    Description:
-                    <textarea
-                      className="td-edit-input td-edit-desc"
-                      value={editDescription} onChange={e => setEditDescription(e.target.value)}
-                      placeholder="Trip description"
-                      rows={2}
-                    />
-                  </label>
-                  <button onClick={saveEditing} className="td-action-btn" style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }} disabled={!editName.trim()}>
-                    Save
-                  </button>
-                  <button onClick={cancelEditing} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>
-                    Cancel
-                  </button>
-                </>
-              )}
-              {!editing && apiTrip && (
-                <>
-                  <button onClick={startEditing} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>
+                  <button onClick={() => setEditTripOpen(true)} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>
                     Edit
                   </button>
+                  {/* Free-form status change — lets any status be set directly (including
+                      "Cancelled", which the contextual quick-action buttons below can never
+                      reach), independent of the linear-flow shortcuts underneath. */}
+                  <select
+                    className="td-status-select"
+                    value={apiTrip.status}
+                    onChange={e => handleStatusTransition(e.target.value)}
+                    disabled={updatingStatus}
+                    aria-label="Change trip status"
+                  >
+                    {Object.entries(apiStatusMeta).map(([value, meta]) => (
+                      <option key={value} value={value}>{meta.display}</option>
+                    ))}
+                  </select>
                   {apiTrip.status === 'planning' && (
                     <>
-                      <button onClick={handleGenerateOptions} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }} disabled={updatingStatus}>
-                        ✦ Generate options
+                      <button onClick={handleGenerateOptions} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }} disabled={updatingStatus || generatingItinerary}>
+                        {generatingItinerary ? '✦ Generating…' : '✦ Generate options'}
                       </button>
                       <button onClick={handleMessageTraveler} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>
                         Message {td.traveler.split(' ')[0]}
@@ -622,9 +837,9 @@ export default function TripDetail() {
                   )}
                 </>
               )}
-              {!editing && !apiTrip && (
+              {!apiTrip && (
                 <>
-                  <button onClick={startEditing} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>
+                  <button onClick={() => setEditTripOpen(true)} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>
                     Edit
                   </button>
                   <button onClick={handleGenerateOptions} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}>
@@ -699,6 +914,16 @@ export default function TripDetail() {
                         ✦ AI pick
                       </span>
                     )}
+                    {opt.itineraryId && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRemoveItinerary(opt.itineraryId!); }}
+                        className="td-block-remove"
+                        disabled={removingItinerary}
+                        title="Delete this option"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -707,26 +932,62 @@ export default function TripDetail() {
                 <span className="td-add-option-label">Add option</span>
               </div>
             </div>
+            {apiTrip && selectedItinerary && (
+              <div className="td-start-city-row">
+                <span className="td-start-city-label">Start city:</span>
+                {editingStartCity ? (
+                  <input
+                    className="td-start-city-input"
+                    value={startCityDraft}
+                    onChange={e => setStartCityDraft(e.target.value)}
+                    onBlur={handleSaveStartCity}
+                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                    placeholder="e.g. Accra"
+                    autoFocus
+                  />
+                ) : (
+                  <button
+                    className="td-start-city-value"
+                    onClick={() => { setStartCityDraft(selectedItinerary.start_city ?? ''); setEditingStartCity(true); }}
+                  >
+                    {selectedItinerary.start_city || '+ Set start city'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {tb.showDrafting && (
-          <div className="td-drafting-state">
-            <div className="td-drafting-icon">
-              ✦
+        {(tb.showDrafting || generatingItinerary) && (
+          <div className="td-generating-card">
+            <div className="td-generating-icon">✦</div>
+            <h2 className="td-generating-title">Meridian is building options…</h2>
+            <p className="td-generating-sub">Searching flights, stays and experiences...</p>
+            <div className="td-generating-progress-wrap">
+              <div className="td-generating-progress-bar" />
             </div>
-            <div className="td-drafting-title">
-              Meridian is building options…
+            <div className="td-generating-checklist">
+              <div className="td-generating-check-item">
+                <span className="td-generating-check-icon">✓</span>
+                <span>Scanned flight routes</span>
+              </div>
+              <div className="td-generating-check-item">
+                <span className="td-generating-check-icon">✓</span>
+                <span>Matched stays & experiences</span>
+              </div>
+              <div className="td-generating-check-item">
+                <div className="td-generating-spinner" />
+                <span>Curating your itinerary…</span>
+              </div>
             </div>
-            <div className="td-drafting-bar">
-              <div className="td-drafting-fill" />
-            </div>
-            <button
-              onClick={ctx.revealOptions}
-              className="td-drafting-skip"
-            >
-              Skip & preview
-            </button>
+            {!generatingItinerary && (
+              <button
+                onClick={ctx.revealOptions}
+                className="td-drafting-skip"
+              >
+                Skip & preview
+              </button>
+            )}
           </div>
         )}
 
@@ -784,7 +1045,9 @@ export default function TripDetail() {
                     {apiTripLoading && (
                       <div className="td-loading">Loading itinerary...</div>
                     )}
-                    {days.map((day) => (
+                    {days.map((day) => {
+                      const dayId = selectedItinerary?.itinerary_days?.[day.di ?? -1]?.itinerary_day_id;
+                      return (
                       <div key={day.di} className="td-day-row">
                         <div className="td-day-col">
                           <span className="td-day-dow">
@@ -804,8 +1067,20 @@ export default function TripDetail() {
                         </div>
 
                         <div className="td-day-body">
-                          <div className="td-day-title">
-                            {day.title}
+                          <div className="td-day-title-row">
+                            <div className="td-day-title">
+                              {day.title}
+                            </div>
+                            {dayId && (
+                              <button
+                                onClick={() => handleRemoveDay(dayId)}
+                                className="td-block-remove"
+                                disabled={removingDayId === dayId}
+                                title="Remove day"
+                              >
+                                ✕
+                              </button>
+                            )}
                           </div>
 
                           <div className="td-day-blocks">
@@ -879,7 +1154,16 @@ export default function TripDetail() {
                           </button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
+                    <button
+                      onClick={handleAddDay}
+                      className="td-dashed-btn"
+                      disabled={addingDay}
+                      style={{ marginTop: 16 }}
+                    >
+                      {addingDay ? '+ Adding...' : '+ Add day'}
+                    </button>
                   </div>
                 )}
 
@@ -913,16 +1197,15 @@ export default function TripDetail() {
                             <div className="td-flight-price">
                               {f.price}
                             </div>
-                            <button
-                              className="td-flight-cta"
-                              style={{
-                                border: f.cta === 'Selected' ? '1px solid #C4D2FF' : 'none',
-                                background: f.cta === 'Selected' ? '#fff' : '#2B63F6',
-                                color: f.cta === 'Selected' ? '#5B6172' : '#fff',
-                              }}
-                            >
-                              {f.cta}
-                            </button>
+                            {apiTrip && selectedItinerary?.itinerary_flights?.[i]?.flight_id && (
+                              <button
+                                onClick={() => handleRemoveFlight(i)}
+                                className="td-flight-remove"
+                                title="Remove flight"
+                              >
+                                ✕
+                              </button>
+                            )}
                           </div>
                           {f.recDisplay === 'inline-block' && (
                             <span className="td-flight-rec">
@@ -932,6 +1215,15 @@ export default function TripDetail() {
                         </div>
                       ))}
                     </div>
+                    {apiTrip && selectedItinerary && (
+                      <button
+                        onClick={() => setAddFlightOpen(true)}
+                        className="td-dashed-btn"
+                        style={{ marginTop: 12 }}
+                      >
+                        + Add flight
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -972,14 +1264,33 @@ export default function TripDetail() {
                                 {st.price}
                                 <span className="td-stay-price-unit"> / night</span>
                               </span>
-                              <button className="td-stay-select">
-                                Select
-                              </button>
+                              {apiTrip && selectedItinerary?.itinerary_accommodation?.[i]?.accommodation_id ? (
+                                <button
+                                  onClick={() => handleRemoveAccommodation(i)}
+                                  className="td-stay-select"
+                                  style={{ background: '#fff', color: '#D64545', border: '1px solid #FDECEC' }}
+                                >
+                                  Remove
+                                </button>
+                              ) : (
+                                <button className="td-stay-select">
+                                  Select
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
+                    {apiTrip && selectedItinerary && (
+                      <button
+                        onClick={() => setAddStayOpen(true)}
+                        className="td-dashed-btn"
+                        style={{ marginTop: 12 }}
+                      >
+                        + Add stay
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -1023,30 +1334,157 @@ export default function TripDetail() {
                 {tabCalls && (
                   <div className="td-calls-grid">
                     <div>
-                      {callLogsArr.map((cl, i) => (
-                        <div
-                          key={i}
-                          onClick={() => setActiveCall(i)}
-                          className="td-call-log"
-                          style={{ background: cl.bg, borderColor: cl.border }}
-                        >
-                          <div className="td-call-log-icon">
-                            {cl.icon}
-                          </div>
-                          <div className="td-call-log-info">
-                            <div className="td-call-log-title">
-                              {cl.title}
+                      {apiTrip ? (
+                        <>
+                          {apiCalls.map((c, i) => (
+                            <div
+                              key={c.call_id}
+                              onClick={() => setActiveCall(i)}
+                              className="td-call-log"
+                              style={{
+                                background: activeCall === i ? '#F4F7FF' : 'transparent',
+                                borderColor: activeCall === i ? '#C4D2FF' : 'transparent',
+                              }}
+                            >
+                              <div className="td-call-log-icon">🎥</div>
+                              <div className="td-call-log-info">
+                                <div className="td-call-log-title">
+                                  {c.title || 'Untitled call'}
+                                </div>
+                                <div className="td-call-log-meta">
+                                  {c.started_at ? new Date(c.started_at).toLocaleString() : 'Not started'}
+                                  {c.ended_at ? ' · Ended' : ''}
+                                </div>
+                              </div>
                             </div>
-                            <div className="td-call-log-meta">
-                              {cl.meta}
+                          ))}
+                          <div className="td-add-call-row">
+                            <input
+                              value={newCallTitle}
+                              onChange={e => setNewCallTitle(e.target.value)}
+                              placeholder="Call title (e.g. Discovery call)"
+                              className="td-call-input"
+                            />
+                            <button
+                              onClick={handleAddCall}
+                              disabled={addingCall || !newCallTitle.trim()}
+                              className="td-dashed-btn"
+                            >
+                              {addingCall ? 'Logging...' : '+ Log a call'}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        callLogsArr.map((cl, i) => (
+                          <div
+                            key={i}
+                            onClick={() => setActiveCall(i)}
+                            className="td-call-log"
+                            style={{ background: cl.bg, borderColor: cl.border }}
+                          >
+                            <div className="td-call-log-icon">
+                              {cl.icon}
+                            </div>
+                            <div className="td-call-log-info">
+                              <div className="td-call-log-title">
+                                {cl.title}
+                              </div>
+                              <div className="td-call-log-meta">
+                                {cl.meta}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
 
                     <div>
-                      {call ? (
+                      {apiTrip ? (
+                        (() => {
+                          const selectedCall = apiCalls[activeCall];
+                          if (!selectedCall) {
+                            return (
+                              <div className="td-call-empty">
+                                Select a call to view details, or log a new one.
+                              </div>
+                            );
+                          }
+                          const organizer = typeof selectedCall.organized_by === 'object' && selectedCall.organized_by
+                            ? selectedCall.organized_by.display_name
+                            : null;
+                          return (
+                            <div>
+                              <div className="td-call-detail-wrap">
+                                <div className="td-call-detail-title">
+                                  {selectedCall.title || 'Untitled call'}
+                                </div>
+                                <div className="td-call-detail-meta">
+                                  {organizer ? `Organized by ${organizer} · ` : ''}
+                                  {selectedCall.started_at ? new Date(selectedCall.started_at).toLocaleString() : 'Not started yet'}
+                                </div>
+                              </div>
+                              {selectedCall.ended_at ? (
+                                <div className="td-call-badge">✓ Call ended</div>
+                              ) : (
+                                <button
+                                  onClick={() => handleEndCall(selectedCall.call_id)}
+                                  className="td-call-badge td-call-end-btn"
+                                >
+                                  End call
+                                </button>
+                              )}
+                              {selectedCall.notes && (
+                                <div className="td-call-section">
+                                  <div className="td-call-section-label">
+                                    Notes
+                                  </div>
+                                  <p className="td-summary-text">
+                                    {selectedCall.notes}
+                                  </p>
+                                </div>
+                              )}
+                              <div className="td-call-section">
+                                <div className="td-call-section-label-mb8">
+                                  Action points
+                                </div>
+                                {(selectedCall.action_items ?? []).map((a, i) => (
+                                  <div key={a.action_item_id} className="td-call-action-row">
+                                    <button
+                                      onClick={() => handleToggleActionItem(a.action_item_id, a.status)}
+                                      className="td-call-action-num td-call-action-toggle"
+                                      style={a.status === 'checked' ? { background: '#0E9F6E', color: '#fff' } : undefined}
+                                      title="Toggle done"
+                                    >
+                                      {a.status === 'checked' ? '✓' : i + 1}
+                                    </button>
+                                    <span
+                                      className="td-call-action-text"
+                                      style={a.status === 'checked' ? { textDecoration: 'line-through', color: '#AEB3C2' } : undefined}
+                                    >
+                                      {a.description}
+                                    </span>
+                                  </div>
+                                ))}
+                                <div className="td-add-call-row">
+                                  <input
+                                    value={newActionItemText}
+                                    onChange={e => setNewActionItemText(e.target.value)}
+                                    placeholder="Add an action point..."
+                                    className="td-call-input"
+                                  />
+                                  <button
+                                    onClick={() => handleAddActionItem(selectedCall.call_id)}
+                                    disabled={savingActionItem || !newActionItemText.trim()}
+                                    className="td-dashed-btn"
+                                  >
+                                    + Add
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : call ? (
                         <div>
                           <div className="td-call-detail-wrap">
                             <div className="td-call-detail-title">
@@ -1138,6 +1576,56 @@ export default function TripDetail() {
                   <div className="td-cost-fee">
                     {costFee}
                   </div>
+                  {apiTrip && (
+                    <div className="td-record-payment">
+                      {showPaymentForm ? (
+                        <div className="td-payment-form">
+                          <input
+                            value={paymentAmount}
+                            onChange={e => setPaymentAmount(e.target.value)}
+                            placeholder={`Amount (${costCurrency})`}
+                            type="number"
+                            className="td-call-input"
+                          />
+                          <input
+                            value={paymentMethod}
+                            onChange={e => setPaymentMethod(e.target.value)}
+                            placeholder="Method (e.g. Paystack, bank transfer)"
+                            className="td-call-input"
+                          />
+                          <div className="td-payment-form-actions">
+                            <button
+                              onClick={() => { setShowPaymentForm(false); setPaymentAmount(''); setPaymentMethod(''); }}
+                              className="td-action-btn"
+                              style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handlePayWithMoolre}
+                              disabled={payingWithMoolre || savingPayment || !paymentAmount.trim()}
+                              className="td-action-btn"
+                              style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}
+                            >
+                              {payingWithMoolre ? 'Redirecting…' : 'Pay with Mobile Money'}
+                            </button>
+                            <button
+                              onClick={handleRecordPayment}
+                              disabled={savingPayment || payingWithMoolre || !paymentAmount.trim()}
+                              className="td-action-btn"
+                              style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }}
+                            >
+                              {savingPayment ? 'Saving...' : 'Record manually'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => setShowPaymentForm(true)} className="td-dashed-btn">
+                          + Record payment
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {payments.length > 0 && (
                     <>
                       <div className="td-cost-divider" />
@@ -1233,10 +1721,37 @@ export default function TripDetail() {
         open={addItemDay !== null}
         dayIndex={addItemDay ?? 0}
         dayId={addItemDay !== null
-          ? selectedItinerary?.itinerary_days?.find(d => d.day_number === addItemDay + 1)?.itinerary_day_id ?? null
+          ? selectedItinerary?.itinerary_days?.[addItemDay]?.itinerary_day_id ?? null
           : null}
         onClose={() => setAddItemDay(null)}
         onSaved={() => { refreshTrip(); setAddItemDay(null); }}
+      />
+      <AddFlightModal
+        open={addFlightOpen}
+        itineraryId={selectedItinerary?.itinerary_id ?? null}
+        onClose={() => setAddFlightOpen(false)}
+        onSaved={() => { refreshTrip(); setAddFlightOpen(false); }}
+      />
+      <AddStayModal
+        open={addStayOpen}
+        itineraryId={selectedItinerary?.itinerary_id ?? null}
+        onClose={() => setAddStayOpen(false)}
+        onSaved={() => { refreshTrip(); setAddStayOpen(false); }}
+      />
+      <AssignTravelerModal
+        open={assignTravelerOpen}
+        tripId={apiTrip?.trip_id ?? null}
+        companyId={apiTrip?.company_id ?? null}
+        currentCustomerId={apiTrip?.customers?.[0]?.customer_id ?? null}
+        onClose={() => setAssignTravelerOpen(false)}
+        onAssigned={() => { refreshTrip(); setAssignTravelerOpen(false); }}
+      />
+      <EditTripModal
+        open={editTripOpen}
+        trip={apiTrip}
+        fallbackName={td.name}
+        onClose={() => setEditTripOpen(false)}
+        onSaved={refreshTrip}
       />
     </div>
   );

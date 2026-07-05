@@ -148,9 +148,13 @@ const acctOptions = [
 // ── ConnectChannelModal ──────────────────────────────────────
 // Purpose: Multi-step modal to connect an external messaging channel (WhatsApp/Gmail/Instagram).
 // Props: none (reads/writes all step state from AppContext)
+// This entire flow is a UI simulation — pick/auth/sync/done are just local state transitions
+// timed with setTimeout in AppContext (connectGo() etc.), with hardcoded fake "142 chats
+// synced" style copy from connectChannelView() in constants/app.ts. There's no real
+// WhatsApp/Gmail/Instagram OAuth or API integration behind any of it yet.
 export default function ConnectChannelModal() {
   const {
-    connectOpen, connectStep, connectChannel, ccPickList, ccAuth, ccSync, ccDone,
+    connectOpen, connectChannel, ccPickList, ccAuth, ccSync, ccDone,
     closeConnect, pickChannel, connectGo, finishConnect,
   } = useApp();
 

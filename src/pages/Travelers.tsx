@@ -34,7 +34,7 @@ const emptyForm = {
 export default function Travelers() {
   const { user } = useAuth();
   const ctx = useApp();
-  const defaultCompanyId = user?.companies?.[0]?.company_id ?? '';
+  const defaultCompanyId = (user?.companies?.find(c => c.pivot.is_default) ?? user?.companies?.[0])?.company_id ?? '';
 
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [loading, setLoading] = useState(true);

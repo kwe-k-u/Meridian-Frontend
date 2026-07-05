@@ -109,6 +109,19 @@
   background: #D9DCE4;
   flex-shrink: 0;
 }
+.td-traveler-change-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2B63F6;
+  cursor: pointer;
+  line-height: 20px;
+}
+.td-traveler-change-btn:hover {
+  text-decoration: underline;
+}
 .td-hero-value {
   font-weight: 600;
   color: #15161B;
@@ -262,44 +275,112 @@
   font-weight: 500;
   color: var(--text-muted);
 }
-/* ── Drafting State ── */
-.td-drafting-state {
-  text-align: center;
-  padding: 80px 0;
+.td-start-city-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.td-start-city-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.td-start-city-value {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2B63F6;
+  cursor: pointer;
+}
+.td-start-city-value:hover {
+  text-decoration: underline;
+}
+.td-start-city-input {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #DDE0E8;
+  outline: none;
+  width: 160px;
+}
+.td-start-city-input:focus {
+  border-color: #2B63F6;
+  box-shadow: 0 0 0 2px rgba(43,99,246,0.1);
+}
+/* ── Drafting / Generating State ──
+   Same visual design as CreateTripModal's step-2 loading screen (.ctm-* classes there),
+   reused here (with a td- prefix) for both the mock "AI drafting" status banner and the
+   real generatingItinerary loading state while ApiService.generateItinerary() is in flight. */
+.td-generating-card {
+  padding: 56px 32px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  text-align: center;
 }
-.td-drafting-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: linear-gradient(135deg,#2B63F6,#5AA0FF);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  color: #fff;
+.td-generating-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+  animation: td-generating-float 2s ease-in-out infinite;
 }
-.td-drafting-title {
+.td-generating-title {
   font-size: 20px;
   font-weight: 700;
   color: #15161B;
+  margin: 0 0 4px;
   line-height: 28px;
 }
-.td-drafting-bar {
-  width: 200px;
-  height: 4px;
+.td-generating-sub {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0 0 28px;
+}
+.td-generating-progress-wrap {
+  width: 100%;
+  max-width: 320px;
+  height: 6px;
   background: #EEF0F4;
-  border-radius: 2px;
+  border-radius: 3px;
+  margin-bottom: 24px;
   overflow: hidden;
 }
-.td-drafting-fill {
-  width: 30%;
+.td-generating-progress-bar {
   height: 100%;
   background: linear-gradient(90deg,#2B63F6,#5AA0FF);
-  border-radius: 2px;
+  border-radius: 3px;
+  animation: td-generating-bar 4s ease-in-out forwards;
+}
+.td-generating-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: 8px;
+}
+.td-generating-check-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #15161B;
+}
+.td-generating-check-icon {
+  color: #0E9F6E;
+  font-size: 16px;
+  font-weight: 700;
+}
+.td-generating-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #DDE0E8;
+  border-top-color: #2B63F6;
+  border-radius: 50%;
+  animation: td-generating-spin .6s linear infinite;
+  flex-shrink: 0;
 }
 .td-drafting-skip {
   background: none;
@@ -310,6 +391,18 @@
   color: var(--text);
   text-decoration: underline;
   line-height: 20px;
+}
+@keyframes td-generating-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes td-generating-bar {
+  0% { width: 0; }
+  50% { width: 65%; }
+  100% { width: 100%; }
+}
+@keyframes td-generating-spin {
+  to { transform: rotate(360deg); }
 }
 /* ── Brief Section ── */
 .td-brief-grid {
@@ -473,11 +566,17 @@
   flex: 1;
   min-width: 0;
 }
+.td-day-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .td-day-title {
   font-size: 15px;
   font-weight: 600;
   color: #15161B;
-  margin-bottom: 12px;
   line-height: 22px;
 }
 .td-day-blocks {
@@ -707,6 +806,20 @@
   color: #B7791F;
   line-height: 16px;
   flex-shrink: 0;
+}
+.td-flight-remove {
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #FDECEC;
+  background: #fff;
+  color: #D64545;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 16px;
+}
+.td-flight-remove:hover {
+  background: #FDECEC;
 }
 /* ── Stays Tab ── */
 .td-stays-desc {
@@ -997,6 +1110,27 @@
   margin-bottom: 8px;
   line-height: 18px;
 }
+.td-call-end-btn {
+  border: none;
+  cursor: pointer;
+}
+.td-call-action-toggle {
+  border: none;
+  cursor: pointer;
+}
+.td-add-call-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.td-call-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
 /* ── Right Sidebar (Cost & Agent) ── */
 .td-sticky-sidebar {
   position: sticky;
@@ -1064,6 +1198,20 @@
   color: #AEB3C2;
   margin-top: 8px;
   line-height: 16px;
+}
+.td-record-payment {
+  margin-top: 12px;
+}
+.td-payment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.td-payment-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 .td-agent-header {
   padding: 16px 20px;
@@ -1164,57 +1312,20 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-/* ── Edit Mode ── */
-.td-edit-input {
-  font-family: inherit;
-  font-size: 13px;
-  padding: 4px 8px;
-  border-radius: 6px;
+.td-status-select {
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
   border: 1px solid #DDE0E8;
   background: #fff;
-  color: #15161B;
-  outline: none;
+  color: #5B6172;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
   line-height: 20px;
 }
-.td-edit-input:focus {
-  border-color: #2B63F6;
-  box-shadow: 0 0 0 2px rgba(43,99,246,0.1);
-}
-.td-edit-name {
-  font-size: 20px;
-  font-weight: 700;
-  padding: 6px 10px;
-  flex: 1;
-}
-.td-edit-date {
-  width: 140px;
-}
-.td-edit-budget {
-  width: 120px;
-}
-.td-edit-desc {
-  flex: 1;
-  min-width: 200px;
-  resize: vertical;
-}
-.td-edit-meta-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.td-edit-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #8A90A2;
-  font-weight: 500;
-}
-.td-edit-desc-label {
-  flex: 1;
-  min-width: 0;
+.td-status-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ── Payments Breakdown ── */

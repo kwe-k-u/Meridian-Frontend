@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../contexts/AppContext';
 import '../../styles/CreateTripModal.css';
+import { ApiService } from '../../services/api-service';
+import { useAuth } from '../../contexts/AuthContext';
 
 const keyframes = `
 @keyframes mfloat {
@@ -23,11 +25,15 @@ const keyframes = `
 // Props: none (reads/writes state from AppContext)
 export default function CreateTripModal() {
   const navigate = useNavigate();
-  const { createOpen, createStep, createFromConvo, closeCreate, startSearch } = useApp();
+  const { createOpen, createStep, createFromConvo, createdTripId, closeCreate, startSearch } = useApp();
   const [tripName, setTripName] = useState('');
   const [request, setRequest] = useState('');
+  // Collected but never sent to the backend — createTrip() has no field for traveler count/
+  // names, so this input is currently decorative.
   const [travelers, setTravelers] = useState('');
-  const [when, setWhen] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const ctx = useAuth();
 
   if (!createOpen) return null;
 
@@ -35,14 +41,28 @@ export default function CreateTripModal() {
   const cs2 = createStep === 2;
   const cs3 = createStep === 3;
 
-  const handleGenerate = () => {
+  // Creates a real trip via the API (status 'planning', the traveler `request` text becomes
+  // the trip description), then starts the multi-step "Meridian is building options…" modal
+  // animation (startSearch — a fixed-timer UI simulation, not an actual generation call; the
+  // real generation call happens later, from TripDetail.tsx, once the user opens the trip).
+  const handleGenerate = async () => {
     if (!tripName.trim()) return;
-    startSearch();
+    ApiService.createTrip({
+    company_id: ctx.user!.companies.find((c)=>c.pivot.is_default)!.company_id,
+    created_by: ctx.user?.user_id,
+    trip_name: tripName,
+    description: request,
+    start_date: startDate || undefined,
+    end_date: endDate || undefined,
+    status: "planning",
+    }).then((response)=>{
+      startSearch(response.trip_id);
+    })
   };
 
   const handleOpenCreatedTrip = () => {
     closeCreate();
-    navigate('/app/trips/0');
+    navigate('/app/trips/' + (createdTripId ?? '0'));
   };
 
   return (
@@ -92,15 +112,25 @@ export default function CreateTripModal() {
                       onChange={e => setTravelers(e.target.value)}
                     />
                   </div>
-                  <div className="ctm-field">
-                    <span className="ctm-label">When</span>
-                    <input
-                      className="ctm-input"
-                      type="text"
-                      placeholder="e.g. 4 – 14 Oct 2026"
-                      value={when}
-                      onChange={e => setWhen(e.target.value)}
-                    />
+                  <div className="ctm-field-row">
+                    <div className="ctm-field">
+                      <span className="ctm-label">Start date</span>
+                      <input
+                        className="ctm-input"
+                        type="date"
+                        value={startDate}
+                        onChange={e => setStartDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="ctm-field">
+                      <span className="ctm-label">End date</span>
+                      <input
+                        className="ctm-input"
+                        type="date"
+                        value={endDate}
+                        onChange={e => setEndDate(e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

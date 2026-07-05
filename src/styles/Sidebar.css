@@ -159,3 +159,35 @@
 .profile-chevron {
   color: var(--text-muted);
 }
+
+/* ── Profile Dropdown Menu ── */
+.sidebar-profile-wrapper {
+  position: relative;
+}
+
+.profile-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 14px;
+  min-width: 140px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.profile-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #EF4444;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.profile-menu-item:hover {
+  background: #FEF2F2;
+}

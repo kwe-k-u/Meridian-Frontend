@@ -11,6 +11,12 @@ import '../styles/Settings.css'
 //          Roles, Channels, and Notification sub-panels.
 // State: displayName, phone, saving (in EditProfile); company/team from API.
 // API: updateProfile (AuthContext), getCompany/updateCompany, sendInvitation.
+//
+// Of the six tabs, Profile/Workspace/Team & Seats/Roles all fetch real data from the backend.
+// Channels and Notifications are still fully static/local-only — Channels renders a
+// hardcoded connect-button list (real connection would need actual OAuth/WhatsApp
+// integrations), and Notifications keeps its toggle state in local useState with nowhere to
+// persist it server-side yet.
 
 const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
   { key: 'profile', label: 'Profile' },
@@ -152,7 +158,7 @@ function TeamAndSeats() {
         company_id: defaultCompanyId,
         invited_by: user.user_id,
         email: inviteEmail.trim(),
-        role: 'agent',
+        role: 'member',
       });
       toastAction(`Invitation sent to ${inviteEmail.trim()}`);
       setInviteEmail('');
@@ -187,9 +193,9 @@ function TeamAndSeats() {
         {team.map((m) => {
           const isYou = m.user_id === user?.user_id;
           const initials = (m.display_name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
-          const colors: Record<string, string> = { 'super-admin': '#16143A', admin: '#2B63F6', agent: '#0E9F6E', finance: '#B7791F' };
-          const bgColors: Record<string, string> = { 'super-admin': '#EEF0F4', admin: '#EAF0FF', agent: '#E3F7EF', finance: '#FFF3E0' };
-          const role = m.pivot.role || 'agent';
+          const colors: Record<string, string> = { owner: '#16143A', admin: '#2B63F6', member: '#0E9F6E' };
+          const bgColors: Record<string, string> = { owner: '#EEF0F4', admin: '#EAF0FF', member: '#E3F7EF' };
+          const role = m.pivot.role || 'member';
           return (
             <div key={m.user_id} className="tr">
               <div className="avatar-row">
@@ -251,15 +257,15 @@ function Roles() {
   const roleDefs = useMemo(() => {
     const countByRole: Record<string, number> = {};
     team.forEach(m => {
-      const r = m.pivot.role || 'agent';
+      const r = m.pivot.role || 'member';
       countByRole[r] = (countByRole[r] || 0) + 1;
     });
 
     return [
       {
-        name: 'Super Admin',
-        count: countByRole['super-admin'] ?? 0,
-        countLabel: `${countByRole['super-admin'] ?? 0} member${(countByRole['super-admin'] ?? 0) !== 1 ? 's' : ''}`,
+        name: 'Owner',
+        count: countByRole['owner'] ?? 0,
+        countLabel: `${countByRole['owner'] ?? 0} member${(countByRole['owner'] ?? 0) !== 1 ? 's' : ''}`,
         desc: 'Full access to all company settings, billing, and team management.',
         icon: '★',
         iconBg: '#16143A',
@@ -280,13 +286,13 @@ function Roles() {
         perms: [
           { label: 'Manage trips & customers', color: '#0E9F6E', icon: '' },
           { label: 'View reports', color: '#0E9F6E', icon: '' },
-          { label: 'Invite agents', color: '#0E9F6E', icon: '' },
+          { label: 'Invite members', color: '#0E9F6E', icon: '' },
         ],
       },
       {
-        name: 'Agent',
-        count: countByRole['agent'] ?? 0,
-        countLabel: `${countByRole['agent'] ?? 0} member${(countByRole['agent'] ?? 0) !== 1 ? 's' : ''}`,
+        name: 'Member',
+        count: countByRole['member'] ?? 0,
+        countLabel: `${countByRole['member'] ?? 0} member${(countByRole['member'] ?? 0) !== 1 ? 's' : ''}`,
         desc: 'Day-to-day trip management and itinerary building.',
         icon: '●',
         iconBg: '#E3F7EF',
@@ -294,19 +300,6 @@ function Roles() {
           { label: 'Create & edit trips', color: '#0E9F6E', icon: '' },
           { label: 'Build itineraries', color: '#0E9F6E', icon: '' },
           { label: 'Communicate with travelers', color: '#0E9F6E', icon: '' },
-        ],
-      },
-      {
-        name: 'Finance',
-        count: countByRole['finance'] ?? 0,
-        countLabel: `${countByRole['finance'] ?? 0} member${(countByRole['finance'] ?? 0) !== 1 ? 's' : ''}`,
-        desc: 'Financial operations — invoices, payments, and reports.',
-        icon: '■',
-        iconBg: '#FFF3E0',
-        perms: [
-          { label: 'View & send invoices', color: '#0E9F6E', icon: '' },
-          { label: 'Record payments', color: '#0E9F6E', icon: '' },
-          { label: 'Financial reports', color: '#0E9F6E', icon: '' },
         ],
       },
     ];

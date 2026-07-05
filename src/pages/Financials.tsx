@@ -29,6 +29,10 @@ const fmtDate = (d: string | null) => {
 //          transaction table.
 // State: transactions, loading.
 // API: ApiService.getTransactions.
+//
+// Every stat/chart on this page is computed client-side (via useMemo below) from the real
+// `transactions` list — this page does NOT use AppContext's getFinancialData()/finStats()/
+// chartData() mock generators, even though those still exist in constants/app.ts.
 
 export default function Financials() {
   const navigate = useNavigate();
@@ -56,6 +60,9 @@ export default function Financials() {
     const pending = transactions.filter(t => t.status === 'pending');
     const refunded = transactions.filter(t => t.status === 'refunded');
 
+    // Note: `revenue` and `paidOut` are computed identically (sum of all completed
+    // transactions) — there's currently no distinction between "revenue recognized" and
+    // "cash actually paid out to the agency" (e.g. minus a platform fee or payout delay).
     const revenue = completed.reduce((s, t) => s + t.amount, 0);
     const outstanding = pending.reduce((s, t) => s + t.amount, 0);
     const paidOut = completed.reduce((s, t) => s + t.amount, 0);
@@ -100,8 +107,33 @@ export default function Financials() {
     });
   }, [transactions]);
 
+  // Clicking a trip-payment row opens the linked trip; subscription payments have no trip
+  // to open, so those just show a quick summary toast instead.
   const handleRowClick = (tx: TransactionResponse) => {
+    const tripId = tx.trip_payment?.trip?.trip_id;
+    if (tripId) {
+      navigate(`/app/trips/${tripId}`);
+      return;
+    }
     ctx.toastAction?.(`Transaction: ${tx.transaction_id} — ${fmtCurrency(tx.amount)}`);
+  };
+
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+
+  // Marks a pending transaction completed — e.g. once a bank transfer or manual payment has
+  // actually cleared. Stops the row's own onClick (which would otherwise navigate away).
+  const handleMarkPaid = async (e: React.MouseEvent, tx: TransactionResponse) => {
+    e.stopPropagation();
+    setMarkingPaidId(tx.transaction_id);
+    try {
+      await ApiService.updateTransactionStatus(tx.transaction_id, 'completed');
+      await fetch();
+      ctx.toastAction?.('Marked as paid');
+    } catch {
+      ctx.toastAction?.('Failed to update transaction');
+    } finally {
+      setMarkingPaidId(null);
+    }
   };
 
   return (
@@ -159,7 +191,7 @@ export default function Financials() {
         ) : transactions.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#8A90A2' }}>No transactions yet</div>
         ) : (
-          transactions.map((tx, i) => {
+          transactions.map((tx) => {
             const sm = statusMeta[tx.status] ?? { bg: '#EEF0F4', fg: '#5B6172' };
             return (
               <div key={tx.transaction_id} className="tr" onClick={() => handleRowClick(tx)}>
@@ -175,6 +207,15 @@ export default function Financials() {
                   <span className="status-pill" style={{ background: sm.bg, color: sm.fg }}>
                     {tx.status}
                   </span>
+                  {tx.status === 'pending' && (
+                    <button
+                      onClick={(e) => handleMarkPaid(e, tx)}
+                      disabled={markingPaidId === tx.transaction_id}
+                      className="mark-paid-btn"
+                    >
+                      {markingPaidId === tx.transaction_id ? 'Saving...' : 'Mark as paid'}
+                    </button>
+                  )}
                 </span>
                 <span>
                   <span className="td">{fmtCurrency(tx.amount, tx.currency)}</span>

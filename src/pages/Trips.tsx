@@ -10,6 +10,8 @@ import '../styles/Trips.css';
 // State: activeFilter, trips, loading, error.
 // API: ApiService.getTrips.
 
+// Same backend-status -> display-label mapping as AppContext.tsx's apiStatusMeta and
+// TripDetail.tsx's local copy (kept separate rather than shared/imported).
 const statusMeta: Record<string, { display: TripStatus; bg: string; fg: string }> = {
   planning:     { display: 'Draft',           bg: '#EEF0F4', fg: '#5B6172' },
   inquiry:      { display: 'Inquiry',         bg: '#FFF3E0', fg: '#B7791F' },
@@ -49,7 +51,9 @@ function travelerName(trip: TripResponse): string {
     const c = trip.customers[0];
     return `${c.first_name} ${c.last_name}`;
   }
-  return trip.created_by_user?.display_name ?? 'Unknown';
+  return typeof trip.created_by === 'object' && trip.created_by
+    ? trip.created_by.display_name
+    : 'Unknown';
 }
 
 function whereFrom(trip: TripResponse): string {

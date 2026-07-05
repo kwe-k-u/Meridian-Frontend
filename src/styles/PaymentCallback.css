@@ -1,0 +1,42 @@
+.pc-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 24px;
+}
+.pc-card {
+  background: #fff;
+  border: 1px solid #ECEDF2;
+  border-radius: var(--radius-lg, 12px);
+  padding: 40px 32px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+}
+.pc-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+.pc-heading {
+  font-size: 20px;
+  font-weight: 700;
+  color: #16143A;
+  margin: 0 0 8px;
+}
+.pc-body {
+  font-size: 14px;
+  color: #5B6172;
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
+.pc-back-link {
+  display: inline-block;
+  padding: 10px 20px;
+  border-radius: var(--radius-md, 8px);
+  background: #2B63F6;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}

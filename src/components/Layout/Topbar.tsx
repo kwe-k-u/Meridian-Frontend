@@ -1,4 +1,3 @@
-import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { useApp } from '../../contexts/AppContext';
 import '../../styles/Topbar.css';
@@ -44,6 +43,7 @@ export default function Topbar() {
         </div>
       </div>
 
+      {/* Decorative only — this input has no value/onChange, so typing does nothing yet. */}
       <div className="topbar-search">
         <div className="topbar-search-wrap">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A90A2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -79,6 +79,8 @@ export default function Topbar() {
           New trip
         </button>
 
+        {/* Notification bell always shows a "no new notifications" toast — there's no real
+            notification feed wired up yet, just the dot indicator. */}
         <div
           onClick={() => toastAction('No new notifications')}
           className="topbar-notif"

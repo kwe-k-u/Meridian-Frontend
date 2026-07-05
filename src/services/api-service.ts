@@ -2,6 +2,15 @@
 // Central HTTP service wrapping all backend endpoints. Handles auth token injection via
 // axios interceptor and provides typed methods for auth, customers, transactions, trips,
 // destinations, itineraries, days, flights, and accommodation CRUD operations.
+//
+// Not every method here is called from the UI yet — getItineraries/getItinerary/
+// deleteItinerary/updateItineraryDay/updateFlight/updateAccommodation/getCustomer are fully
+// wired to the backend but have no caller in src/pages or src/components today — they're here
+// for whichever screen ends up needing them (e.g. a fuller "edit itinerary metadata" UI;
+// updateItinerary itself IS used now, but only for its start_city field — see TripDetail.tsx's
+// inline start-city editor). recordSubscriptionPayment is similarly unused now that
+// Pricing.tsx pays through Moolre (initiateMoolreSubscriptionPayment) instead of recording a
+// payment as already-completed — kept for a possible future "record an offline payment" flow.
 
 import axios from 'axios';
 import type { LoginResponse } from '../types/auth';
@@ -9,7 +18,9 @@ import type {
   DashboardResponse, ApiPaginatedResponse,
   CustomerResponse, TransactionResponse, TripResponse, TripCostResponse, ItineraryResponse,
   ItineraryDayResponse, ItineraryFlightResponse, ItineraryAccommodationResponse,
-  DestinationResponse, CompanyResponse,
+  DestinationResponse, CompanyResponse, CallResponse, CallActionItemResponse,
+  SubscriptionTierResponse, CompanySubscriptionResponse, MoolreCheckoutResponse,
+  FlightSearchResponse, HotelSearchResponse,
 } from '../types/app';
 
 export class ApiService {
@@ -73,11 +84,21 @@ export class ApiService {
     }
   }
 
-  public static async googleLogin(idToken: string): Promise<LoginResponse> {
-    const endpoint = `${ApiService.BASE_URL}/auth/google`
+  public static async googleLogin(google: {
+    idToken: string;
+    email: string | null;
+    displayName: string | null;
+    avatarUrl: string | null;
+  }): Promise<LoginResponse> {
+    const endpoint = `${ApiService.BASE_URL}/auth/login`
 
     try {
-      const response = await axios.post(endpoint, { id_token: idToken })
+      const response = await axios.post(endpoint, {
+        provider_token: google.idToken,
+        email: google.email,
+        display_name: google.displayName,
+        avatar_url: google.avatarUrl,
+      })
       return response.data
     } catch (error) {
       console.error('Error during Google sign-in:', error)
@@ -150,6 +171,7 @@ export class ApiService {
     }
   }
 
+  // ── Dashboard ──
   public static async getDashboard(): Promise<DashboardResponse> {
     const endpoint = `${ApiService.BASE_URL}/dashboard`;
 
@@ -165,8 +187,6 @@ export class ApiService {
       throw new Error(errorMessage);
     }
   }
-
-  // ── Dashboard ──
 
   // ── Customers ──
   public static async getCustomers(page = 1): Promise<ApiPaginatedResponse<CustomerResponse>> {
@@ -213,7 +233,7 @@ export class ApiService {
     await axios.delete(`${ApiService.BASE_URL}/customers/${id}`);
   }
 
-  // ── Customers ──
+  // ── Transactions ──
   public static async getTransactions(page = 1): Promise<ApiPaginatedResponse<TransactionResponse>> {
     const res = await axios.get(`${ApiService.BASE_URL}/transactions?page=${page}`);
     return res.data;
@@ -255,7 +275,7 @@ export class ApiService {
     return res.data;
   }
 
-  // ── Transactions ──
+  // ── Trips ──
   public static async getTrips(page = 1): Promise<ApiPaginatedResponse<TripResponse>> {
     const res = await axios.get(`${ApiService.BASE_URL}/trips?page=${page}`);
     return res.data;
@@ -306,6 +326,29 @@ export class ApiService {
     return res.data;
   }
 
+  public static async generateItinerary(id: string, preferences?: {
+    budget?: string;
+    style?: string;
+    priorities?: string[];
+    notes?: string;
+    start_city?: string;
+  }): Promise<ItineraryResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/trips/${id}/generate-itinerary`, preferences ?? {});
+    return res.data;
+  }
+
+  // Attaches a customer to a trip as its traveler (role defaults to 'primary' server-side).
+  // Was already routed on the backend (TripController::addCustomer/removeCustomer) but never
+  // exposed here — nothing in the UI could assign a traveler to a trip before this.
+  public static async addCustomerToTrip(tripId: string, customerId: string, role?: 'primary' | 'companion'): Promise<TripResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/trips/${tripId}/customers`, { customer_id: customerId, role });
+    return res.data;
+  }
+
+  public static async removeCustomerFromTrip(tripId: string, customerId: string): Promise<void> {
+    await axios.delete(`${ApiService.BASE_URL}/trips/${tripId}/customers/${customerId}`);
+  }
+
   // ── Company ──
   public static async getCompany(id: string): Promise<CompanyResponse> {
     const res = await axios.get(`${ApiService.BASE_URL}/companies/${id}`);
@@ -333,7 +376,7 @@ export class ApiService {
     email: string;
     role?: string;
   }): Promise<any> {
-    const token = Math.random().toString(36).substring(2, 15);
+    const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const res = await axios.post(`${ApiService.BASE_URL}/invitations`, {
       ...data,
@@ -351,7 +394,7 @@ export class ApiService {
 
   public static async createDestination(data: {
     name: string;
-    country?: string;
+    country: string;
     url?: string;
   }): Promise<DestinationResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/destinations`, data);
@@ -373,6 +416,7 @@ export class ApiService {
     trip_id: string;
     created_by?: string;
     itinerary_name: string;
+    start_city?: string;
     description?: string;
     start_date?: string;
     end_date?: string;
@@ -383,6 +427,7 @@ export class ApiService {
 
   public static async updateItinerary(id: string, data: Partial<{
     itinerary_name: string;
+    start_city: string;
     description: string;
     start_date: string;
     end_date: string;
@@ -462,7 +507,20 @@ export class ApiService {
     await axios.delete(`${ApiService.BASE_URL}/itinerary/flights/${flightId}`);
   }
 
-  // ── Itinerary Flights ──
+  // Real flight search via SerpApi's Google Flights engine (server-side — see
+  // ItineraryController::searchFlights). Read-only; call addFlight() once per leg of
+  // whichever FlightSearchResult the user picks to actually save it.
+  public static async searchFlights(itineraryId: string, params: {
+    departure_id: string;
+    arrival_id: string;
+    outbound_date: string;
+    return_date?: string;
+  }): Promise<FlightSearchResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/itinerary/${itineraryId}/flights/search`, { params });
+    return res.data;
+  }
+
+  // ── Itinerary Accommodation ──
   public static async addAccommodation(itineraryId: string, data: {
     accommodation_name: string;
     address?: string;
@@ -499,16 +557,144 @@ export class ApiService {
     await axios.delete(`${ApiService.BASE_URL}/itinerary/accommodation/${accommodationId}`);
   }
 
+  // Real hotel/stay search via SerpApi's Google Hotels engine (server-side — see
+  // ItineraryController::searchHotels). Read-only; call addAccommodation() with the picked
+  // HotelSearchResult's fields to actually save it.
+  public static async searchHotels(itineraryId: string, params: {
+    q: string;
+    check_in_date: string;
+    check_out_date: string;
+    adults?: number;
+  }): Promise<HotelSearchResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/itinerary/${itineraryId}/accommodation/search`, { params });
+    return res.data;
+  }
+
   // ── Itinerary Day Destinations ──
   // Links a destination to a specific itinerary day with optional cost/activity/booking info
   public static async addDestinationToDay(dayId: string, data: {
     destination_id: string;
+    item_type?: 'activity' | 'dining' | 'transfer' | 'venue';
     cost?: string;
     currency?: string;
     activities?: string;
     booking_url?: string;
   }): Promise<any> {
     const res = await axios.post(`${ApiService.BASE_URL}/itinerary/days/${dayId}/destinations`, data);
+    return res.data;
+  }
+
+  // Removes a single destination from a day, without deleting the day itself — see
+  // ItineraryController::removeDestinationFromDay on the backend.
+  public static async removeDestinationFromDay(dayId: string, destinationId: string): Promise<void> {
+    await axios.delete(`${ApiService.BASE_URL}/itinerary/days/${dayId}/destinations/${destinationId}`);
+  }
+
+  // ── Calls ──
+  // Optional tripId scopes the list to one trip — used by TripDetail.tsx's Calls tab.
+  public static async getCalls(tripId?: string): Promise<ApiPaginatedResponse<CallResponse>> {
+    const res = await axios.get(`${ApiService.BASE_URL}/calls`, {
+      params: tripId ? { trip_id: tripId } : undefined,
+    });
+    return res.data;
+  }
+
+  public static async getCall(id: string): Promise<CallResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/calls/${id}`);
+    return res.data;
+  }
+
+  public static async createCall(data: {
+    trip_id: string;
+    organized_by?: string;
+    title?: string;
+    started_at?: string;
+    meeting_link?: string;
+  }): Promise<CallResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/calls`, data);
+    return res.data;
+  }
+
+  public static async updateCall(id: string, data: Partial<{
+    title: string;
+    started_at: string;
+    ended_at: string;
+    meeting_link: string;
+    notes: string;
+    transcript: string;
+  }>): Promise<CallResponse> {
+    const res = await axios.put(`${ApiService.BASE_URL}/calls/${id}`, data);
+    return res.data;
+  }
+
+  public static async deleteCall(id: string): Promise<void> {
+    await axios.delete(`${ApiService.BASE_URL}/calls/${id}`);
+  }
+
+  public static async endCall(id: string): Promise<CallResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/calls/${id}/end`);
+    return res.data;
+  }
+
+  public static async addCallActionItem(callId: string, description: string): Promise<CallActionItemResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/calls/${callId}/action-items`, { description });
+    return res.data;
+  }
+
+  public static async updateCallActionItem(id: string, data: Partial<{
+    description: string;
+    status: string;
+  }>): Promise<CallActionItemResponse> {
+    const res = await axios.put(`${ApiService.BASE_URL}/calls/action-items/${id}`, data);
+    return res.data;
+  }
+
+  public static async removeCallActionItem(id: string): Promise<void> {
+    await axios.delete(`${ApiService.BASE_URL}/calls/action-items/${id}`);
+  }
+
+  // ── Subscriptions ──
+  public static async getSubscriptionTiers(): Promise<ApiPaginatedResponse<SubscriptionTierResponse>> {
+    const res = await axios.get(`${ApiService.BASE_URL}/subscription-tiers`);
+    return res.data;
+  }
+
+  // Returns the caller's own company's subscription history (most recent first) —
+  // CompanySubscriptionController::index is scoped server-side, no company_id needed here.
+  public static async getCompanySubscriptions(): Promise<ApiPaginatedResponse<CompanySubscriptionResponse>> {
+    const res = await axios.get(`${ApiService.BASE_URL}/company-subscriptions`);
+    return res.data;
+  }
+
+  // Subscribes the caller's own company to a tier. Does not record a payment — call
+  // recordSubscriptionPayment() separately with the returned subscription_id for that.
+  public static async subscribeToTier(data: {
+    tier_id: string;
+    start_date: string;
+    end_date: string;
+    status?: string;
+  }): Promise<CompanySubscriptionResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/company-subscriptions`, data);
+    return res.data;
+  }
+
+  // ── Moolre payments (https://docs.moolre.com/) ──
+  // Both initiate* calls create a pending Transaction server-side and return a hosted
+  // checkout URL to redirect the customer to — see MoolrePaymentController. Payment
+  // completion is confirmed by polling checkMoolrePaymentStatus() from the page the customer
+  // lands back on (the Moolre webhook is best-effort and can't reach a local dev server).
+  public static async initiateMoolreTripPayment(tripId: string, amount: number, notes?: string): Promise<MoolreCheckoutResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/payments/moolre/trip`, { trip_id: tripId, amount, notes });
+    return res.data;
+  }
+
+  public static async initiateMoolreSubscriptionPayment(subscriptionId: string, amount: number): Promise<MoolreCheckoutResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/payments/moolre/subscription`, { subscription_id: subscriptionId, amount });
+    return res.data;
+  }
+
+  public static async checkMoolrePaymentStatus(transactionId: string): Promise<TransactionResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/payments/moolre/${transactionId}/status`);
     return res.data;
   }
 }

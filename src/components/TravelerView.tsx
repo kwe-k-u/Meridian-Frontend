@@ -1,19 +1,63 @@
-import React from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
+import { ApiService } from '../services/api-service';
+import type { TripResponse, Day } from '../types/app';
 import logoM from '../assets/logo/logo_m.svg';
 import '../styles/TravelerView.css';
 
 // ── TravelerView ─────────────────────────────────────────────
-// Purpose: Read-only traveler-facing trip view with day-by-day itinerary, accept/request-change actions.
-// Props: none (reads tripId from URL params and data from AppContext)
+// Purpose: The read-only, publicly-shareable "trip pack" page a traveler sees (day-by-day
+// itinerary, total price, accept/request-changes buttons) — the equivalent of TripDetail.tsx
+// but branded for the end customer rather than the agency. Deliberately keeps its own local
+// copies of dayToBlocks/travDaysToDays/fmtDateRange instead of importing from AppContext.tsx
+// or TripDetail.tsx, so this page renders independently even if those change.
+// State: apiTrip (only for real, non-numeric trip ids).
+// API: ApiService.getTrip (real trips only — mock trips fall back to ctx.getTripDetail/getDays).
 export default function TravelerView() {
   const { tripId } = useParams<{ tripId: string }>();
   const navigate = useNavigate();
   const ctx = useApp();
-  const tid = tripId ? parseInt(tripId, 10) : 0;
+  const isRealId = tripId ? !/^\d+$/.test(tripId) : false;
 
-  const days = ctx.getDays(tid, 'A');
+  const [apiTrip, setApiTrip] = useState<TripResponse | null>(null);
+
+  useEffect(() => {
+    if (!tripId || !isRealId) return;
+    ApiService.getTrip(tripId).then(setApiTrip).catch(() => {});
+  }, [tripId, isRealId]);
+
+  const mockTid = tripId ? (isRealId ? 0 : parseInt(tripId, 10)) : 0;
+  const { td: mockTd } = ctx.getTripDetail(mockTid, 'A');
+
+  const td = useMemo(() => {
+    if (!apiTrip) return mockTd;
+    const trav = apiTrip.customers?.[0]
+      ? `${apiTrip.customers[0].first_name} ${apiTrip.customers[0].last_name}`
+      : 'Traveler';
+    const where = apiTrip.description?.split('.')[0] ?? apiTrip.trip_name;
+    return {
+      ...mockTd,
+      name: apiTrip.trip_name,
+      traveler: trav,
+      where,
+      dates: apiTrip.start_date
+        ? fmtDateRange(apiTrip.start_date, apiTrip.end_date)
+        : mockTd.dates,
+      value: apiTrip.budget ? `GHS ${Number(apiTrip.budget).toLocaleString()}` : mockTd.value,
+    };
+  }, [apiTrip, mockTd]);
+
+  const rawDays = useMemo(() => {
+    if (!apiTrip) return ctx.getDays(mockTid, 'A');
+    const itin = apiTrip.itineraries?.[0];
+    if (itin?.itinerary_days?.length) {
+      return travDaysToDays(itin.itinerary_days);
+    }
+    return [];
+  }, [apiTrip, ctx, mockTid]);
+
+  const days = rawDays.map((d, di) => ({ ...d, di: d.di ?? di }));
 
   return (
     <div className="tv">
@@ -25,7 +69,7 @@ export default function TravelerView() {
         <div className="tv__header-right">
           <span className="tv__prepared">Prepared for you by Oasis Travel Agency</span>
           <button
-            onClick={() => navigate('/app/trips/' + tid)}
+            onClick={() => navigate('/app/trips/' + (isRealId && tripId ? tripId : mockTid))}
             className="tv__back-btn"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -44,48 +88,23 @@ export default function TravelerView() {
               <circle cx="12" cy="10" r="3"/>
               <path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z"/>
             </svg>
-            Greece & Italy · 10 nights
+            {td.where}
           </div>
           <h1 className="tv__hero-title">
-            Your Honeymoon
+            {td.name}
           </h1>
           <p className="tv__hero-sub">
-            4 – 14 October 2026 · for Ama & Kofi
+            {td.dates} · for {td.traveler}
           </p>
         </div>
 
-        <div className="tv__info-row">
-          <div className="tv__info-card">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-            </svg>
-            <div>
-              <div className="tv__info-label">Flights</div>
-              <div className="tv__info-sub">Accra ⇄ Santorini · 1 stop</div>
-            </div>
-          </div>
-          <div className="tv__info-card">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E9F6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-              <polyline points="9 22 9 12 15 12 15 22"/>
-            </svg>
-            <div>
-              <div className="tv__info-label">Stays</div>
-              <div className="tv__info-sub">Canaves Oia · Le Sirenuse</div>
-            </div>
-          </div>
-          <div className="tv__info-card">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B7791F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-            </svg>
-            <div>
-              <div className="tv__info-label">Experiences</div>
-              <div className="tv__info-sub">5 included</div>
-            </div>
-          </div>
-        </div>
-
         <h2 className="tv__section-title">Day by day</h2>
+
+        {days.length === 0 && (
+          <p style={{ color: '#8A90A2', textAlign: 'center', padding: 40 }}>
+            No itinerary days yet.
+          </p>
+        )}
 
         {days.map((day, di) => (
           <div key={di} className="tv__day-row">
@@ -100,10 +119,7 @@ export default function TravelerView() {
             <div className="tv__day-content">
               <div className="tv__day-title">{day.title}</div>
               {day.blocks.map((block, bi) => (
-                <div
-                  key={bi}
-                  className="tv__block"
-                >
+                <div key={bi} className="tv__block">
                   <div className="tv__block-icon" style={{ background: block.iconBg || '#EEF0F4' }}>
                     {block.icon}
                   </div>
@@ -132,7 +148,7 @@ export default function TravelerView() {
       <div className="tv__footer">
         <div>
           <div className="tv__total-label">Total</div>
-          <div className="tv__total-value">GHS 84,500</div>
+          <div className="tv__total-value">{td.value}</div>
         </div>
         <div className="tv__footer-actions">
           <button
@@ -144,7 +160,7 @@ export default function TravelerView() {
           <button
             onClick={() => {
               ctx.toastAction('Trip accepted by traveler');
-              navigate('/app/trips/' + tid);
+              navigate('/app/trips/' + (isRealId && tripId ? tripId : mockTid));
             }}
             className="tv__btn-accept"
           >
@@ -157,4 +173,89 @@ export default function TravelerView() {
       </div>
     </div>
   );
+}
+
+// ── Local helpers (mirror AppContext transformers for independence) ──
+
+interface ItinDayLike {
+  date: string | null;
+  day_number: number;
+  title: string | null;
+  description: string | null;
+  location: string | null;
+  destinations?: {
+    destination_id: string;
+    cost: string | null;
+    currency: string | null;
+    activities: string | null;
+    booking_url: string | null;
+    destination?: { destination_id: string; name: string; country: string };
+  }[];
+}
+
+const kindMeta: Record<string, { icon: string; iconBg: string; kindColor: string }> = {
+  Flight: { icon: '✈️', iconBg: '#EAF0FF', kindColor: '#2B63F6' },
+  Transfer: { icon: '🚐', iconBg: '#E3F7EF', kindColor: '#0E9F6E' },
+  Stay: { icon: '🏨', iconBg: '#F0EBFF', kindColor: '#6B46C1' },
+  Dining: { icon: '🍽️', iconBg: '#FFF3E0', kindColor: '#B7791F' },
+  Activity: { icon: '⭐', iconBg: '#E3F7EF', kindColor: '#0E9F6E' },
+  Venue: { icon: '🏢', iconBg: '#EAF0FF', kindColor: '#2B63F6' },
+};
+
+function dayToBlocks(day: ItinDayLike) {
+  const blocks: { kind: string; kindColor: string; icon: string; iconBg: string; meta: string; title: string; sub: string; price: string }[] = [];
+  if (day.destinations) {
+    day.destinations.forEach(d => {
+      const m = kindMeta.Activity;
+      blocks.push({
+        kind: 'Activity',
+        kindColor: m.kindColor,
+        icon: m.icon,
+        iconBg: m.iconBg,
+        meta: d.destination?.country ?? '',
+        title: d.destination?.name ?? d.activities ?? 'Activity',
+        sub: d.activities ?? '',
+        price: d.cost ? `${d.currency ?? ''} ${d.cost}` : '',
+      });
+    });
+  }
+  if (day.location) {
+    const m = kindMeta.Transfer;
+    blocks.push({
+      kind: 'Location',
+      kindColor: m.kindColor,
+      icon: '📍',
+      iconBg: m.iconBg,
+      meta: '',
+      title: day.location,
+      sub: day.description ?? '',
+      price: '',
+    });
+  }
+  return blocks;
+}
+
+function travDaysToDays(itineraryDays: ItinDayLike[]): Day[] {
+  return itineraryDays.map((d, i) => {
+    const dt = d.date ? new Date(d.date) : null;
+    return {
+      di: i,
+      dow: dt ? dt.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() : '',
+      day: dt ? String(dt.getDate()).padStart(2, '0') : String(d.day_number),
+      mon: dt ? dt.toLocaleDateString('en-US', { month: 'short' }) : '',
+      title: d.title ?? `Day ${d.day_number}`,
+      blocks: dayToBlocks(d),
+      hasSuggestion: false,
+      addBlock: () => {},
+    };
+  });
+}
+
+function fmtDateRange(start: string | null, end: string | null): string {
+  if (!start) return 'TBD';
+  const s = new Date(start);
+  const e = end ? new Date(end) : null;
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  if (!e || s.getTime() === e.getTime()) return s.toLocaleDateString('en-US', opts);
+  return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }

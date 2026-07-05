@@ -4,13 +4,15 @@
 // flows, and other placeholder data used throughout the UI during development/demo.
 
 import type {
-  Day, DayBlock, Conversation, Message, TripItem, TripDetailData, CostItem, TripOption,
+  Day, DayBlock, Conversation, TripItem, TripDetailData, CostItem, TripOption,
   Flight, Stay, Activity, CallLog, CallDetail, FinStat, ChartBar, InvoiceItem, InvoiceDetail,
   Plan, TravelerItem, TeamMember, RoleDef, Channel, NotifSetting, OnboardingTask,
-  GuideCard, GuideArticle, GuideSection, AgentFeedItem, ConnectPickItem, ConnectChannelView,
-  BillingPeriod, TripStatus, HeaderAction, StatusBanner,
+  GuideCard, GuideArticle, AgentFeedItem, ConnectPickItem, ConnectChannelView,
+  BillingPeriod, TripStatus, HeaderAction,
 } from '../types/app';
 
+// Maps a mock TripStatus display label to a [background, foreground] color pair for badges.
+// Falls back to the 'Draft' colors for any status not in the table.
 export function statusMeta(k: string): [string, string] {
   const m: Record<string, [string, string]> = {
     'Draft': ['#EEF0F4','#5B6172'],
@@ -25,6 +27,8 @@ export function statusMeta(k: string): [string, string] {
   return m[k] || m['Draft'];
 }
 
+// Hand-written day-by-day itinerary for the "Asante–Mensah Honeymoon" demo trip
+// (trip index 0 in tripsData() / tripDetailData() below).
 export function asanteDays(): Day[] {
   return [
     {dow:'SAT',day:'04',mon:'Oct',title:'Accra → Santorini',blocks:[
@@ -49,12 +53,14 @@ export function asanteDays(): Day[] {
   ];
 }
 
+// [color, icon] per messaging channel — used by convoData() to decorate each conversation row.
 export const chMeta: Record<string, [string, string]> = {
   whatsapp: ['#25D366','💬'],
   gmail: ['#EA4335','✉️'],
   instagram: ['#C13584','📸'],
 };
 
+// Named gradient swatches reused as trip cover backgrounds throughout tripDetailData() below.
 export const gradients = {
   blue: 'linear-gradient(135deg,#1B5BBE,#5AA0FF)',
   teal: 'linear-gradient(135deg,#0E7C8F,#36C5C0)',
@@ -65,6 +71,9 @@ export const gradients = {
   green: 'linear-gradient(135deg,#15803D,#5DBE7E)',
 };
 
+// Shorthand constructor for one itinerary DayBlock (flight/transfer/stay/dining/activity/venue),
+// looking up its icon/colors from `kind`. Used to build the D[2]/D[3]/D[4]/D[5] sample
+// itineraries in tripDetailData() below without repeating the icon/color boilerplate each time.
 function B(kind: string, title: string, sub: string, meta: string, price: string): DayBlock {
   const k: Record<string, [string,string,string]> = {
     Flight: ['✈️','#EAF0FF','#2B63F6'],
@@ -78,11 +87,7 @@ function B(kind: string, title: string, sub: string, meta: string, price: string
   return { kind, kindColor: v[2], icon: v[0], iconBg: v[1], title, sub, meta, price };
 }
 
-const opt = (letter: string, name: string, sub: string, cover: string, rec: boolean): TripOption => ({
-  letter, name, sub, cover, rec, recDisplay: rec ? 'inline-block' : 'none',
-  border: '#ECEDF2', bg: '#fff', titleColor: '#15161B',
-});
-
+// Mock conversation/inbox data for the Messages page — one demo thread per channel/traveler.
 export function convoData(): Conversation[] {
   const raw = [
     {name:'Efua Danso',ch:'whatsapp' as const,av:'ED',avBg:'#0E7C8F',last:'Do you plan honeymoons to the Maldives?',time:'4m',unread:1,trip:null as string | null,linkName:null as string | null,
@@ -120,7 +125,7 @@ export function convoData(): Conversation[] {
       tripValue: '',
       openLinkedTrip: () => {},
       msgs: c.msgs.map(m => ({
-        t: m.t, time: m.time,
+        t: m.t, time: m.time, me: m.me,
         align: m.me ? 'flex-end' as const : 'flex-start' as const,
         textAlign: m.me ? 'right' as const : 'left' as const,
         bubbleBg: m.me ? '#2B63F6' : '#fff',
@@ -131,6 +136,10 @@ export function convoData(): Conversation[] {
   });
 }
 
+// The 7 demo trips shown on the Trips list / Dashboard "trips in motion" panel when no real
+// API trip data is available. Each tuple in `raw` is positional — see the destructure below
+// for what each index means (name, traveler, initials, avatar color, destination, dates,
+// status, budget, itinerary-option count, cover gradient, "next step" label).
 export function tripsData(): TripItem[] {
   const raw: [string,string,string,string,string,string,TripStatus,string,number,string,string][] = [
     ['Asante–Mensah Honeymoon','Ama & Kofi Asante','AA','#6B46C1','Santorini · Amalfi','4–14 Oct','Awaiting review','GHS 84,500',3,'linear-gradient(135deg,#1B5BBE,#5AA0FF)','Send options to traveler'],
@@ -141,7 +150,7 @@ export function tripsData(): TripItem[] {
     ['Tetteh Group Lagos','Tetteh & co','TC','#B7791F','Lagos','28–30 Jun','Booked','GHS 22,400',1,'linear-gradient(135deg,#15803D,#5DBE7E)','All booked · departs 28 Jun'],
     ['Sarpong Europe Tour','Nana Sarpong','NS','#2B63F6','Paris · Rome · Barcelona','18–30 Dec','Draft','GHS 96,700',1,'linear-gradient(135deg,#334155,#7889A6)','Discovery call summarised'],
   ];
-  return raw.map((r,i) => {
+  return raw.map((r) => {
     const sm = statusMeta(r[6]);
     return {
       name: r[0], traveler: r[1], initials: r[2], avatarBg: r[3], where: r[4], dates: r[5],
@@ -152,7 +161,17 @@ export function tripsData(): TripItem[] {
   });
 }
 
-export function tripDetailData(index: number, activeOption: string): TripDetailData {
+// Builds the full mock TripDetailData for one of the 7 demo trips (by its index in
+// tripsData()), for the given active itinerary-option letter. This is what AppContext's
+// getTripDetail()/TripDetail.tsx fall back to when there's no real apiTrip loaded.
+// `D` below holds the per-trip extras (gradient, brief, days, costs, options, ...) that
+// aren't already covered by tripsData(); `headerActions` are then derived from the trip's
+// status to decide which action buttons the hero banner shows.
+// `_activeOption` isn't used inside — mock trips only ever show their D[i] entry regardless
+// of which option letter is active — but every caller passes it, matching the signature real
+// itinerary-backed trips need (see apiTripToTripDetail() in AppContext.tsx, which does use its
+// `opt` argument to pick a specific itinerary option).
+export function tripDetailData(index: number, _activeOption: string): TripDetailData {
   const i = index;
   const days = asanteDays();
 
@@ -172,13 +191,6 @@ export function tripDetailData(index: number, activeOption: string): TripDetailD
   }> = {};
 
   const g = gradients;
-  const opts = (letter: string, name: string, sub: string, cover: string, rec: boolean): TripOption[] => [{
-    letter, name, sub, cover, rec, recDisplay: rec ? 'inline-block' : 'none',
-    border: activeOption === letter ? '#2B63F6' : '#ECEDF2',
-    bg: activeOption === letter ? '#F4F7FF' : '#fff',
-    titleColor: activeOption === letter ? '#2B63F6' : '#15161B',
-    onClick: () => {},
-  }];
 
   D[0] = {
     gradient: 'linear-gradient(120deg,#1B5BBE,#2B63F6 55%,#5AA0FF)',
@@ -376,6 +388,7 @@ export function tripDetailData(index: number, activeOption: string): TripDetailD
   };
 }
 
+// Mock "Meridian activity" feed shown on the Dashboard and TripDetail sidebar.
 export function agentFeed(): AgentFeedItem[] {
   return [
     {iconEl:'📝',iconBg:'#EAF0FF',title:'Drafted 3 itinerary options',detail:'Asante–Mensah Honeymoon · Santorini, Maldives & Zanzibar',time:'6m ago',actionLabel:'Review options',action:()=>{}},
@@ -386,6 +399,8 @@ export function agentFeed(): AgentFeedItem[] {
   ];
 }
 
+// Mock flight options for the "Flights" builder tab (mock/non-API trips only — real trips
+// show their actual ItineraryFlight rows instead, converted by itineraryFlightsToFlights()).
 export function flightsData(): Flight[] {
   return [
     {code:'TK',airline:'Turkish Airlines',route:'ACC 07:40 → JTR 21:00 · via IST',duration:'13h 05m',stops:'1 stop',price:'GHS 14,200',cta:'Selected',logoBg:'#C2102E',recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF'},
@@ -394,6 +409,7 @@ export function flightsData(): Flight[] {
   ];
 }
 
+// Mock accommodation options for the "Stays" builder tab (mock/non-API trips only).
 export function staysData(): Stay[] {
   return [
     {name:'Canaves Oia Suites',loc:'Oia, Santorini',rating:'4.9',price:'GHS 6,400',cover:'linear-gradient(135deg,#1B5BBE,#5AA0FF)',recDisplay:'block',border:'#2B63F6',bg:'#F4F7FF',tags:['Private pool','Sea view','Breakfast']},
@@ -402,6 +418,8 @@ export function staysData(): Stay[] {
   ];
 }
 
+// Mock add-on activities for the "Activities" builder tab (mock/non-API trips only).
+// Each `add()` callback appends the activity to the last day via AppContext.addActivity().
 export function activitiesData(): Activity[] {
   const raw = [
     {name:'Couples sunset spa',meta:'Santorini · 2h',price:'GHS 1,800',cover:'linear-gradient(135deg,#7C3AED,#B58CF5)'},
@@ -414,6 +432,7 @@ export function activitiesData(): Activity[] {
   return raw.map(a => ({...a, add: () => {}}));
 }
 
+// Mock call history + AI-generated call summaries for the "Calls" builder tab.
 export function callLogs(): { logs: CallLog[], details: CallDetail[] } {
   const logs: CallLog[] = [
     {title:'Discovery call — Asante',meta:'12 Jun · 28 min · Google Meet',icon:'🎥',onClick:()=>{},bg:'#F4F7FF',border:'#C4D2FF'},
@@ -432,6 +451,10 @@ export function callLogs(): { logs: CallLog[], details: CallDetail[] } {
   return { logs, details };
 }
 
+// Mock top-line revenue/outstanding/paid-out/refund stat cards. Exposed via AppContext's
+// getFinancialData()/getDashboardStats(), but Financials.tsx and Dashboard.tsx were both
+// rewired to compute their stats from real API data instead — neither page calls this
+// anymore, so it's effectively orphaned (kept in case something still references it).
 export function finStats(): FinStat[] {
   return [
     {label:'Revenue · June',value:'GHS 64,300',delta:'↑ 18% vs May',deltaColor:'#0E9F6E'},
@@ -441,6 +464,9 @@ export function finStats(): FinStat[] {
   ];
 }
 
+// Mock monthly revenue bar-chart data. Only reachable via AppContext.getFinancialData(),
+// which Financials.tsx no longer calls (it renders its own chart from real transactions) —
+// effectively orphaned.
 export function chartData(): ChartBar[] {
   const raw: [string,number][] = [['Jan',38],['Feb',42],['Mar',51],['Apr',47],['May',58],['Jun',64]];
   return raw.map((m,i) => ({
@@ -492,6 +518,9 @@ const invDefs: {
    payments:[['25 May 2026','Deposit',1200,'Paystack','PSK-8401'],['28 May 2026','Refund issued',-1200,'Paystack','PSK-8402R']], schedule:[]},
 ];
 
+// Six mock invoices. `detail()` is genuinely used (AppContext.getInvoiceDetail() →
+// InvoiceDetailModal.tsx), but the `list`/`tripDetail` parts are only wired through
+// getFinancialData(), which no page calls anymore — see chartData() above.
 export function invoicesData(): {
   list: InvoiceItem[];
   detail: (id: string) => InvoiceDetail | null;
@@ -549,6 +578,8 @@ export function invoicesData(): {
   return { list, detail, tripDetail };
 }
 
+// Pricing plan cards for the Pricing page (ctx.getPlans() → Pricing.tsx). `annual` billing
+// is priced at 10x the monthly rate (i.e. ~17% off a 12x multiple) as a simple placeholder deal.
 export function plansData(billing: BillingPeriod, currentPlan: string, toast: (msg: string) => void): Plan[] {
   const annual = billing === 'annual';
   const raw = [
@@ -575,14 +606,20 @@ export function plansData(billing: BillingPeriod, currentPlan: string, toast: (m
   });
 }
 
+// Reshapes the mock tripsData() into TravelerItem rows (one "traveler" per demo trip).
+// Only reachable via AppContext.getTravelersData(), which the real Travelers.tsx page no
+// longer calls (it fetches real customers instead) — effectively orphaned.
 export function travelersData(): TravelerItem[] {
-  return tripsData().map((t, ix) => ({
+  return tripsData().map((t) => ({
     name: t.traveler, initials: t.initials, avatarBg: t.avatarBg,
     trip: t.name, status: t.status, statusBg: t.statusBg, statusFg: t.statusFg,
     value: t.value, where: t.where, open: () => {},
   }));
 }
 
+// Mock team roster. Reachable via AppContext.getTeamData(), but Settings.tsx's Team & Seats
+// tab now fetches the real company's users from the API instead — effectively orphaned,
+// along with rolesData()/channelsData()/notificationsData() below (same getTeamData() bundle).
 export function teamMembers(): TeamMember[] {
   const raw = [
     {name:'Kweku Ansah', email:'kweku@oasistravel.com', initials:'KA', avatarBg:'#2B63F6', role:'Super admin', roleBg:'#EAF0FF', roleFg:'#2B63F6', active:'Active now', you:true},
@@ -597,6 +634,10 @@ export function teamMembers(): TeamMember[] {
   }));
 }
 
+// Mock role definitions (Super admin/Agent/Finance/Read-only) with permission checklists.
+// Note this role vocabulary doesn't match the real backend's CompanyRole enum
+// (owner/admin/member) — Settings.tsx's real Roles tab computes its own role breakdown
+// from actual company users rather than using this. Orphaned — see teamMembers() above.
 export function rolesData(): RoleDef[] {
   const yes = 'M20 6 9 17l-5-5';
   const no = 'M18 6 6 18M6 6l12 12';
@@ -621,6 +662,8 @@ export function rolesData(): RoleDef[] {
   }));
 }
 
+// Mock connected-channels list for the Settings > Channels tab. Orphaned — see teamMembers()
+// above; Settings.tsx's real ChannelsSection renders its own hardcoded channel list instead.
 export function channelsData(toast: (msg: string) => void, openConnectFor: (n: string) => void): Channel[] {
   const raw = [
     {name:'WhatsApp Business', icon:'💬', iconBg:'#E3F7EF', sub:'+233 24 555 0192 · Oasis Travel', connected:true},
@@ -638,6 +681,10 @@ export function channelsData(toast: (msg: string) => void, openConnectFor: (n: s
   }));
 }
 
+// Initial values for AppContext's own `notifs` state (used to seed useState in AppProvider).
+// The resulting toggles are only ever surfaced via getTeamData().notifSettings, which is
+// orphaned (see teamMembers() above) — Settings.tsx's real Notifications tab keeps its own
+// separate local state instead, so toggling AppContext's copy has no visible effect anywhere.
 export function notifDefaults(): Record<string, boolean> {
   return {
     newMessage: true,
@@ -649,6 +696,8 @@ export function notifDefaults(): Record<string, boolean> {
   };
 }
 
+// Combines notifDefaults()-shaped state with display metadata for the (orphaned) Team &
+// Seats notification toggles — see notifDefaults() above.
 export function notificationsData(
   notifs: Record<string, boolean>,
   toggle: (k: string) => void
@@ -670,6 +719,8 @@ export function notificationsData(
   }));
 }
 
+// Mock onboarding checklist. Reachable via AppContext.getOnboardTasks(), but Dashboard.tsx
+// builds its own local onboarding task list instead — effectively orphaned.
 export function onboardTasks(openGenItin: () => void): OnboardingTask[] {
   return [
     {slot:'ob-connect', icon:'💬', title:'Connect a channel', desc:'Bring WhatsApp, Gmail or Instagram into Meridian.', done:true, todo:false, ph:'Drop a workspace photo'},
@@ -678,6 +729,8 @@ export function onboardTasks(openGenItin: () => void): OnboardingTask[] {
   ];
 }
 
+// Cover gradient per guide article id — used below in guidesData() and (as its own
+// smaller local copy) in Dashboard.tsx's onboarding "How Meridian works" cards.
 export const guideCovers: Record<string, string> = {
   connect: 'linear-gradient(135deg,#1B5BBE,#5AA0FF)',
   trip: 'linear-gradient(135deg,#0E7C8F,#36C5C0)',
@@ -687,11 +740,14 @@ export const guideCovers: Record<string, string> = {
   inbox: 'linear-gradient(135deg,#15803D,#5DBE7E)',
 };
 
+// The 6 help-center guide articles (Help.tsx list + GuideArticle.tsx detail view). Actively
+// used: `cards`/`featured` feed Help.tsx, and `article(id)` feeds GuideArticle.tsx.
+// `worksCards` (first 4, title/cover only) isn't currently rendered by any page.
 export function guidesData(openGuide: (id: string) => void): {
   cards: GuideCard[];
   worksCards: GuideCard[];
   featured: GuideCard;
-  article: (id: string, guides: any[]) => GuideArticle;
+  article: (id: string) => GuideArticle;
 } {
   const gz = guideCovers;
 
@@ -762,7 +818,7 @@ export function guidesData(openGuide: (id: string) => void): {
 
   const featured: GuideCard = { ...cards[0] };
 
-  const article = (id: string, guides: any[]): GuideArticle => {
+  const article = (id: string): GuideArticle => {
     const gi = Math.max(0, guideDefs.findIndex(g => g.id === id));
     const gd = guideDefs[gi];
     const nextGd = guideDefs[(gi + 1) % guideDefs.length];
@@ -782,6 +838,7 @@ export function guidesData(openGuide: (id: string) => void): {
   return { cards, worksCards, featured, article };
 }
 
+// The channel picker list shown on step 1 of ConnectChannelModal (WhatsApp/Gmail/Instagram).
 export function connectPickList(pickChannel: (n: string) => void): ConnectPickItem[] {
   return [
     {name:'WhatsApp Business', icon:'💬', iconBg:'#E3F7EF', sub:'Link with a QR code, like WhatsApp Web', pick: () => pickChannel('WhatsApp Business')},
@@ -790,6 +847,9 @@ export function connectPickList(pickChannel: (n: string) => void): ConnectPickIt
   ];
 }
 
+// Per-channel copy/mock-imported-contacts shown on the later steps of ConnectChannelModal
+// (auth instructions, then a fake "synced N contacts" summary) — this whole flow is a UI
+// simulation with a setTimeout in AppContext.connectGo(), not a real channel integration.
 export function connectChannelView(name: string | null): ConnectChannelView | null {
   if (!name) return null;
   const cfg: Record<string, {

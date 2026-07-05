@@ -94,6 +94,8 @@ function AuthPage() {
         password: signupPassword,
         password_confirmation: confirmPassword,
       })
+      // AuthController::registerCompany always returns access_token on success (201), so the
+      // `else` branch below is just a defensive fallback that shouldn't normally trigger.
       if (response.access_token) {
         auth.login(response)
         navigate('/app/dashboard')
@@ -111,8 +113,8 @@ function AuthPage() {
     setErrorMessage('')
     setLoading(true)
     try {
-      const idToken = await signInWithGoogle()
-      const response = await ApiService.googleLogin(idToken)
+      const google = await signInWithGoogle()
+      const response = await ApiService.googleLogin(google)
       auth.login(response)
       navigate('/app/dashboard')
     } catch (error) {

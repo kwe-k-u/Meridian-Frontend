@@ -1,0 +1,229 @@
+/* ── AddItemModal ── Styles for the Add Item modal (overlay, form, dropdown, footer) */
+
+/* ── Overlay & Modal Container ── */
+.aim-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.aim-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 480px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+/* ── Header ── */
+.aim-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 0;
+}
+.aim-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #15161B;
+  margin: 0;
+  line-height: 26px;
+}
+.aim-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #F7F8FA;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8A90A2;
+}
+/* ── Body & Form Fields ── */
+.aim-body {
+  padding: 20px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.aim-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5B6172;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  line-height: 16px;
+  margin-bottom: -6px;
+}
+.aim-type-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.aim-type-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #DDE0E8;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  color: #5B6172;
+  cursor: pointer;
+  line-height: 18px;
+}
+.aim-type-btn--active {
+  background: #F4F7FF;
+  border-color: #2B63F6;
+  color: #2B63F6;
+  font-weight: 600;
+}
+.aim-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #DDE0E8;
+  font-size: 14px;
+  font-family: inherit;
+  color: #15161B;
+  outline: none;
+  line-height: 20px;
+  box-sizing: border-box;
+}
+.aim-input:focus {
+  border-color: #2B63F6;
+  box-shadow: 0 0 0 2px rgba(43,99,246,0.1);
+}
+.aim-select {
+  appearance: none;
+  background: #fff;
+  cursor: pointer;
+}
+.aim-dest-select {
+  position: relative;
+}
+.aim-dest-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #DDE0E8;
+  border-radius: 8px;
+  margin-top: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+.aim-dest-opt {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 18px;
+}
+.aim-dest-opt:hover, .aim-dest-opt--active {
+  background: #F4F7FF;
+}
+.aim-dest-name {
+  font-weight: 500;
+  color: #15161B;
+}
+.aim-dest-country {
+  color: #8A90A2;
+  font-size: 12px;
+}
+.aim-dest-create-form {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.aim-dest-create-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #15161B;
+}
+.aim-dest-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.aim-dest-create-cancel {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #DDE0E8;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5B6172;
+  cursor: pointer;
+  line-height: 18px;
+}
+.aim-dest-create-confirm {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  background: #2B63F6;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 18px;
+}
+.aim-dest-create-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.aim-cost-row {
+  display: grid;
+  grid-template-columns: 1fr 100px;
+  gap: 12px;
+}
+.aim-cost-field, .aim-curr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* ── Footer & Buttons ── */
+.aim-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 24px 20px;
+}
+.aim-cancel {
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 1px solid #DDE0E8;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5B6172;
+  cursor: pointer;
+  line-height: 20px;
+}
+.aim-save {
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: none;
+  background: #2B63F6;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 20px;
+}
+.aim-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

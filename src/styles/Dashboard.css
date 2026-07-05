@@ -7,6 +7,13 @@
   color: #15161B;
 }
 
+.dashboard-loading {
+  padding: 40px 0;
+  text-align: center;
+  color: #8A90A2;
+  font-size: 14px;
+}
+
 /* ── View Toggle ── */
 .dashboard-view-toggle {
   display: flex;

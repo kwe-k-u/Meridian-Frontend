@@ -68,6 +68,15 @@
   gap: 16px;
 }
 
+.ctm-field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.ctm-field-row .ctm-field {
+  flex: 1;
+}
+
 .ctm-field {
   display: flex;
   flex-direction: column;

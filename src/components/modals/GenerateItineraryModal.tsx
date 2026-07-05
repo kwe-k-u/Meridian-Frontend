@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../contexts/AppContext';
 import type { TripItem } from '../../types/app';
@@ -13,11 +13,22 @@ const priorityOptions = ['Flights', 'Accommodation', 'Activities', 'Dining', 'Ex
 // ── GenerateItineraryModal ───────────────────────────────────
 // Purpose: Modal to pick a draft trip and set traveler preferences (budget, style, priorities) before generating itinerary.
 // Props: none (reads/writes state from AppContext and navigates on generate)
+//
+// This modal doesn't call the generate-itinerary API itself — it only collects which trip
+// and what preferences, then navigates to that trip's TripDetail page with
+// `{ triggerGenerate: true, travelerPrefs }` in router state. TripDetail.tsx picks that up
+// in a mount effect and is what actually calls ApiService.generateItinerary().
 export default function GenerateItineraryModal() {
   const navigate = useNavigate();
-  const { genItinOpen, closeGenItin, openCreate, getTripsData } = useApp();
+  const { genItinOpen, closeGenItin, openCreate, getTripsData, fetchTripsList } = useApp();
 
   const [step, setStep] = useState<GenStep>('pick');
+
+  // Refresh the trip list from the real API every time the modal opens, so "Draft"/"AI
+  // drafting" filtering below reflects real trips (falls back to mock data on failure).
+  useEffect(() => {
+    if (genItinOpen) fetchTripsList();
+  }, [genItinOpen, fetchTripsList]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   const [budget, setBudget] = useState('');
@@ -45,8 +56,13 @@ export default function GenerateItineraryModal() {
 
   const handleGenerate = () => {
     if (selectedIdx === null) return;
+    // Real trips carry their trip_id (from fetchTripsList()'s reshaping); mock demo trips
+    // don't have an `id`, so we fall back to the array index, which is how TripDetail.tsx
+    // identifies mock trips (see its isRealId/tid logic).
+    const trip = getTripsData()[selectedIdx];
+    const destination = trip?.id ?? selectedIdx;
     closeGenItin();
-    navigate(`/app/trips/${selectedIdx}`, {
+    navigate(`/app/trips/${destination}`, {
       state: {
         triggerGenerate: true,
         travelerPrefs: { budget, style, priorities, notes },

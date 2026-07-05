@@ -1,10 +1,25 @@
 // ── App Types ────────────────────────────────────────────────
 // Core type definitions for the Meridian frontend: domain entities, API response shapes,
 // UI state types, and data transfer interfaces used across components and services.
+//
+// This file has two distinct halves:
+//  1. "Domain Types" through "Agent Feed & Channel Connect Types" — UI-shaped view models
+//     (pre-formatted strings, colors, onClick handlers) produced by the mock data generators
+//     in constants/app.ts and consumed by pages/components for screens that aren't wired to
+//     real endpoints yet (financials charts, team/roles, guides, messages, etc.).
+//  2. "API Response Types" (below) — the *actual* JSON shapes returned by the Laravel backend,
+//     used by src/services/api-service.ts and by the handful of pages/contexts that fetch
+//     real data (Trips, TripDetail, Travelers, Settings, Dashboard, AppContext). These should
+//     be kept in sync with the corresponding Eloquent model + controller on the backend.
 
 export type Screen = 'dashboard' | 'trips' | 'tripDetail' | 'messages' | 'travelers' | 'financials' | 'pricing' | 'settings' | 'help' | 'guide';
 
-export type TripStatus = 'Draft' | 'AI drafting' | 'Awaiting review' | 'Shared' | 'Changes requested' | 'Confirmed' | 'Booked' | 'Completed';
+// Union of every status label the UI can show for a trip. Mixes two vocabularies:
+// the original mock-data labels ('Draft', 'AI drafting', 'Awaiting review', ...) and the
+// real backend TripStatus enum values re-labeled for display ('Inquiry', 'In Progress',
+// 'Cancelled' — see apiStatusMeta in AppContext.tsx/TripDetail.tsx/Trips.tsx, which maps
+// backend values like `planning`/`in_progress` to these display strings).
+export type TripStatus = 'Draft' | 'AI drafting' | 'Awaiting review' | 'Shared' | 'Changes requested' | 'Confirmed' | 'Booked' | 'Completed' | 'Inquiry' | 'In Progress' | 'Cancelled';
 
 export type BuilderTab = 'itinerary' | 'flights' | 'stays' | 'activities' | 'calls';
 
@@ -60,9 +75,13 @@ export interface TripOption {
   bg?: string;
   titleColor?: string;
   onClick?: () => void;
+  // Present only for real (non-mock) itinerary options — the itinerary_id to delete via
+  // ApiService.deleteItinerary(). Absent for mock options, which can't be deleted.
+  itineraryId?: string;
 }
 
 export interface TripItem {
+  id?: string;
   name: string;
   traveler: string;
   initials: string;
@@ -447,6 +466,9 @@ export interface ConnectChannelView {
 }
 
 // ── API Response Types ──
+// Mirrors Laravel's default paginate() JSON shape (LengthAwarePaginator::toArray()).
+// Every list-fetching ApiService method (getCustomers, getTrips, getTransactions, ...)
+// returns one of these.
 export interface ApiPaginatedResponse<T> {
   data: T[];
   current_page: number;
@@ -498,11 +520,25 @@ export interface TransactionResponse {
   } | null;
 }
 
+// Returned by MoolrePaymentController::initiateTripPayment/initiateSubscriptionPayment —
+// `authorization_url` is Moolre's hosted checkout page to redirect the customer to.
+export interface MoolreCheckoutResponse {
+  transaction_id: string;
+  authorization_url: string;
+}
+
 export interface ItineraryResponse {
   itinerary_id: string;
   trip_id: string;
-  created_by: string | null;
+  // A plain user_id string when the `createdBy` relation isn't eager-loaded on the backend;
+  // becomes the full {user_id, display_name} object when it is (Laravel's relationsToArray()
+  // overwrites the `created_by` attribute key with the loaded relation of the same
+  // snake-cased name — see Itinerary::createdBy() on the backend for details).
+  created_by: string | { user_id: string; display_name: string } | null;
   itinerary_name: string;
+  // The city the traveler departs from for this itinerary — used to default the "From" field
+  // in flight search and the destination query in stay search (see TripDetail.tsx).
+  start_city: string | null;
   description: string | null;
   start_date: string | null;
   end_date: string | null;
@@ -510,7 +546,6 @@ export interface ItineraryResponse {
   created_at: string;
   updated_at: string;
   trip?: { trip_id: string; trip_name: string; company_id: string };
-  created_by_user?: { user_id: string; display_name: string };
   itinerary_days?: ItineraryDayResponse[];
   itinerary_flights?: ItineraryFlightResponse[];
   itinerary_accommodation?: ItineraryAccommodationResponse[];
@@ -526,12 +561,66 @@ export interface ItineraryDayResponse {
   location: string | null;
   destinations?: {
     destination_id: string;
+    item_type: 'activity' | 'dining' | 'transfer' | 'venue' | null;
     cost: string | null;
     currency: string | null;
     activities: string | null;
     booking_url: string | null;
     destination?: { destination_id: string; name: string; country: string };
   }[];
+}
+
+// One leg of a SerpApi Google Flights result (see SerpApiService::searchFlights) — a
+// FlightSearchResult with >1 leg is a connecting itinerary, not a direct flight.
+export interface FlightSearchLeg {
+  airline: string;
+  airline_logo: string | null;
+  flight_number: string | null;
+  departure_airport: string | null;
+  departure_airport_name: string | null;
+  departure_time: string | null;
+  arrival_airport: string | null;
+  arrival_airport_name: string | null;
+  arrival_time: string | null;
+  duration: number | null;
+  airplane: string | null;
+}
+
+export interface FlightSearchResult {
+  id: string;
+  price: number | null;
+  currency: string;
+  total_duration: number | null;
+  stops: number;
+  airline_logo: string | null;
+  legs: FlightSearchLeg[];
+}
+
+export interface FlightSearchResponse {
+  currency: string;
+  google_flights_url: string | null;
+  results: FlightSearchResult[];
+  error?: string;
+}
+
+// One property from a SerpApi Google Hotels search (see SerpApiService::searchHotels).
+export interface HotelSearchResult {
+  property_token: string | null;
+  name: string;
+  link: string | null;
+  hotel_class: string | null;
+  overall_rating: number | null;
+  rate_per_night: number | null;
+  total_rate: number | null;
+  currency: string;
+  thumbnail: string | null;
+  gps_coordinates: { latitude: number; longitude: number } | null;
+}
+
+export interface HotelSearchResponse {
+  currency: string;
+  results: HotelSearchResult[];
+  error?: string;
 }
 
 export interface ItineraryFlightResponse {
@@ -568,6 +657,7 @@ export interface ItineraryAccommodationResponse {
 export interface TripResponse {
   trip_id: string;
   company_id: string;
+  // Same string-or-object duality as ItineraryResponse.created_by above — see the comment there.
   created_by: string | { user_id: string; display_name: string } | null;
   trip_name: string;
   description: string | null;
@@ -585,15 +675,68 @@ export interface TripResponse {
 export interface DestinationResponse {
   destination_id: string;
   name: string;
-  country: string;
+  country: string | null;
   url: string | null;
 }
 
+export interface CallActionItemResponse {
+  action_item_id: string;
+  call_id: string;
+  description: string;
+  status: string;
+}
+
+export interface CallResponse {
+  call_id: string;
+  trip_id: string;
+  // Same string-or-object duality as TripResponse.created_by — see the comment there.
+  organized_by: string | { user_id: string; display_name: string } | null;
+  title: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  meeting_link: string | null;
+  notes: string | null;
+  transcript: string | null;
+  created_at: string;
+  updated_at: string;
+  trip?: { trip_id: string; trip_name: string; company_id: string };
+  action_items?: CallActionItemResponse[];
+}
+
+export interface SubscriptionTierResponse {
+  tier_id: string;
+  name: string;
+  price_quarterly: number;
+  features: string[] | null;
+  status: boolean;
+}
+
+export interface CompanySubscriptionResponse {
+  subscription_id: string;
+  company_id: string;
+  tier_id: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  company?: { company_id: string; company_name: string };
+  tier?: SubscriptionTierResponse;
+}
+
+// GET /dashboard response (DashboardController). `user` here is the raw authenticated User
+// model (not a custom {id, name, email} shape) — use `display_name`, not `name`.
 export interface DashboardResponse {
   user: {
-    id: number;
-    name: string;
+    user_id: string;
     email: string;
+    display_name: string;
+    phone: string | null;
+    avatar_url: string | null;
+    status: string;
+    last_login: string | null;
+    created_at: string;
+    updated_at: string;
   };
   revenue: {
     amount: number;
@@ -616,17 +759,24 @@ export interface DashboardResponse {
   pending_review_tasks: number;
 }
 
+// GET /trips/{id}/costs response. One cost breakdown per itinerary option on the trip (in
+// the same order as TripResponse.itineraries), plus the trip's payment history and an
+// overall summary across ALL itineraries combined (see TripController::costs() on the
+// backend). TripDetail.tsx matches an entry here to the currently-selected itinerary by
+// array index rather than itinerary_id, since that's simpler and the two arrays are always
+// built from the same underlying `$trip->itineraries` relation in the same order.
 export interface TripCostResponse {
   trip_id: string;
-  currency: string;
-  itinerary_costs: {
+  itineraries: {
+    itinerary_id: string | null;
+    currency: string;
     flights: number;
     accommodation: number;
     activities: number;
     subtotal: number;
     service_fee: number;
     total: number;
-  };
+  }[];
   payments: {
     transaction_id: string;
     amount: number;
@@ -649,8 +799,8 @@ export interface DashboardTrip {
   trip_id: string;
   trip_name: string;
   status: string;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
 }
 
 // ── Company / Team Types ──
@@ -664,6 +814,11 @@ export interface CompanyUser {
   status: string;
   created_at: string;
   updated_at: string;
+  // is_default/is_enabled come through as 0/1 rather than booleans because the backend's
+  // UserCompany pivot model doesn't cast them — compare with `=== 1` or use `!!value`, not
+  // strict boolean checks. `is_enabled` is the important one: it marks which company is the
+  // user's *active* company for authorization purposes (see User::active_company() on the
+  // backend); `is_default` is only a UI hint for which company tab to show first.
   pivot: {
     user_id: string;
     company_id: string;

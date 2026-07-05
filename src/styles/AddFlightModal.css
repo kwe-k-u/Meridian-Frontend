@@ -9,6 +9,14 @@
   padding: 0 24px;
   margin-top: 12px;
 }
+/* Equal-width From/To row for the airport search fields — aim-cost-row's 1fr/100px split is
+   too narrow for a "City (CODE)" label once it's resolved from a search rather than typed as
+   a bare 3-letter code. */
+.afm-airport-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
 .afm-search-btn {
   padding: 10px 16px;
   border-radius: 8px;

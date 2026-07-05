@@ -6,18 +6,33 @@ import '../../styles/AddItemModal.css';
 const ITEM_TYPES = ['Activity', 'Dining', 'Transfer', 'Venue'] as const;
 type ItemType = typeof ITEM_TYPES[number];
 
+// The shape of one entry in ItineraryDayResponse.destinations — passed in when editing an
+// existing item rather than adding a new one.
+export interface EditingDayItem {
+  destination_id: string;
+  item_type: 'activity' | 'dining' | 'transfer' | 'venue' | null;
+  cost: string | null;
+  currency: string | null;
+  activities: string | null;
+  destination?: { destination_id: string; name: string; country: string };
+}
+
 interface Props {
   open: boolean;
   dayIndex: number;
   dayId: string | null;
+  // When set, the modal opens prefilled from this item and saving updates it in place instead
+  // of adding a new item — used by the Activities tab's per-card "Edit" button.
+  editing?: EditingDayItem | null;
   onClose: () => void;
   onSaved: () => void;
 }
 
 // ── AddItemModal ─────────────────────────────────────────────
-// Purpose: Modal to add a new item (Activity/Dining/Transfer/Venue) to a specific itinerary day.
-// Props: open: boolean; dayIndex: number; dayId: string | null; onClose: () => void; onSaved: () => void
-export default function AddItemModal({ open, dayIndex, dayId, onClose, onSaved }: Props) {
+// Purpose: Modal to add a new item (Activity/Dining/Transfer/Venue) to a specific itinerary day,
+// or edit an existing one (see `editing` above).
+// Props: open: boolean; dayIndex: number; dayId: string | null; editing?: EditingDayItem | null; onClose: () => void; onSaved: () => void
+export default function AddItemModal({ open, dayIndex, dayId, editing, onClose, onSaved }: Props) {
   const [destinations, setDestinations] = useState<DestinationResponse[]>([]);
   const [search, setSearch] = useState('');
   const [itemType, setItemType] = useState<ItemType>('Activity');
@@ -34,18 +49,29 @@ export default function AddItemModal({ open, dayIndex, dayId, onClose, onSaved }
   useEffect(() => {
     if (!open) return;
     setSearch('');
-    setItemType('Activity');
-    setTitle('');
-    setCost('');
-    setCurrency('GHS');
-    setSelectedDest(null);
     setSaving(false);
     setShowCreateForm(false);
     setNewDestCountry('');
+    if (editing) {
+      const cap = editing.item_type ? editing.item_type[0].toUpperCase() + editing.item_type.slice(1) : 'Activity';
+      setItemType(ITEM_TYPES.includes(cap as ItemType) ? (cap as ItemType) : 'Activity');
+      setTitle(editing.activities ?? '');
+      setCost(editing.cost ?? '');
+      setCurrency(editing.currency ?? 'GHS');
+      setSelectedDest(editing.destination
+        ? { destination_id: editing.destination.destination_id, name: editing.destination.name, country: editing.destination.country, url: null }
+        : null);
+    } else {
+      setItemType('Activity');
+      setTitle('');
+      setCost('');
+      setCurrency('GHS');
+      setSelectedDest(null);
+    }
     ApiService.getDestinations(1).then(r => {
       setDestinations(r.data);
     }).catch(() => {});
-  }, [open]);
+  }, [open, editing]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return destinations;
@@ -59,6 +85,13 @@ export default function AddItemModal({ open, dayIndex, dayId, onClose, onSaved }
     if (!dayId || !selectedDest || !title.trim()) return;
     setSaving(true);
     try {
+      // addDestinationToDay upserts on (day, destination_id), so editing in place just means
+      // calling it again with the same destination_id. But if the user swapped the destination
+      // while editing, that upsert would land on a *different* row and leave the original
+      // attachment behind — so the old one has to be explicitly removed first.
+      if (editing && editing.destination_id !== selectedDest.destination_id) {
+        await ApiService.removeDestinationFromDay(dayId, editing.destination_id);
+      }
       await ApiService.addDestinationToDay(dayId, {
         destination_id: selectedDest.destination_id,
         item_type: itemType.toLowerCase() as 'activity' | 'dining' | 'transfer' | 'venue',
@@ -103,7 +136,7 @@ export default function AddItemModal({ open, dayIndex, dayId, onClose, onSaved }
     <div className="aim-overlay" onClick={onClose}>
       <div className="aim-modal" onClick={e => e.stopPropagation()}>
         <div className="aim-header">
-          <h2 className="aim-title">Add item to Day {dayIndex + 1}</h2>
+          <h2 className="aim-title">{editing ? `Edit item · Day ${dayIndex + 1}` : `Add item to Day ${dayIndex + 1}`}</h2>
           <button className="aim-close" onClick={onClose}>✕</button>
         </div>
 
@@ -221,7 +254,7 @@ export default function AddItemModal({ open, dayIndex, dayId, onClose, onSaved }
             onClick={handleSave}
             disabled={!selectedDest || !title.trim() || saving}
           >
-            {saving ? 'Saving...' : 'Add to day'}
+            {saving ? 'Saving...' : editing ? 'Save changes' : 'Add to day'}
           </button>
         </div>
       </div>

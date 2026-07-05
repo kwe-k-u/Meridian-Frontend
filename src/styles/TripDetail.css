@@ -241,6 +241,50 @@
   color: var(--text-muted);
   line-height: 18px;
 }
+.td-option-name-input {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid #2B63F6;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.td-option-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.td-option-name-row .td-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.td-edit-icon-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.td-edit-icon-btn:hover {
+  opacity: 1;
+  background: #EEF0F4;
+  color: #2B63F6;
+}
 .td-ai-pick {
   display: inline-flex;
   align-items: center;
@@ -506,20 +550,33 @@
 .td-tab-content {
   padding: 24px;
 }
-/* ── Day Timeline (Itinerary) ── */
-.td-day-row {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 24px;
-  position: relative;
+/* ── Day Accordion (Itinerary) ── */
+.td-day-acc {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  background: var(--bg-card);
+  overflow: hidden;
 }
-.td-day-col {
-  width: 56px;
-  flex-shrink: 0;
+.td-day-acc--open {
+  border-color: #C4D2FF;
+}
+.td-day-acc-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+.td-day-acc--open .td-day-acc-header {
+  border-bottom: 1px solid var(--border);
+}
+.td-day-acc-date {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 2px;
+  width: 48px;
+  flex-shrink: 0;
 }
 .td-day-dow {
   font-size: 11px;
@@ -528,10 +585,10 @@
   line-height: 16px;
 }
 .td-day-num {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: #15161B;
-  line-height: 28px;
+  line-height: 26px;
 }
 .td-day-mon {
   font-size: 11px;
@@ -539,45 +596,62 @@
   color: var(--text-muted);
   line-height: 16px;
 }
-.td-timeline-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 10px;
-  flex-shrink: 0;
-  position: relative;
-}
-.td-timeline-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #D9DCE4;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 1;
-}
-.td-timeline-line {
-  width: 2px;
-  background: var(--border);
-  flex: 1;
-  margin: 4px 0;
-}
-.td-day-body {
+.td-day-acc-title-col {
   flex: 1;
   min-width: 0;
 }
 .td-day-title-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  min-width: 0;
 }
 .td-day-title {
   font-size: 15px;
   font-weight: 600;
   color: #15161B;
   line-height: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.td-day-title-input {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: #15161B;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid #2B63F6;
+  outline: none;
+  width: 100%;
+  max-width: 320px;
+  box-sizing: border-box;
+}
+.td-day-acc-summary {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 18px;
+  margin-top: 1px;
+}
+.td-day-acc-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.td-day-acc-chevron {
+  display: inline-flex;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+.td-day-acc-chevron--open {
+  transform: rotate(180deg);
+}
+.td-day-acc-body {
+  padding: 14px 16px 16px;
 }
 .td-day-blocks {
   display: flex;
@@ -899,6 +973,11 @@
   font-weight: 400;
   color: var(--text-muted);
 }
+.td-stay-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .td-stay-select {
   padding: 6px 14px;
   border-radius: 6px;
@@ -916,6 +995,11 @@
   color: var(--text);
   line-height: 21px;
   margin: 0 0 16px 0;
+}
+.td-acts-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 12px 0;
 }
 .td-acts-grid {
   display: grid;
@@ -958,6 +1042,11 @@
   font-weight: 700;
   color: #15161B;
   line-height: 20px;
+}
+.td-act-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .td-act-add {
   padding: 4px 12px;

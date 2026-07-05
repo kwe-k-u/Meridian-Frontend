@@ -679,6 +679,15 @@ export interface DestinationResponse {
   url: string | null;
 }
 
+// A row from the `airports` reference table (see AirportController::search) — used by
+// AddFlightModal's city/country → airport picker.
+export interface AirportResponse {
+  iata_code: string;
+  name: string;
+  city: string;
+  country: string;
+}
+
 export interface CallActionItemResponse {
   action_item_id: string;
   call_id: string;

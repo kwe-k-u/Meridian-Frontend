@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import logoWordmark from '../assets/logo/logo_wordmark.svg'
 import ImageCarousel from '../components/ImageCarousel'
@@ -21,19 +21,24 @@ import '../styles/AuthPage.css'
 
 function AuthPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const auth = useAuth()
   const [mode, setMode] = useState<'login' | 'signup'>('signup')
   const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState(1)
+  const [step, setStep] = useState(() => {
+    const s = searchParams.get('step')
+    return s ? Number(s) : 1
+  })
+  const [isGoogleOnboarding, setIsGoogleOnboarding] = useState(false)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
-  const [companyEmail, setCompanyEmail] = useState('')
+  const [companyEmail, setCompanyEmail] = useState(searchParams.get('email') || '')
   const [companyName, setCompanyName] = useState('')
   const [country, setCountry] = useState('')
   const [businessType, setBusinessType] = useState('')
-  const [fullName, setFullName] = useState('')
+  const [fullName, setFullName] = useState(searchParams.get('name') || '')
   const [signupPassword, setSignupPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordFocused, setPasswordFocused] = useState(false)
@@ -41,6 +46,13 @@ function AuthPage() {
   const [errorMessage, setErrorMessage] = useState('')
 
   const isLogin = mode === 'login'
+
+  // Detect Google onboarding (pre-filled step 2 from query params)
+  useEffect(() => {
+    if (searchParams.get('step') === '2' && searchParams.get('email') && step === 2) {
+      setIsGoogleOnboarding(true)
+    }
+  }, [searchParams, step])
 
   // ── Event handlers ──
 
@@ -103,7 +115,49 @@ function AuthPage() {
         navigate('/login')
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to register company.')
+      const message = error instanceof Error ? error.message : 'Failed to register company.'
+      // If the user already exists (e.g. Google-authenticated user now setting up a company),
+      // try creating the company for the already-authenticated user instead.
+      if (isGoogleOnboarding && (message.includes('already exists') || message.includes('already taken'))) {
+        try {
+          const company = await ApiService.createCompany({
+            company_name: companyName,
+            country,
+            business_type: businessType,
+          })
+          // Append the new company to the user's profile and navigate to dashboard
+          const updatedUser = {
+            ...auth.user!,
+            companies: [...(auth.user?.companies || []), {
+              company_id: company.company_id,
+              company_name: company.company_name,
+              country: company.country || '',
+              city_of_operation: company.city_of_operation || '',
+              status: company.status,
+              created_at: company.created_at,
+              updated_at: company.updated_at,
+              pivot: {
+                user_id: auth.user!.user_id,
+                company_id: company.company_id,
+                role: 'owner',
+                is_default: 1,
+                is_enabled: 1,
+                joined_at: new Date().toISOString(),
+              },
+            }],
+          }
+          auth.login({
+            access_token: auth.token!,
+            token_type: 'bearer',
+            user: updatedUser,
+          })
+          navigate('/app/dashboard')
+        } catch {
+          setErrorMessage(message)
+        }
+      } else {
+        setErrorMessage(message)
+      }
     } finally {
       setLoading(false)
     }
@@ -116,7 +170,13 @@ function AuthPage() {
       const google = await signInWithGoogle()
       const response = await ApiService.googleLogin(google)
       auth.login(response)
-      navigate('/app/dashboard')
+
+      // If the user has no company, redirect to company creation flow
+      if (!response.user.companies?.length) {
+        navigate(`/signup?step=2&email=${encodeURIComponent(google.email || '')}&name=${encodeURIComponent(google.displayName || '')}`, { replace: true })
+      } else {
+        navigate('/app/dashboard')
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to sign in with Google.')
     } finally {
@@ -124,7 +184,11 @@ function AuthPage() {
     }
   }
 
-  const stepTitles = ['Create account', 'Set up your company workspace', 'Employee info']
+  const stepTitles = [
+    isGoogleOnboarding ? 'Company details' : 'Create account',
+    'Set up your company workspace',
+    isGoogleOnboarding ? 'Set a password' : 'Employee info',
+  ]
 
   // ── Render ──
 
@@ -212,7 +276,7 @@ function AuthPage() {
         ) : (
           <>
             <div className="form-wrap">
-              {step > 1 && (
+              {step > 1 && !isGoogleOnboarding && (
                 <button type="button" className="back-btn" onClick={() => setStep((s) => s - 1)}>
                   Back
                 </button>
@@ -220,21 +284,28 @@ function AuthPage() {
               <div className="step-content" key={step}>
                 <h1 className="title">{stepTitles[step - 1]}</h1>
 
-                {step === 1 ?( <p className="subtitle">
-                  Already have an account?{' '}
-                  <button
-                    type="button"
-                    className="link-btn"
-                    onClick={() => switchMode('login')}
-                  >
-                    Login
-                  </button>
-                </p>)
-                :(<p className="subtitle">
-                  Tell us a little about your business so we can personalise your workspace.
-                </p>)}
+                {step === 1 && !isGoogleOnboarding ? (
+                  <p className="subtitle">
+                    Already have an account?{' '}
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => switchMode('login')}
+                    >
+                      Login
+                    </button>
+                  </p>
+                ) : step === 2 && isGoogleOnboarding ? (
+                  <p className="subtitle">
+                    Your Google account is connected. Now set up your company workspace.
+                  </p>
+                ) : step < 3 ? (
+                  <p className="subtitle">
+                    Tell us a little about your business so we can personalise your workspace.
+                  </p>
+                ) : null}
 
-                {step === 1 && (
+                {step === 1 && !isGoogleOnboarding && (
                   <form className="form" onSubmit={handleNextStep}>
                     <div className="field">
                       <label htmlFor="company-email">Work email</label>
@@ -259,6 +330,27 @@ function AuthPage() {
                     <Button type="button" variant="google" onClick={handleGoogleSignIn}>
                       <GoogleIcon />
                       Continue with Google
+                    </Button>
+                  </form>
+                )}
+
+                {step === 1 && isGoogleOnboarding && (
+                  <form className="form" onSubmit={handleNextStep}>
+                    <div className="field">
+                      <label htmlFor="company-email">Work email</label>
+                      <input
+                        id="company-email"
+                        type="email"
+                        placeholder="you@company.com"
+                        value={companyEmail}
+                        onChange={(e) => setCompanyEmail(e.target.value)}
+                        required
+                        disabled
+                      />
+                    </div>
+
+                    <Button type="submit">
+                      Continue
                     </Button>
                   </form>
                 )}

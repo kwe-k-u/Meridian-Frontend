@@ -1,25 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ApiService } from '../../services/api-service';
-import type { HotelSearchResult } from '../../types/app';
+import type { HotelSearchResult, ItineraryAccommodationResponse } from '../../types/app';
 import '../../styles/AddItemModal.css';
 import '../../styles/AddFlightModal.css';
 
 // ── AddStayModal ─────────────────────────────────────────────
 // Purpose: Adds accommodation to a real itinerary, either by searching real hotels via
 // SerpApi's Google Hotels engine (ApiService.searchHotels — see
-// ItineraryController::searchHotels) and picking one, or by typing one in by hand.
+// ItineraryController::searchHotels) and picking one, or by typing one in by hand. Also
+// doubles as the edit modal for an existing accommodation row (see `editing` below) — editing
+// only ever goes through the manual fields since there's no "re-search" concept for a stay
+// that's already booked.
 // Only used for real trips — TripDetail.tsx only renders the "+ Add stay" button that
 // opens this when `apiTrip && selectedItinerary` are both present.
-// Props: open: boolean; itineraryId: string | null; onClose: () => void; onSaved: () => void
+// Props: open: boolean; itineraryId: string | null; startCity: string | null; editing?: ItineraryAccommodationResponse | null; onClose: () => void; onSaved: () => void
 
 interface Props {
   open: boolean;
   itineraryId: string | null;
+  // Itinerary.start_city — unlike AddFlightModal (which needs a strict airport code),
+  // Google Hotels' `q` param is free text, so "<city> hotels" is a real, working prefill here
+  // (confirmed live) rather than just a placeholder hint.
+  startCity: string | null;
+  // When set, the modal opens straight into the manual form prefilled from this row and
+  // "Save" calls updateAccommodation instead of addAccommodation — used by the Stays tab's
+  // per-card "Edit" button.
+  editing?: ItineraryAccommodationResponse | null;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export default function AddStayModal({ open, itineraryId, onClose, onSaved }: Props) {
+export default function AddStayModal({ open, itineraryId, startCity, editing, onClose, onSaved }: Props) {
   const [mode, setMode] = useState<'search' | 'manual'>('search');
 
   // ── Search mode ──
@@ -40,6 +51,34 @@ export default function AddStayModal({ open, itineraryId, onClose, onSaved }: Pr
   const [cost, setCost] = useState('');
   const [currency, setCurrency] = useState('GHS');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      setMode('manual');
+      setName(editing.accommodation_name);
+      setAddress(editing.address ?? '');
+      setRoomType(editing.room_type ?? '');
+      setManualCheckIn(editing.check_in_date ? editing.check_in_date.split('T')[0] : '');
+      setManualCheckOut(editing.check_out_date ? editing.check_out_date.split('T')[0] : '');
+      setCost(editing.cost != null ? String(editing.cost) : '');
+      setCurrency(editing.currency ?? 'GHS');
+      return;
+    }
+    setMode('search');
+    setQuery(startCity ? `${startCity} hotels` : '');
+    setCheckInDate('');
+    setCheckOutDate('');
+    setResults(null);
+    setSearchError('');
+    setName('');
+    setAddress('');
+    setRoomType('');
+    setManualCheckIn('');
+    setManualCheckOut('');
+    setCost('');
+    setCurrency('GHS');
+  }, [open, startCity, editing]);
 
   if (!open) return null;
 
@@ -90,10 +129,10 @@ export default function AddStayModal({ open, itineraryId, onClose, onSaved }: Pr
   };
 
   const handleSaveManual = async () => {
-    if (!itineraryId || !name.trim()) return;
+    if (!name.trim()) return;
     setSaving(true);
     try {
-      await ApiService.addAccommodation(itineraryId, {
+      const payload = {
         accommodation_name: name.trim(),
         address: address.trim() || undefined,
         check_in_date: manualCheckIn || undefined,
@@ -101,7 +140,13 @@ export default function AddStayModal({ open, itineraryId, onClose, onSaved }: Pr
         room_type: roomType.trim() || undefined,
         cost: cost ? Number(cost) : undefined,
         currency: cost ? currency : undefined,
-      });
+      };
+      if (editing) {
+        await ApiService.updateAccommodation(editing.accommodation_id, payload);
+      } else {
+        if (!itineraryId) return;
+        await ApiService.addAccommodation(itineraryId, payload);
+      }
       onSaved();
       onClose();
     } catch {
@@ -115,24 +160,26 @@ export default function AddStayModal({ open, itineraryId, onClose, onSaved }: Pr
     <div className="aim-overlay" onClick={onClose}>
       <div className="aim-modal afm-modal" onClick={e => e.stopPropagation()}>
         <div className="aim-header">
-          <h2 className="aim-title">Add stay</h2>
+          <h2 className="aim-title">{editing ? 'Edit stay' : 'Add stay'}</h2>
           <button className="aim-close" onClick={onClose}>✕</button>
         </div>
 
-        <div className="afm-mode-row">
-          <button
-            className={'aim-type-btn' + (mode === 'search' ? ' aim-type-btn--active' : '')}
-            onClick={() => setMode('search')}
-          >
-            Search stays
-          </button>
-          <button
-            className={'aim-type-btn' + (mode === 'manual' ? ' aim-type-btn--active' : '')}
-            onClick={() => setMode('manual')}
-          >
-            Enter manually
-          </button>
-        </div>
+        {!editing && (
+          <div className="afm-mode-row">
+            <button
+              className={'aim-type-btn' + (mode === 'search' ? ' aim-type-btn--active' : '')}
+              onClick={() => setMode('search')}
+            >
+              Search stays
+            </button>
+            <button
+              className={'aim-type-btn' + (mode === 'manual' ? ' aim-type-btn--active' : '')}
+              onClick={() => setMode('manual')}
+            >
+              Enter manually
+            </button>
+          </div>
+        )}
 
         {mode === 'search' ? (
           <>
@@ -283,9 +330,9 @@ export default function AddStayModal({ open, itineraryId, onClose, onSaved }: Pr
               <button
                 className="aim-save"
                 onClick={handleSaveManual}
-                disabled={!itineraryId || !name.trim() || saving}
+                disabled={(!editing && !itineraryId) || !name.trim() || saving}
               >
-                {saving ? 'Saving...' : 'Add stay'}
+                {saving ? 'Saving...' : editing ? 'Save changes' : 'Add stay'}
               </button>
             </div>
           </>

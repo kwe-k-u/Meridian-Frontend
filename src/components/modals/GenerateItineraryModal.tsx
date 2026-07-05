@@ -35,6 +35,7 @@ export default function GenerateItineraryModal() {
   const [style, setStyle] = useState('');
   const [priorities, setPriorities] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
+  const [startCity, setStartCity] = useState('');
 
   if (!genItinOpen) return null;
 
@@ -65,7 +66,7 @@ export default function GenerateItineraryModal() {
     navigate(`/app/trips/${destination}`, {
       state: {
         triggerGenerate: true,
-        travelerPrefs: { budget, style, priorities, notes },
+        travelerPrefs: { budget, style, priorities, notes, start_city: startCity || undefined },
       },
     });
   };
@@ -203,6 +204,17 @@ export default function GenerateItineraryModal() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="gim-q-group">
+                <div className="gim-q-label">Start city</div>
+                <input
+                  className="gim-q-textarea"
+                  style={{ minHeight: 'auto' }}
+                  placeholder="e.g. Accra — used to default flight/stay search later"
+                  value={startCity}
+                  onChange={e => setStartCity(e.target.value)}
+                />
               </div>
 
               <div className="gim-q-group">

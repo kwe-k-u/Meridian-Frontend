@@ -18,7 +18,7 @@ import type {
   DashboardResponse, ApiPaginatedResponse,
   CustomerResponse, TransactionResponse, TripResponse, TripCostResponse, ItineraryResponse,
   ItineraryDayResponse, ItineraryFlightResponse, ItineraryAccommodationResponse,
-  DestinationResponse, CompanyResponse, CallResponse, CallActionItemResponse,
+  DestinationResponse, AirportResponse, CompanyResponse, CallResponse, CallActionItemResponse,
   SubscriptionTierResponse, CompanySubscriptionResponse, MoolreCheckoutResponse,
   FlightSearchResponse, HotelSearchResponse,
 } from '../types/app';
@@ -350,6 +350,15 @@ export class ApiService {
   }
 
   // ── Company ──
+  public static async createCompany(data: {
+    company_name: string;
+    country: string;
+    business_type: string;
+  }): Promise<CompanyResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/companies`, data);
+    return res.data;
+  }
+
   public static async getCompany(id: string): Promise<CompanyResponse> {
     const res = await axios.get(`${ApiService.BASE_URL}/companies/${id}`);
     return res.data;
@@ -398,6 +407,14 @@ export class ApiService {
     url?: string;
   }): Promise<DestinationResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/destinations`, data);
+    return res.data;
+  }
+
+  // ── Airports ──
+  // City/country → IATA code lookup (see AirportController::search) — used by AddFlightModal's
+  // From/To fields so agents don't need to memorize airport codes.
+  public static async searchAirports(query: string): Promise<{ data: AirportResponse[] }> {
+    const res = await axios.get(`${ApiService.BASE_URL}/airports/search`, { params: { q: query } });
     return res.data;
   }
 

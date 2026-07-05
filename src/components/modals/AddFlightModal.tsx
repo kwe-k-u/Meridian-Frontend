@@ -1,8 +1,71 @@
 import { useState, useEffect } from 'react';
 import { ApiService } from '../../services/api-service';
-import type { FlightSearchResult } from '../../types/app';
+import type { FlightSearchResult, AirportResponse } from '../../types/app';
 import '../../styles/AddItemModal.css';
 import '../../styles/AddFlightModal.css';
+
+// A city/country search box that resolves down to a specific airport, backed by the real
+// `airports` table (see AirportController::search / AirportSeeder — an OpenFlights import, not
+// a hand-picked list) — used for the "Search flights" From/To fields, which need a real IATA
+// code for SerpApi's departure_id/arrival_id. Fully controlled: the parent owns the display
+// text (`query`) so it can be reset/prefilled the same way as every other field in this modal,
+// and clears the resolved code (via onQueryChange) whenever the text no longer matches a
+// selection. Debounced so every keystroke doesn't fire its own request.
+function AirportField({
+  label, query, onQueryChange, onSelect, placeholder,
+}: {
+  label: string;
+  query: string;
+  onQueryChange: (q: string) => void;
+  onSelect: (airport: AirportResponse) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [matches, setMatches] = useState<AirportResponse[]>([]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setMatches([]);
+      return;
+    }
+    const handle = setTimeout(() => {
+      ApiService.searchAirports(q).then(res => setMatches(res.data)).catch(() => setMatches([]));
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  return (
+    <div>
+      <label className="aim-label">{label}</label>
+      <div className="aim-dest-select">
+        <input
+          className="aim-input"
+          value={query}
+          onChange={e => { onQueryChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder={placeholder ?? 'e.g. Accra, or Ghana'}
+        />
+        {open && matches.length > 0 && (
+          <div className="aim-dest-dropdown">
+            {matches.map(a => (
+              <div
+                key={a.iata_code}
+                className="aim-dest-opt"
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => { onSelect(a); setOpen(false); }}
+              >
+                <span className="aim-dest-name">{a.city} ({a.iata_code})</span>
+                <span className="aim-dest-country">{a.country}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ── AddFlightModal ───────────────────────────────────────────
 // Purpose: Adds a flight booking to a real itinerary, either by searching real flights via
@@ -41,8 +104,13 @@ export default function AddFlightModal({ open, itineraryId, startCity, onClose, 
   const [mode, setMode] = useState<'search' | 'manual'>('search');
 
   // ── Search mode ──
+  // departureId/arrivalId hold the resolved IATA code (what actually gets sent to SerpApi);
+  // departureQuery/arrivalQuery hold the free-text the user typed/the "City (CODE)" label
+  // shown once they've picked a match — see AirportField above.
   const [departureId, setDepartureId] = useState('');
   const [arrivalId, setArrivalId] = useState('');
+  const [departureQuery, setDepartureQuery] = useState('');
+  const [arrivalQuery, setArrivalQuery] = useState('');
   const [outboundDate, setOutboundDate] = useState('');
   const [returnDate, setReturnDate] = useState('');
   const [searching, setSearching] = useState(false);
@@ -66,6 +134,8 @@ export default function AddFlightModal({ open, itineraryId, startCity, onClose, 
     setMode('search');
     setDepartureId('');
     setArrivalId('');
+    setDepartureQuery('');
+    setArrivalQuery('');
     setOutboundDate('');
     setReturnDate('');
     setResults(null);
@@ -176,25 +246,23 @@ export default function AddFlightModal({ open, itineraryId, startCity, onClose, 
         {mode === 'search' ? (
           <>
             <div className="aim-body">
-              <div className="aim-cost-row">
+              <div className="afm-airport-row">
                 <div className="aim-cost-field">
-                  <label className="aim-label">From (airport code)</label>
-                  <input
-                    className="aim-input"
-                    value={departureId}
-                    onChange={e => setDepartureId(e.target.value.toUpperCase())}
-                    placeholder={startCity ? `e.g. ACC (${startCity})` : 'e.g. ACC'}
-                    maxLength={3}
+                  <AirportField
+                    label="From"
+                    query={departureQuery}
+                    onQueryChange={q => { setDepartureQuery(q); setDepartureId(''); }}
+                    onSelect={a => { setDepartureId(a.iata_code); setDepartureQuery(`${a.city} (${a.iata_code})`); }}
+                    placeholder={startCity ? `e.g. ${startCity}` : 'e.g. Accra, or Ghana'}
                   />
                 </div>
                 <div className="aim-curr-field">
-                  <label className="aim-label">To (airport code)</label>
-                  <input
-                    className="aim-input"
-                    value={arrivalId}
-                    onChange={e => setArrivalId(e.target.value.toUpperCase())}
-                    placeholder="e.g. LHR"
-                    maxLength={3}
+                  <AirportField
+                    label="To"
+                    query={arrivalQuery}
+                    onQueryChange={q => { setArrivalQuery(q); setArrivalId(''); }}
+                    onSelect={a => { setArrivalId(a.iata_code); setArrivalQuery(`${a.city} (${a.iata_code})`); }}
+                    placeholder="e.g. London, or United Kingdom"
                   />
                 </div>
               </div>

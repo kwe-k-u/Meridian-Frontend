@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { ApiService } from '../services/api-service';
-import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse } from '../types/app';
-import AddItemModal from '../components/modals/AddItemModal';
+import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse } from '../types/app';
+import AddItemModal, { type EditingDayItem } from '../components/modals/AddItemModal';
 import AddFlightModal from '../components/modals/AddFlightModal';
 import AddStayModal from '../components/modals/AddStayModal';
 import AssignTravelerModal from '../components/modals/AssignTravelerModal';
@@ -190,12 +190,26 @@ export default function TripDetail() {
   const [editTripOpen, setEditTripOpen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [addItemDay, setAddItemDay] = useState<number | null>(null);
+  // The activity being edited (Activities tab's per-card "Edit" button) — reuses AddItemModal
+  // rather than a separate one, so it's kept apart from `addItemDay`'s "add new" flow.
+  const [editingActivity, setEditingActivity] = useState<{ dayIndex: number; item: EditingDayItem } | null>(null);
   const [addFlightOpen, setAddFlightOpen] = useState(false);
   const [addStayOpen, setAddStayOpen] = useState(false);
+  // The accommodation being edited (Stays tab's per-card "Edit" button) — reuses AddStayModal.
+  const [editingStay, setEditingStay] = useState<ItineraryAccommodationResponse | null>(null);
   const [assignTravelerOpen, setAssignTravelerOpen] = useState(false);
   const [editingStartCity, setEditingStartCity] = useState(false);
   const [startCityDraft, setStartCityDraft] = useState('');
+  const [editingItinName, setEditingItinName] = useState<string | null>(null);
+  const [itinNameDraft, setItinNameDraft] = useState('');
+  const [editingDayTitle, setEditingDayTitle] = useState<string | null>(null);
+  const [dayTitleDraft, setDayTitleDraft] = useState('');
+  // Which days are expanded in the Itinerary tab's accordion (keyed by day index `di`).
+  // Starts with just the first day open so a multi-day trip doesn't dump every day's blocks
+  // on screen at once.
+  const [expandedDays, setExpandedDays] = useState<Set<number>>(() => new Set([0]));
   const [addingDay, setAddingDay] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(false);
   const [generatingItinerary, setGeneratingItinerary] = useState(false);
   const [removingDayId, setRemovingDayId] = useState<string | null>(null);
   const [removingItinerary, setRemovingItinerary] = useState(false);
@@ -242,7 +256,7 @@ export default function TripDetail() {
   // and returns a templated itinerary — see TripController::generateItinerary), showing the
   // `generatingItinerary` loading state below for the duration; for a mock trip it falls back
   // to the old client-only fake "drafting" animation (ctx.generateOptions()).
-  const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string }) => {
+  const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string; start_city?: string }) => {
     if (!tripId || !isRealId) {
       ctx.generateOptions();
       return;
@@ -467,6 +481,33 @@ export default function TripDetail() {
     refreshTrip();
   };
 
+  // Renames an itinerary option (e.g. "Option A" -> "Beach-focused"). No-op if unchanged.
+  const handleSaveItinName = async (itineraryId: string, original: string) => {
+    setEditingItinName(null);
+    const trimmed = itinNameDraft.trim();
+    if (!trimmed || trimmed === original) return;
+    await ApiService.updateItinerary(itineraryId, { itinerary_name: trimmed });
+    refreshTrip();
+  };
+
+  // Renames a single day's title (e.g. "Day 1" -> "Arrival & check-in"). No-op if unchanged.
+  const handleSaveDayTitle = async (dayId: string, original: string) => {
+    setEditingDayTitle(null);
+    const trimmed = dayTitleDraft.trim();
+    if (!trimmed || trimmed === original) return;
+    await ApiService.updateItineraryDay(dayId, { title: trimmed });
+    refreshTrip();
+  };
+
+  const toggleDay = (di: number) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev);
+      if (next.has(di)) next.delete(di);
+      else next.add(di);
+      return next;
+    });
+  };
+
   // Deletes an entire day (and everything on it) from the selected itinerary.
   const handleRemoveDay = async (dayId: string) => {
     if (!window.confirm('Remove this day and everything on it? This cannot be undone.')) return;
@@ -623,6 +664,77 @@ export default function TripDetail() {
     }
   };
 
+  // Lazily creates a bare itinerary for this trip if one doesn't exist yet, mirroring
+  // handleAddBlock's bootstrap above — shared by the Flights/Stays/Activities "+ Add" buttons
+  // below, which previously only appeared once an itinerary already existed, leaving a
+  // brand-new trip (no itinerary at all) with no visible way to add its first flight/stay/
+  // activity. Returns the up-to-date itinerary straight from refreshTrip()'s response rather
+  // than reading the (still-stale, pre-refresh) `selectedItinerary` closure variable.
+  const ensureItinerary = async (): Promise<ItineraryResponse | null> => {
+    if (selectedItinerary) return selectedItinerary;
+    if (!apiTrip) return null;
+    await ApiService.createItinerary({
+      trip_id: apiTrip.trip_id,
+      itinerary_name: 'Option A',
+      description: 'Auto-created itinerary',
+    });
+    const trip = await refreshTrip();
+    return trip?.itineraries?.[0] ?? null;
+  };
+
+  const handleOpenAddFlight = async () => {
+    setBootstrapping(true);
+    try {
+      if (await ensureItinerary()) setAddFlightOpen(true);
+    } finally {
+      setBootstrapping(false);
+    }
+  };
+
+  const handleOpenAddStay = async () => {
+    setBootstrapping(true);
+    try {
+      if (await ensureItinerary()) setAddStayOpen(true);
+    } finally {
+      setBootstrapping(false);
+    }
+  };
+
+  // Same bootstrap as above, plus ensuring at least one day exists — activities attach to a
+  // specific day, not to the itinerary directly, so this defaults to the last day (matching
+  // the tab's own copy: "They'll appear on the last day").
+  const handleOpenAddActivity = async () => {
+    setBootstrapping(true);
+    try {
+      const itn = await ensureItinerary();
+      if (!itn || !apiTrip) return;
+      let dayIndex: number;
+      if (!itn.itinerary_days || itn.itinerary_days.length === 0) {
+        await ApiService.addItineraryDay(itn.itinerary_id, {
+          day_number: 1,
+          date: apiTrip.start_date ? apiTrip.start_date.split('T')[0] : undefined,
+          title: 'Day 1',
+        });
+        await refreshTrip();
+        dayIndex = 0;
+      } else {
+        dayIndex = itn.itinerary_days.length - 1;
+      }
+      setAddItemDay(dayIndex);
+    } finally {
+      setBootstrapping(false);
+    }
+  };
+
+  // Removes a single destination/activity attached to a specific day of the selected
+  // itinerary — used by the Activities tab's real (non-mock) list below.
+  const handleRemoveActivity = async (dayIndex: number, destinationId: string) => {
+    const dayId = selectedItinerary?.itinerary_days?.[dayIndex]?.itinerary_day_id;
+    if (!dayId) return;
+    await ApiService.removeDestinationFromDay(dayId, destinationId);
+    refreshTrip();
+  };
+
   const days = rawDays.map((d, di) => ({
     ...d,
     di: d.di ?? di,
@@ -646,6 +758,23 @@ export default function TripDetail() {
     ...a,
     add: () => ctx.addActivity({ name: a.name, meta: a.meta, price: a.price }),
   }));
+
+  // Real (non-mock) activities for the Activities tab — every destination attached to any day
+  // of the selected itinerary, flattened into one list with which day it's on. Previously this
+  // tab always showed a fixed mock catalog regardless of trip type, so its "+ Add" button did
+  // nothing for real trips (ctx.addActivity only touches client-side mock state).
+  const realActivities = apiTrip
+    ? (selectedItinerary?.itinerary_days ?? []).flatMap((day, di) =>
+        (day.destinations ?? []).map(d => ({
+          dayIndex: di,
+          destinationId: d.destination_id,
+          name: d.destination?.name ?? d.activities ?? 'Activity',
+          meta: `${day.title || 'Day ' + day.day_number}${d.destination?.country ? ' · ' + d.destination.country : ''}`,
+          price: d.cost ? `${d.currency ?? ''} ${d.cost}` : '',
+          item: d,
+        })),
+      )
+    : null;
   const { calls: callLogsArr, callDetails } = ctx.getCallLogs();
   const call = callDetails[activeCall] ?? null;
   const agentFeed = ctx.getAgentFeed();
@@ -653,7 +782,7 @@ export default function TripDetail() {
   useEffect(() => {
     const state = location.state as {
       triggerGenerate?: boolean;
-      travelerPrefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string };
+      travelerPrefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string; start_city?: string };
     } | null;
     if (state?.triggerGenerate) {
       handleGenerateItinerary(state.travelerPrefs);
@@ -902,9 +1031,46 @@ export default function TripDetail() {
                       {opt.letter}
                     </div>
                     <div className="td-option-info">
-                      <div className="td-option-name" style={{ color: isActive ? '#2B63F6' : '#15161B' }}>
-                        {opt.name}
-                      </div>
+                      {opt.itineraryId && editingItinName === opt.itineraryId ? (
+                        <input
+                          className="td-option-name-input"
+                          value={itinNameDraft}
+                          onChange={e => setItinNameDraft(e.target.value)}
+                          onBlur={() => handleSaveItinName(opt.itineraryId!, opt.name)}
+                          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                          onClick={e => e.stopPropagation()}
+                          autoFocus
+                        />
+                      ) : (
+                        <div className="td-option-name-row">
+                          <div
+                            className="td-option-name"
+                            style={{ color: isActive ? '#2B63F6' : '#15161B' }}
+                            onDoubleClick={(e) => {
+                              if (!opt.itineraryId) return;
+                              e.stopPropagation();
+                              setItinNameDraft(opt.name);
+                              setEditingItinName(opt.itineraryId);
+                            }}
+                            title={opt.itineraryId ? 'Double-click to rename' : undefined}
+                          >
+                            {opt.name}
+                          </div>
+                          {opt.itineraryId && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setItinNameDraft(opt.name);
+                                setEditingItinName(opt.itineraryId!);
+                              }}
+                              className="td-edit-icon-btn"
+                              title="Rename option"
+                            >
+                              ✎
+                            </button>
+                          )}
+                        </div>
+                      )}
                       <div className="td-option-sub">
                         {opt.sub}
                       </div>
@@ -1047,33 +1213,62 @@ export default function TripDetail() {
                     )}
                     {days.map((day) => {
                       const dayId = selectedItinerary?.itinerary_days?.[day.di ?? -1]?.itinerary_day_id;
+                      const isOpen = expandedDays.has(day.di);
                       return (
-                      <div key={day.di} className="td-day-row">
-                        <div className="td-day-col">
-                          <span className="td-day-dow">
-                            {day.dow}
-                          </span>
-                          <span className="td-day-num">
-                            {day.day}
-                          </span>
-                          <span className="td-day-mon">
-                            {day.mon}
-                          </span>
-                        </div>
+                      <div key={day.di} className={'td-day-acc' + (isOpen ? ' td-day-acc--open' : '')}>
+                        <div className="td-day-acc-header" onClick={() => toggleDay(day.di)}>
+                          <div className="td-day-acc-date">
+                            <span className="td-day-dow">{day.dow}</span>
+                            <span className="td-day-num">{day.day}</span>
+                            <span className="td-day-mon">{day.mon}</span>
+                          </div>
 
-                        <div className="td-timeline-col">
-                          <div className="td-timeline-dot" />
-                          <div className="td-timeline-line" />
-                        </div>
-
-                        <div className="td-day-body">
-                          <div className="td-day-title-row">
-                            <div className="td-day-title">
-                              {day.title}
+                          <div className="td-day-acc-title-col" onClick={e => e.stopPropagation()}>
+                            {dayId && editingDayTitle === dayId ? (
+                              <input
+                                className="td-day-title-input"
+                                value={dayTitleDraft}
+                                onChange={e => setDayTitleDraft(e.target.value)}
+                                onBlur={() => handleSaveDayTitle(dayId, day.title)}
+                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                autoFocus
+                              />
+                            ) : (
+                              <div className="td-day-title-row">
+                                <div
+                                  className="td-day-title"
+                                  onDoubleClick={() => {
+                                    if (!dayId) return;
+                                    setDayTitleDraft(day.title);
+                                    setEditingDayTitle(dayId);
+                                  }}
+                                  title={dayId ? 'Double-click to rename' : undefined}
+                                >
+                                  {day.title}
+                                </div>
+                                {dayId && (
+                                  <button
+                                    onClick={() => {
+                                      setDayTitleDraft(day.title);
+                                      setEditingDayTitle(dayId);
+                                    }}
+                                    className="td-edit-icon-btn"
+                                    title="Rename day"
+                                  >
+                                    ✎
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                            <div className="td-day-acc-summary">
+                              {day.blocks.length === 0 ? 'No items yet' : `${day.blocks.length} item${day.blocks.length === 1 ? '' : 's'}`}
                             </div>
+                          </div>
+
+                          <div className="td-day-acc-actions">
                             {dayId && (
                               <button
-                                onClick={() => handleRemoveDay(dayId)}
+                                onClick={(e) => { e.stopPropagation(); handleRemoveDay(dayId); }}
                                 className="td-block-remove"
                                 disabled={removingDayId === dayId}
                                 title="Remove day"
@@ -1081,78 +1276,85 @@ export default function TripDetail() {
                                 ✕
                               </button>
                             )}
+                            <span className={'td-day-acc-chevron' + (isOpen ? ' td-day-acc-chevron--open' : '')}>
+                              ⌄
+                            </span>
                           </div>
+                        </div>
 
-                          <div className="td-day-blocks">
-                            {day.blocks.map((block, bi) => (
-                              <div key={bi} className="td-block-card">
-                                <div className="td-block-icon" style={{ background: block.iconBg }}>
-                                  {block.icon}
-                                </div>
-                                <div className="td-block-info">
-                                  <div className="td-block-kind-row">
-                                    <span className="td-block-kind" style={{ color: block.kindColor }}>
-                                      {block.kind}
-                                    </span>
-                                    {block.meta && (
-                                      <>
-                                        <span className="td-block-dot" />
-                                        <span className="td-block-meta">
-                                          {block.meta}
-                                        </span>
-                                      </>
+                        {isOpen && (
+                          <div className="td-day-acc-body">
+                            <div className="td-day-blocks">
+                              {day.blocks.map((block, bi) => (
+                                <div key={bi} className="td-block-card">
+                                  <div className="td-block-icon" style={{ background: block.iconBg }}>
+                                    {block.icon}
+                                  </div>
+                                  <div className="td-block-info">
+                                    <div className="td-block-kind-row">
+                                      <span className="td-block-kind" style={{ color: block.kindColor }}>
+                                        {block.kind}
+                                      </span>
+                                      {block.meta && (
+                                        <>
+                                          <span className="td-block-dot" />
+                                          <span className="td-block-meta">
+                                            {block.meta}
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+                                    <div className="td-block-title">
+                                      {block.title}
+                                    </div>
+                                    {block.sub && (
+                                      <div className="td-block-sub">
+                                        {block.sub}
+                                      </div>
                                     )}
                                   </div>
-                                  <div className="td-block-title">
-                                    {block.title}
+                                  <div className="td-block-price-col">
+                                    {block.price && (
+                                      <div className="td-block-price">
+                                        {block.price}
+                                      </div>
+                                    )}
                                   </div>
-                                  {block.sub && (
-                                    <div className="td-block-sub">
-                                      {block.sub}
-                                    </div>
-                                  )}
+                                  <button
+                                    onClick={block.remove}
+                                    className="td-block-remove"
+                                  >
+                                    ✕
+                                  </button>
                                 </div>
-                                <div className="td-block-price-col">
-                                  {block.price && (
-                                    <div className="td-block-price">
-                                      {block.price}
-                                    </div>
-                                  )}
+                              ))}
+                            </div>
+
+                            {day.hasSuggestion && day.suggestion && (
+                              <div className="td-suggestion">
+                                <span className="td-suggestion-icon">✦</span>
+                                <div className="td-suggestion-text">
+                                  <span className="td-suggestion-label">
+                                    Meridian suggests
+                                  </span>
+                                  <span className="td-suggestion-desc">
+                                    {day.suggestion}
+                                  </span>
                                 </div>
                                 <button
-                                  onClick={block.remove}
-                                  className="td-block-remove"
+                                  onClick={day.addSuggestion}
+                                  className="td-suggestion-add"
                                 >
-                                  ✕
+                                  + Add
                                 </button>
                               </div>
-                            ))}
+                            )}
+
+                            <button onClick={day.addBlock} className="td-dashed-btn">
+                              + Add item to this day
+                            </button>
                           </div>
-
-                          {day.hasSuggestion && day.suggestion && (
-                            <div className="td-suggestion">
-                              <span className="td-suggestion-icon">✦</span>
-                              <div className="td-suggestion-text">
-                                <span className="td-suggestion-label">
-                                  Meridian suggests
-                                </span>
-                                <span className="td-suggestion-desc">
-                                  {day.suggestion}
-                                </span>
-                              </div>
-                              <button
-                                onClick={day.addSuggestion}
-                                className="td-suggestion-add"
-                              >
-                                + Add
-                              </button>
-                            </div>
-                          )}
-
-                          <button onClick={day.addBlock} className="td-dashed-btn">
-                            + Add item to this day
-                          </button>
-                        </div>
+                        )}
                       </div>
                       );
                     })}
@@ -1215,13 +1417,14 @@ export default function TripDetail() {
                         </div>
                       ))}
                     </div>
-                    {apiTrip && selectedItinerary && (
+                    {apiTrip && (
                       <button
-                        onClick={() => setAddFlightOpen(true)}
+                        onClick={handleOpenAddFlight}
                         className="td-dashed-btn"
                         style={{ marginTop: 12 }}
+                        disabled={bootstrapping}
                       >
-                        + Add flight
+                        {bootstrapping ? 'One moment…' : '+ Add flight'}
                       </button>
                     )}
                   </div>
@@ -1265,13 +1468,22 @@ export default function TripDetail() {
                                 <span className="td-stay-price-unit"> / night</span>
                               </span>
                               {apiTrip && selectedItinerary?.itinerary_accommodation?.[i]?.accommodation_id ? (
-                                <button
-                                  onClick={() => handleRemoveAccommodation(i)}
-                                  className="td-stay-select"
-                                  style={{ background: '#fff', color: '#D64545', border: '1px solid #FDECEC' }}
-                                >
-                                  Remove
-                                </button>
+                                <div className="td-stay-actions">
+                                  <button
+                                    onClick={() => setEditingStay(selectedItinerary.itinerary_accommodation![i])}
+                                    className="td-stay-select"
+                                    style={{ background: '#fff', color: '#5B6172', border: '1px solid #DDE0E8' }}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveAccommodation(i)}
+                                    className="td-stay-select"
+                                    style={{ background: '#fff', color: '#D64545', border: '1px solid #FDECEC' }}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               ) : (
                                 <button className="td-stay-select">
                                   Select
@@ -1282,13 +1494,14 @@ export default function TripDetail() {
                         </div>
                       ))}
                     </div>
-                    {apiTrip && selectedItinerary && (
+                    {apiTrip && (
                       <button
-                        onClick={() => setAddStayOpen(true)}
+                        onClick={handleOpenAddStay}
                         className="td-dashed-btn"
                         style={{ marginTop: 12 }}
+                        disabled={bootstrapping}
                       >
-                        + Add stay
+                        {bootstrapping ? 'One moment…' : '+ Add stay'}
                       </button>
                     )}
                   </div>
@@ -1297,37 +1510,95 @@ export default function TripDetail() {
                 {tabActs && (
                   <div>
                     <p className="td-acts-desc">
-                      Add activities to this itinerary. They'll appear on the last day.
+                      {apiTrip
+                        ? "Activities added across this itinerary's days."
+                        : "Add activities to this itinerary. They'll appear on the last day."}
                     </p>
-                    <div className="td-acts-grid">
-                      {activitiesData.map((act, i) => (
-                        <div
-                          key={i}
-                          className="td-act-card"
-                        >
-                          <div className="td-act-cover" style={{ background: act.cover }} />
-                          <div className="td-act-body">
-                            <div className="td-act-name">
-                              {act.name}
-                            </div>
-                            <div className="td-act-meta">
-                              {act.meta}
-                            </div>
-                            <div className="td-act-bottom">
-                              <span className="td-act-price">
-                                {act.price}
-                              </span>
-                              <button
-                                onClick={act.add}
-                                className="td-act-add"
+                    {apiTrip ? (
+                      <>
+                        {realActivities && realActivities.length > 0 ? (
+                          <div className="td-acts-grid">
+                            {realActivities.map((act) => (
+                              <div
+                                key={`${act.dayIndex}-${act.destinationId}`}
+                                className="td-act-card"
                               >
-                                + Add
-                              </button>
+                                <div className="td-act-cover" style={{ background: '#E3F7EF' }} />
+                                <div className="td-act-body">
+                                  <div className="td-act-name">
+                                    {act.name}
+                                  </div>
+                                  <div className="td-act-meta">
+                                    {act.meta}
+                                  </div>
+                                  <div className="td-act-bottom">
+                                    <span className="td-act-price">
+                                      {act.price}
+                                    </span>
+                                    <div className="td-act-actions">
+                                      <button
+                                        onClick={() => setEditingActivity({ dayIndex: act.dayIndex, item: act.item })}
+                                        className="td-act-add"
+                                        style={{ background: '#fff', color: '#5B6172', border: '1px solid #DDE0E8' }}
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={() => handleRemoveActivity(act.dayIndex, act.destinationId)}
+                                        className="td-act-add"
+                                        style={{ background: '#fff', color: '#D64545', border: '1px solid #FDECEC' }}
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="td-acts-empty">No activities added yet.</p>
+                        )}
+                        <button
+                          onClick={handleOpenAddActivity}
+                          className="td-dashed-btn"
+                          style={{ marginTop: 12 }}
+                          disabled={bootstrapping}
+                        >
+                          {bootstrapping ? 'One moment…' : '+ Add activity'}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="td-acts-grid">
+                        {activitiesData.map((act, i) => (
+                          <div
+                            key={i}
+                            className="td-act-card"
+                          >
+                            <div className="td-act-cover" style={{ background: act.cover }} />
+                            <div className="td-act-body">
+                              <div className="td-act-name">
+                                {act.name}
+                              </div>
+                              <div className="td-act-meta">
+                                {act.meta}
+                              </div>
+                              <div className="td-act-bottom">
+                                <span className="td-act-price">
+                                  {act.price}
+                                </span>
+                                <button
+                                  onClick={act.add}
+                                  className="td-act-add"
+                                >
+                                  + Add
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1718,25 +1989,30 @@ export default function TripDetail() {
         )}
       </div>
       <AddItemModal
-        open={addItemDay !== null}
-        dayIndex={addItemDay ?? 0}
-        dayId={addItemDay !== null
-          ? selectedItinerary?.itinerary_days?.[addItemDay]?.itinerary_day_id ?? null
-          : null}
-        onClose={() => setAddItemDay(null)}
-        onSaved={() => { refreshTrip(); setAddItemDay(null); }}
+        open={addItemDay !== null || editingActivity !== null}
+        dayIndex={editingActivity ? editingActivity.dayIndex : addItemDay ?? 0}
+        dayId={(() => {
+          const di = editingActivity ? editingActivity.dayIndex : addItemDay;
+          return di !== null ? selectedItinerary?.itinerary_days?.[di]?.itinerary_day_id ?? null : null;
+        })()}
+        editing={editingActivity?.item ?? null}
+        onClose={() => { setAddItemDay(null); setEditingActivity(null); }}
+        onSaved={() => { refreshTrip(); setAddItemDay(null); setEditingActivity(null); }}
       />
       <AddFlightModal
         open={addFlightOpen}
         itineraryId={selectedItinerary?.itinerary_id ?? null}
+        startCity={selectedItinerary?.start_city ?? null}
         onClose={() => setAddFlightOpen(false)}
         onSaved={() => { refreshTrip(); setAddFlightOpen(false); }}
       />
       <AddStayModal
-        open={addStayOpen}
+        open={addStayOpen || editingStay !== null}
         itineraryId={selectedItinerary?.itinerary_id ?? null}
-        onClose={() => setAddStayOpen(false)}
-        onSaved={() => { refreshTrip(); setAddStayOpen(false); }}
+        startCity={selectedItinerary?.start_city ?? null}
+        editing={editingStay}
+        onClose={() => { setAddStayOpen(false); setEditingStay(null); }}
+        onSaved={() => { refreshTrip(); setAddStayOpen(false); setEditingStay(null); }}
       />
       <AssignTravelerModal
         open={assignTravelerOpen}

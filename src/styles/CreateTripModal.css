@@ -257,3 +257,38 @@
   margin: 0 0 32px;
   text-align: center;
 }
+
+/* ── CreateTripModal Responsive ── */
+@media (max-width: 768px) {
+  .ctm-card {
+    max-width: 100%;
+    margin: 16px;
+    border-radius: 16px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  .ctm-body {
+    padding: 24px 20px 20px;
+  }
+
+  .ctm-footer {
+    padding: 0 20px 24px;
+  }
+
+  .ctm-field-row {
+    flex-direction: column;
+  }
+
+  .ctm-title {
+    font-size: 18px;
+  }
+
+  .ctm-centered {
+    padding: 32px 20px;
+  }
+
+  .ctm-btn-row {
+    flex-direction: column;
+  }
+}

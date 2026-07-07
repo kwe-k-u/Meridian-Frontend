@@ -203,3 +203,52 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* ── Financials Responsive ── */
+@media (max-width: 768px) {
+  .financials-page {
+    padding: 16px;
+  }
+
+  .th-row,
+  .tr {
+    grid-template-columns: 1.2fr 1fr 1fr;
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+
+  .th-row > :nth-child(n+4),
+  .tr > :nth-child(n+4) {
+    display: none;
+  }
+
+  .bar-row {
+    height: 120px;
+    gap: 8px;
+  }
+
+  .payout-card {
+    padding: 16px;
+  }
+
+  .payout-amount {
+    font-size: 24px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .th-row,
+  .tr {
+    grid-template-columns: 1fr 1fr;
+    padding: 10px 12px;
+  }
+
+  .th-row > :nth-child(n+3),
+  .tr > :nth-child(n+3) {
+    display: none;
+  }
+}

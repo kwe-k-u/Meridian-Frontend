@@ -176,3 +176,50 @@
   color: var(--text-muted);
   margin: 0;
 }
+
+/* ── Help Responsive ── */
+@media (max-width: 768px) {
+  .help-hero {
+    padding: 32px 20px;
+    margin-bottom: 24px;
+  }
+
+  .help-hero-title {
+    font-size: 24px;
+  }
+
+  .help-featured-card {
+    grid-template-columns: 1fr;
+    margin-bottom: 32px;
+  }
+
+  .help-content-side {
+    padding: 24px 20px;
+  }
+
+  .help-cover-side {
+    min-height: 180px;
+  }
+
+  .help-feat-title {
+    font-size: 18px;
+  }
+
+  .help-all-head {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .help-hero {
+    padding: 24px 16px;
+  }
+
+  .help-hero-title {
+    font-size: 20px;
+  }
+
+  .help-search-input {
+    max-width: 100%;
+  }
+}

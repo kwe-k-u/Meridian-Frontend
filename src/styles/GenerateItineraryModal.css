@@ -328,3 +328,33 @@
 .gim-next-btn:hover {
   background: #2455D6;
 }
+
+/* ── GenerateItineraryModal Responsive ── */
+@media (max-width: 768px) {
+  .gim-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 12px;
+    max-height: 90vh;
+  }
+
+  .gim-header {
+    padding: 20px 20px 0;
+  }
+
+  .gim-questions {
+    padding: 8px 20px 0;
+  }
+
+  .gim-footer {
+    padding: 12px 20px;
+  }
+
+  .gim-create-btn {
+    margin: 0 12px 12px;
+  }
+
+  .gim-trip-item {
+    padding: 10px;
+  }
+}

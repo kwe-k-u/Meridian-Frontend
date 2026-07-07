@@ -501,3 +501,111 @@
   color: var(--text);
   line-height: 1.5;
 }
+
+/* ── Mobile back / nav buttons ── */
+.msgs-back-btn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #15161B;
+  padding: 4px;
+  line-height: 1;
+}
+
+.msgs-back-btn-details {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.msgs-details-btn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #8A90A2;
+  padding: 4px;
+  line-height: 1;
+}
+
+.msgs-chat-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Messages Responsive ── */
+@media (max-width: 1024px) {
+  .msgs-layout {
+    grid-template-columns: 260px 1fr 260px;
+  }
+}
+
+@media (max-width: 768px) {
+  .msgs-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 100vh;
+    overflow: hidden;
+  }
+
+  .msgs-back-btn,
+  .msgs-details-btn {
+    display: inline-flex;
+  }
+
+  .msgs-left-panel,
+  .msgs-center-panel,
+  .msgs-right-panel {
+    grid-row: 1;
+    grid-column: 1;
+    transition: opacity 0.2s, visibility 0.2s;
+  }
+
+  .msgs-layout[data-mobile-panel="inbox"] .msgs-left-panel {
+    opacity: 1;
+    visibility: visible;
+    position: relative;
+  }
+
+  .msgs-layout[data-mobile-panel="inbox"] .msgs-center-panel,
+  .msgs-layout[data-mobile-panel="inbox"] .msgs-right-panel {
+    opacity: 0;
+    visibility: hidden;
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .msgs-layout[data-mobile-panel="chat"] .msgs-center-panel {
+    opacity: 1;
+    visibility: visible;
+    position: relative;
+  }
+
+  .msgs-layout[data-mobile-panel="chat"] .msgs-left-panel,
+  .msgs-layout[data-mobile-panel="chat"] .msgs-right-panel {
+    opacity: 0;
+    visibility: hidden;
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .msgs-layout[data-mobile-panel="details"] .msgs-right-panel {
+    opacity: 1;
+    visibility: visible;
+    position: relative;
+  }
+
+  .msgs-layout[data-mobile-panel="details"] .msgs-left-panel,
+  .msgs-layout[data-mobile-panel="details"] .msgs-center-panel {
+    opacity: 0;
+    visibility: hidden;
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .msgs-open-trip-btn {
+    display: none;
+  }
+}

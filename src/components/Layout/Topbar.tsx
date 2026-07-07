@@ -27,13 +27,25 @@ function usePageInfo() {
 
 // ── Topbar ──────────────────────────────────────────────────
 // Purpose: Top bar showing page title/subtitle, search input, and action buttons (generate itinerary, new trip).
-// Props: none (uses context for actions)
-export default function Topbar() {
+// Props: onToggleSidebar — opens/closes the mobile sidebar drawer
+export default function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const [pageTitle, pageSub] = usePageInfo();
   const { openCreate, openGenItin, toastAction } = useApp();
 
   return (
     <div className="topbar">
+      <button
+        onClick={onToggleSidebar}
+        className="topbar-hamburger"
+        aria-label="Toggle sidebar"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
       <div className="topbar-title">
         <div className="topbar-title-text">
           {pageTitle}
@@ -60,13 +72,13 @@ export default function Topbar() {
       <div className="topbar-actions">
         <button
           onClick={openGenItin}
-          className="btn-primary"
+          className="btn-primary topbar-hide-mobile"
           style={{ background: '#10B981', borderColor: '#10B981', marginRight: 8 }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
           </svg>
-          Generate itinerary
+          <span className="topbar-btn-label">Generate itinerary</span>
         </button>
         <button
           onClick={openCreate}
@@ -76,7 +88,7 @@ export default function Topbar() {
             <line x1="12" y1="5" x2="12" y2="19"/>
             <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
-          New trip
+          <span className="topbar-btn-label">New trip</span>
         </button>
 
         {/* Notification bell always shows a "no new notifications" toast — there's no real

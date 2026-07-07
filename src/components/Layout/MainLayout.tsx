@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
@@ -9,17 +10,19 @@ import InvoiceDetailModal from '../modals/InvoiceDetailModal';
 import GenerateItineraryModal from '../modals/GenerateItineraryModal';
 import '../../styles/MainLayout.css';
 
-// ── MainLayout ──────────────────────────────────────────────
-// Purpose: Wraps authenticated app pages with Sidebar, Topbar, and renders modals/toast from context.
-// Props: none (uses Outlet for nested routes)
 export default function MainLayout() {
   const { toast, createOpen, genItinOpen, connectOpen, invoiceOpen } = useApp();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const toggleSidebar = () => setSidebarOpen((v) => !v);
+  const closeSidebar = () => setSidebarOpen(false);
 
   return (
     <div className="main-layout">
-      <Sidebar />
+      <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
+      {sidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar} />}
       <div className="main-layout__content">
-        <Topbar />
+        <Topbar onToggleSidebar={toggleSidebar} />
         <div className="main-layout__body">
           <Outlet />
         </div>

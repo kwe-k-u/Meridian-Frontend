@@ -486,3 +486,43 @@
   font-size: 11px;
   color: #AEB3C2;
 }
+
+/* ── Dashboard Responsive ── */
+
+@media (max-width: 1024px) {
+  .dashboard-page {
+    padding: 20px 16px;
+  }
+
+  .dashboard-greeting {
+    font-size: 22px;
+  }
+
+  .dashboard-hero-section {
+    padding: 24px 20px;
+  }
+
+  .dashboard-hero-title {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-onboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dashboard-panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

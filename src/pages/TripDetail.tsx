@@ -297,7 +297,9 @@ export default function TripDetail() {
   const [refineModel, setRefineModel] = useState('claude-sonnet-5');
   const [refineFor, setRefineFor] = useState<'all' | string>('all');
   const [refineTitle, setRefineTitle] = useState('');
-  const [refineIncludeEvents, setRefineIncludeEvents] = useState(true);
+  const [includeFlights, setIncludeFlights] = useState(true);
+  const [includeStays, setIncludeStays] = useState(true);
+  const [includeEvents, setIncludeEvents] = useState(true);
   const [flightDepTime, setFlightDepTime] = useState('');
   const [returnFlightTime, setReturnFlightTime] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -349,10 +351,13 @@ export default function TripDetail() {
     setGeneratingItinerary(true);
     setGenerateError(null);
     try {
-      // Merge persistent flight times into every generate call so the AI always
-      // knows the outbound/return schedule without the user re-entering it each time.
+      // Merge all persistent generation settings into every call — service toggles,
+      // flight times — so Regenerate and the initial generate button honour them too.
       const enrichedPrefs = {
         ...prefs,
+        include_flights: includeFlights,
+        include_stays: includeStays,
+        include_events: includeEvents,
         ...(flightDepTime ? { flight_departure_time: flightDepTime } : {}),
         ...(returnFlightTime ? { return_flight_time: returnFlightTime } : {}),
       };
@@ -900,7 +905,6 @@ export default function TripDetail() {
       notes: context || undefined,
       model: refineModel,
       snapshotTitle: refineTitle.trim() || undefined,
-      include_events: refineIncludeEvents,
     });
     setRefineText('');
     setRefineImageName(null);
@@ -1677,6 +1681,25 @@ Questions? Simply reply to this email or reach out directly.`
               );
             })}
 
+            {/* Service include toggles — always visible so the agent can flip before generating */}
+            {apiTrip && (
+              <div className="td-services-row">
+                <span className="td-services-label">Include:</span>
+                <label className="td-service-toggle">
+                  <input type="checkbox" checked={includeFlights} onChange={e => setIncludeFlights(e.target.checked)} />
+                  <span>✈ Flights</span>
+                </label>
+                <label className="td-service-toggle">
+                  <input type="checkbox" checked={includeStays} onChange={e => setIncludeStays(e.target.checked)} />
+                  <span>🏨 Hotels</span>
+                </label>
+                <label className="td-service-toggle">
+                  <input type="checkbox" checked={includeEvents} onChange={e => setIncludeEvents(e.target.checked)} />
+                  <span>🎟 Events</span>
+                </label>
+              </div>
+            )}
+
             {/* Start city + regen row */}
             {apiTrip && options.length > 0 && (
               <div className="td-chat-bottom-row">
@@ -1900,6 +1923,21 @@ Questions? Simply reply to this email or reach out directly.`
                 <p className="td-brief-text">
                   {td.brief}
                 </p>
+                <div className="td-brief-services">
+                  <span className="td-brief-services-label">Include live data:</span>
+                  <label className="td-service-toggle">
+                    <input type="checkbox" checked={includeFlights} onChange={e => setIncludeFlights(e.target.checked)} />
+                    <span>✈ Flights</span>
+                  </label>
+                  <label className="td-service-toggle">
+                    <input type="checkbox" checked={includeStays} onChange={e => setIncludeStays(e.target.checked)} />
+                    <span>🏨 Hotels</span>
+                  </label>
+                  <label className="td-service-toggle">
+                    <input type="checkbox" checked={includeEvents} onChange={e => setIncludeEvents(e.target.checked)} />
+                    <span>🎟 Events</span>
+                  </label>
+                </div>
                 <button
                   onClick={handleGenerateOptions}
                   className="td-brief-generate"
@@ -2800,15 +2838,22 @@ Questions? Simply reply to this email or reach out directly.`
               </div>
             </div>
 
-            {/* Events toggle */}
-            <label className="td-refine-events-toggle">
-              <input
-                type="checkbox"
-                checked={refineIncludeEvents}
-                onChange={e => setRefineIncludeEvents(e.target.checked)}
-              />
-              <span>Include real events from Ticketmaster</span>
-            </label>
+            {/* Service toggles — shared with the main chat area */}
+            <div className="td-refine-services-row">
+              <span className="td-refine-label">Include live data:</span>
+              <label className="td-refine-service-toggle">
+                <input type="checkbox" checked={includeFlights} onChange={e => setIncludeFlights(e.target.checked)} />
+                <span>✈ Flights</span>
+              </label>
+              <label className="td-refine-service-toggle">
+                <input type="checkbox" checked={includeStays} onChange={e => setIncludeStays(e.target.checked)} />
+                <span>🏨 Hotels</span>
+              </label>
+              <label className="td-refine-service-toggle">
+                <input type="checkbox" checked={includeEvents} onChange={e => setIncludeEvents(e.target.checked)} />
+                <span>🎟 Events</span>
+              </label>
+            </div>
 
             <div className="td-refine-toolbar">
               <button

@@ -338,6 +338,8 @@ export class ApiService {
     notes?: string;
     start_city?: string;
     model?: string;
+    include_flights?: boolean;
+    include_stays?: boolean;
     include_events?: boolean;
     flight_departure_time?: string;
     return_flight_time?: string;

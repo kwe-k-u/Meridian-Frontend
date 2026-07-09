@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { ApiService } from '../services/api-service';
-import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse } from '../types/app';
+import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse, SkippedProvider } from '../types/app';
 import AddItemModal, { type EditingDayItem } from '../components/modals/AddItemModal';
 import AddFlightModal from '../components/modals/AddFlightModal';
 import AddStayModal from '../components/modals/AddStayModal';
@@ -332,6 +332,13 @@ export default function TripDetail() {
     }
   };
 
+  const providerLabel = (id: string | undefined) => {
+    const map: Record<string, string> = {
+      gemini: 'Gemini', openai: 'ChatGPT', anthropic: 'Claude', ollama: 'Ollama',
+    };
+    return id ? (map[id] ?? id) : 'AI';
+  };
+
   const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string; start_city?: string; model?: string; snapshotTitle?: string; include_events?: boolean }) => {
     if (!tripId || !isRealId) {
       ctx.generateOptions();
@@ -341,6 +348,20 @@ export default function TripDetail() {
     setGenerateError(null);
     try {
       const result = await ApiService.generateItinerary(tripId, prefs);
+
+      // Notify if the requested model was unavailable and a fallback was used
+      if (result.skipped_providers?.length && result.provider_used) {
+        const rateLimited = (result.skipped_providers as SkippedProvider[]).filter(s => s.reason === 'rate_limited');
+        if (rateLimited.length) {
+          const skippedNames = rateLimited.map(s => providerLabel(s.name)).join(', ');
+          const usedLabel = providerLabel(result.provider_used);
+          const retryInfo = rateLimited[0].retry_after_seconds
+            ? ` (available again in ~${rateLimited[0].retry_after_seconds}s)`
+            : '';
+          ctx.toastAction(`${skippedNames} is rate-limited${retryInfo} — used ${usedLabel} instead.`);
+        }
+      }
+
       if (result?.all_options?.length) {
         // Save the newly generated result as a named snapshot in the history timeline
         const userTitle = prefs?.snapshotTitle?.trim();

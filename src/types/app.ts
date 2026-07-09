@@ -529,9 +529,17 @@ export interface MoolreCheckoutResponse {
   authorization_url: string;
 }
 
+export interface SkippedProvider {
+  name: string;
+  reason: 'rate_limited' | 'credit_exhausted';
+  retry_after_seconds: number | null;
+}
+
 export interface GenerateItineraryApiResponse {
   itinerary: ItineraryResponse;
   all_options: ItineraryResponse[];
+  provider_used?: string;
+  skipped_providers?: SkippedProvider[];
 }
 
 export interface ItineraryResponse {

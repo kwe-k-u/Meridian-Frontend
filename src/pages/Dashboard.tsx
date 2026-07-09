@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
 import type { DashboardResponse, GuideCard } from '../types/app';
 import '../styles/Dashboard.css';
@@ -15,8 +16,6 @@ import '../styles/Dashboard.css';
 // (ctx.onboarded from AppContext) — it's not derived from whether the user has actually
 // created any trips, so a real account with real trips could still flip back to the
 // onboarding checklist view.
-
-const fmtCurrency = (n: number) => 'GHS ' + n.toLocaleString('en-US');
 
 const fmtDate = (d: string | null) => {
   if (!d) return 'TBD';
@@ -68,9 +67,10 @@ interface OnboardingTask {
 function Dashboard() {
   const navigate = useNavigate();
   const ctx = useApp();
+  const { format: fmtCurrency } = useCurrency();
   const {
     onboarded, obNewBg, obNewFg, obEstBg, obEstFg,
-    setNewUser, setEstablished, openGenItin,
+    setNewUser, setEstablished, openGenItin, openCreate,
   } = ctx;
 
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
@@ -103,7 +103,7 @@ function Dashboard() {
       desc: 'Set up your first travel experience to share with travelers.',
       done: hasTrips,
       cta: 'Create trip',
-      action: () => navigate('/app/trips'),
+      action: openCreate,
       ph: 'Drop a travel photo',
     },
     {
@@ -147,6 +147,17 @@ function Dashboard() {
   const doneCount = onboardTasks.filter(t => t.done).length;
   const totalCount = onboardTasks.length;
   const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
+  // Default straight to the Established view once the dashboard has loaded, if the onboarding
+  // checklist is already fully done (e.g. an account that already has trips) — otherwise a
+  // fully set-up account would still land on the onboarding screen on every visit. Gated on
+  // `loading` so it only fires once per successful load, not on every render, which means the
+  // manual "New user view" toggle above still works afterwards without being fought over.
+  useEffect(() => {
+    if (!loading && doneCount === totalCount) {
+      setEstablished();
+    }
+  }, [loading, doneCount, totalCount, setEstablished]);
 
   const userName = dashboardData?.user?.display_name?.split(' ')[0] ?? 'Travel Agent';
 

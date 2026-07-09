@@ -266,7 +266,7 @@ export default function AddFlightModal({ open, itineraryId, startCity, onClose, 
                   />
                 </div>
               </div>
-              <div className="aim-cost-row">
+              <div className="aim-row-2">
                 <div className="aim-cost-field">
                   <label className="aim-label">Depart</label>
                   <input
@@ -369,7 +369,7 @@ export default function AddFlightModal({ open, itineraryId, startCity, onClose, 
                 </div>
               </div>
 
-              <div className="aim-cost-row">
+              <div className="aim-row-2">
                 <div className="aim-cost-field">
                   <label className="aim-label">Departure</label>
                   <input

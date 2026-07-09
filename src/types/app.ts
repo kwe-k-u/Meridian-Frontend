@@ -844,7 +844,19 @@ export interface CompanyResponse {
   country: string | null;
   city_of_operation: string | null;
   status: number;
+  // Which currency this company's amounts should be displayed in app-wide — see
+  // CurrencyContext, which converts every displayed amount (stored as GHS/whatever its own
+  // native currency is) into this before rendering. Defaults to 'GHS' for every company.
+  preferred_currency: string;
   created_at: string;
   updated_at: string;
   users: CompanyUser[];
+}
+
+// GET /currency-rates response (CurrencyController). `rates` is GHS-per-1-unit for each
+// supported currency (rates['GHS'] is always 1) — see App\Services\CurrencyService on the
+// backend, which is the single source of truth this table mirrors.
+export interface CurrencyRatesResponse {
+  base: string;
+  rates: Record<string, number>;
 }

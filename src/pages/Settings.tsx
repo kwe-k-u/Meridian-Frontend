@@ -47,10 +47,13 @@ function TabBar({ currentTab }: { currentTab: SettingsTab }) {
 }
 
 // ── Workspace ──────────────────────────────────────────────────
-// Fetches the user's default company and allows updating name/country/city.
+// Fetches the user's default company and allows updating name/country/city/currency.
+
+const SUPPORTED_CURRENCIES = ['GHS', 'USD', 'EUR', 'GBP'];
 
 function Workspace() {
-  const { user } = useAuth();
+  const auth = useAuth();
+  const { user } = auth;
   const { toastAction } = useApp();
 
   const defaultCompany: CompanyResponse | null = useMemo(() => {
@@ -64,12 +67,13 @@ function Workspace() {
   const [name, setName] = useState('');
   const [country, setCountry] = useState('');
   const [city, setCity] = useState('');
+  const [currency, setCurrency] = useState('GHS');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!defaultCompany) { setLoading(false); return; }
     ApiService.getCompany(defaultCompany.company_id)
-      .then(c => { setCompany(c); setName(c.company_name); setCountry(c.country ?? ''); setCity(c.city_of_operation ?? ''); })
+      .then(c => { setCompany(c); setName(c.company_name); setCountry(c.country ?? ''); setCity(c.city_of_operation ?? ''); setCurrency(c.preferred_currency ?? 'GHS'); })
       .catch(() => toastAction('Failed to load company'))
       .finally(() => setLoading(false));
   }, [defaultCompany]);
@@ -82,8 +86,13 @@ function Workspace() {
         company_name: name,
         country: country || undefined,
         city_of_operation: city || undefined,
+        preferred_currency: currency,
       });
       setCompany(updated);
+      // The company data cached on the auth user (what CurrencyContext reads its
+      // preferred_currency from) doesn't get refreshed by updateCompany above — patch it in
+      // place so the new currency takes effect across the app immediately, not just here.
+      auth.updateCompanyInProfile(company.company_id, { preferred_currency: updated.preferred_currency });
       toastAction('Company settings saved');
     } catch {
       toastAction('Failed to save company settings');
@@ -111,8 +120,17 @@ function Workspace() {
           <input className="field-input" value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Accra" />
         </div>
       </div>
+      <div className="field-row">
+        <label className="field-label">Preferred currency</label>
+        <select className="field-input" value={currency} onChange={e => setCurrency(e.target.value)}>
+          {SUPPORTED_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <p style={{ fontSize: 12, color: '#8A90A2', marginTop: 4 }}>
+          Amounts across the app (revenue, trip costs, payments) will display converted into this currency.
+        </p>
+      </div>
       <div className="btn-row btn-row-end">
-        <button className="btn-cancel" onClick={() => { setName(company.company_name); setCountry(company.country ?? ''); setCity(company.city_of_operation ?? ''); }}>
+        <button className="btn-cancel" onClick={() => { setName(company.company_name); setCountry(company.country ?? ''); setCity(company.city_of_operation ?? ''); setCurrency(company.preferred_currency ?? 'GHS'); }}>
           Cancel
         </button>
         <button className="btn-save" onClick={handleSave} disabled={saving}>

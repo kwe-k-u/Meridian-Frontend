@@ -2,18 +2,23 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { ApiService } from '../services/api-service';
-import type { TripResponse, Day } from '../types/app';
+import type { TripResponse, TripCostResponse, Day } from '../types/app';
 import logoM from '../assets/logo/logo_m.svg';
 import '../styles/TravelerView.css';
 
 // ── TravelerView ─────────────────────────────────────────────
-// Purpose: The read-only, publicly-shareable "trip pack" page a traveler sees (day-by-day
-// itinerary, total price, accept/request-changes buttons) — the equivalent of TripDetail.tsx
-// but branded for the end customer rather than the agency. Deliberately keeps its own local
-// copies of dayToBlocks/travDaysToDays/fmtDateRange instead of importing from AppContext.tsx
-// or TripDetail.tsx, so this page renders independently even if those change.
-// State: apiTrip (only for real, non-numeric trip ids).
-// API: ApiService.getTrip (real trips only — mock trips fall back to ctx.getTripDetail/getDays).
+// Purpose: The read-only, publicly-shareable "trip pack" page a traveler sees (booked flights,
+// booked stays, day-by-day itinerary, payment history, and either accept/request-changes or a
+// Pay button depending on trip status) — the equivalent of TripDetail.tsx but branded for the
+// end customer rather than the agency. Deliberately keeps its own local copies of
+// dayToBlocks/travDaysToDays/fmtDateRange instead of importing from AppContext.tsx or
+// TripDetail.tsx, so this page renders independently even if those change.
+// State: apiTrip/tripCosts (only for real, non-numeric trip ids), pay modal state.
+// API: ApiService.getPublicTrip/getPublicTripCosts (real trips only — mock trips fall back to
+// ctx.getTripDetail/getDays and never show flights/stays/payment history or the Pay flow,
+// since there's no real trip behind them), ApiService.initiatePublicMoolreTripPayment.
+const MIN_CUSTOM_PAYMENT = 50;
+
 export default function TravelerView() {
   const { tripId } = useParams<{ tripId: string }>();
   const navigate = useNavigate();
@@ -21,11 +26,64 @@ export default function TravelerView() {
   const isRealId = tripId ? !/^\d+$/.test(tripId) : false;
 
   const [apiTrip, setApiTrip] = useState<TripResponse | null>(null);
+  const [tripCosts, setTripCosts] = useState<TripCostResponse | null>(null);
 
   useEffect(() => {
     if (!tripId || !isRealId) return;
-    ApiService.getTrip(tripId).then(setApiTrip).catch(() => {});
+    ApiService.getPublicTrip(tripId).then(setApiTrip).catch(() => {});
+    ApiService.getPublicTripCosts(tripId).then(setTripCosts).catch(() => {});
   }, [tripId, isRealId]);
+
+  // Pay flow — reachable once the trip is anything besides 'inquiry' (still being put
+  // together, nothing to pay yet). Two modes: pay the outstanding balance in full, or a
+  // traveler-chosen amount between MIN_CUSTOM_PAYMENT and the outstanding balance.
+  const [payOpen, setPayOpen] = useState(false);
+  const [payMode, setPayMode] = useState<'full' | 'custom'>('full');
+  const [customAmount, setCustomAmount] = useState('');
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState('');
+
+  const outstanding = tripCosts?.summary.outstanding ?? 0;
+  const payCurrency = tripCosts?.itineraries[0]?.currency ?? 'GHS';
+  const canPayCustom = outstanding >= MIN_CUSTOM_PAYMENT;
+  const showPayFlow = apiTrip != null && apiTrip.status !== 'inquiry';
+
+  const openPay = () => {
+    setPayMode('full');
+    setCustomAmount('');
+    setPayError('');
+    setPayOpen(true);
+  };
+
+  const handlePay = async () => {
+    if (!tripId) return;
+    const amount = payMode === 'full' ? outstanding : Number(customAmount);
+
+    if (payMode === 'custom') {
+      if (!customAmount || Number.isNaN(amount)) {
+        setPayError('Enter an amount.');
+        return;
+      }
+      if (amount < MIN_CUSTOM_PAYMENT) {
+        setPayError(`Minimum payment is ${payCurrency} ${MIN_CUSTOM_PAYMENT}.`);
+        return;
+      }
+      if (amount > outstanding) {
+        setPayError(`Amount can't exceed the outstanding balance of ${payCurrency} ${outstanding.toLocaleString()}.`);
+        return;
+      }
+    }
+
+    setPayError('');
+    setPaying(true);
+    try {
+      const { authorization_url } = await ApiService.initiatePublicMoolreTripPayment(tripId, amount);
+      window.location.href = authorization_url;
+    } catch (error) {
+      setPayError(error instanceof Error ? error.message : 'Could not start the payment. Please try again.');
+      setPaying(false);
+    }
+  };
 
   const mockTid = tripId ? (isRealId ? 0 : parseInt(tripId, 10)) : 0;
   const { td: mockTd } = ctx.getTripDetail(mockTid, 'A');
@@ -58,6 +116,17 @@ export default function TravelerView() {
   }, [apiTrip, ctx, mockTid]);
 
   const days = rawDays.map((d, di) => ({ ...d, di: d.di ?? di }));
+
+  // Flights/stays booked for the trip — real trips only (see the file-header comment on why
+  // mock trips don't surface this), pulled straight off the first itinerary option.
+  const flights = apiTrip?.itineraries?.[0]?.itinerary_flights ?? [];
+  const stays = apiTrip?.itineraries?.[0]?.itinerary_accommodation ?? [];
+
+  // Itinerary/Payments toggle — mirrors TripDetail.tsx's builderTab tabs bar, but local state
+  // here since TravelerView deliberately doesn't share AppContext's builder state with the
+  // agency-facing page (see file-header comment).
+  const [activeTab, setActiveTab] = useState<'itinerary' | 'payments'>('itinerary');
+  const payments = tripCosts?.payments ?? [];
 
   return (
     <div className="tv">
@@ -98,79 +167,238 @@ export default function TravelerView() {
           </p>
         </div>
 
-        <h2 className="tv__section-title">Day by day</h2>
+        <div className="tv__tabs-bar">
+          <button
+            className={'tv__tab-btn' + (activeTab === 'itinerary' ? ' tv__tab-btn--active' : '')}
+            onClick={() => setActiveTab('itinerary')}
+          >
+            Itinerary
+          </button>
+          <button
+            className={'tv__tab-btn' + (activeTab === 'payments' ? ' tv__tab-btn--active' : '')}
+            onClick={() => setActiveTab('payments')}
+          >
+            Payments
+          </button>
+        </div>
 
-        {days.length === 0 && (
-          <p style={{ color: '#8A90A2', textAlign: 'center', padding: 40 }}>
-            No itinerary days yet.
-          </p>
-        )}
-
-        {days.map((day, di) => (
-          <div key={di} className="tv__day-row">
-            <div className="tv__day-col">
-              <div className="tv__day-dow">{day.dow}</div>
-              <div className="tv__day-num">{day.day}</div>
-              <div className="tv__day-mon">{day.mon}</div>
-            </div>
-            <div className="tv__timeline">
-              <div className="tv__timeline-dot" />
-            </div>
-            <div className="tv__day-content">
-              <div className="tv__day-title">{day.title}</div>
-              {day.blocks.map((block, bi) => (
-                <div key={bi} className="tv__block">
-                  <div className="tv__block-icon" style={{ background: block.iconBg || '#EEF0F4' }}>
-                    {block.icon}
-                  </div>
-                  <div className="tv__block-body">
-                    <div className="tv__block-meta-row">
-                      <span className="tv__block-kind" style={{ color: block.kindColor }}>{block.kind}</span>
-                      {block.meta && (
-                        <span className="tv__block-meta">· {block.meta}</span>
-                      )}
+        {activeTab === 'itinerary' ? (
+          <>
+            {flights.length > 0 && (
+              <>
+                <h2 className="tv__section-title">Flights</h2>
+                <div className="tv__flights">
+                  {flights.map((f) => (
+                    <div key={f.flight_id} className="tv__travel-card">
+                      <div className="tv__travel-icon">✈️</div>
+                      <div className="tv__travel-body">
+                        <div className="tv__travel-title">
+                          {f.departure_airport ?? 'TBD'} → {f.arrival_airport ?? 'TBD'}
+                        </div>
+                        <div className="tv__travel-meta">
+                          {[f.airline, f.flight_number].filter(Boolean).join(' ') || 'Airline TBD'}
+                        </div>
+                        <div className="tv__travel-sub">
+                          {fmtFlightTime(f.departure_datetime)} – {fmtFlightTime(f.arrival_datetime)}
+                        </div>
+                      </div>
+                      <div className="tv__travel-side">
+                        {f.cost != null && (
+                          <div className="tv__travel-price">{f.currency ?? 'GHS'} {Number(f.cost).toLocaleString()}</div>
+                        )}
+                        <span className={`tv__travel-status tv__travel-status--${f.status}`}>{f.status}</span>
+                      </div>
                     </div>
-                    <div className="tv__block-title">{block.title}</div>
-                    {block.sub && (
-                      <div className="tv__block-sub">{block.sub}</div>
-                    )}
-                    {block.price && (
-                      <div className="tv__block-price">{block.price}</div>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
+              </>
+            )}
+
+            {stays.length > 0 && (
+              <>
+                <h2 className="tv__section-title">Stays</h2>
+                <div className="tv__stays">
+                  {stays.map((s) => (
+                    <div key={s.accommodation_id} className="tv__travel-card">
+                      <div className="tv__travel-icon">🏨</div>
+                      <div className="tv__travel-body">
+                        <div className="tv__travel-title">{s.accommodation_name}</div>
+                        <div className="tv__travel-meta">
+                          {[s.room_type, s.address].filter(Boolean).join(' · ') || 'Room details TBD'}
+                        </div>
+                        <div className="tv__travel-sub">{fmtDateRange(s.check_in_date, s.check_out_date)}</div>
+                      </div>
+                      <div className="tv__travel-side">
+                        {s.cost != null && (
+                          <div className="tv__travel-price">{s.currency ?? 'GHS'} {Number(s.cost).toLocaleString()}</div>
+                        )}
+                        <span className={`tv__travel-status tv__travel-status--${s.status}`}>{s.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <h2 className="tv__section-title">Day by day</h2>
+
+            {days.length === 0 && (
+              <p style={{ color: '#8A90A2', textAlign: 'center', padding: 40 }}>
+                No itinerary days yet.
+              </p>
+            )}
+
+            {days.map((day, di) => (
+              <div key={di} className="tv__day-row">
+                <div className="tv__day-col">
+                  <div className="tv__day-dow">{day.dow}</div>
+                  <div className="tv__day-num">{day.day}</div>
+                  <div className="tv__day-mon">{day.mon}</div>
+                </div>
+                <div className="tv__timeline">
+                  <div className="tv__timeline-dot" />
+                </div>
+                <div className="tv__day-content">
+                  <div className="tv__day-title">{day.title}</div>
+                  {day.blocks.map((block, bi) => (
+                    <div key={bi} className="tv__block">
+                      <div className="tv__block-icon" style={{ background: block.iconBg || '#EEF0F4' }}>
+                        {block.icon}
+                      </div>
+                      <div className="tv__block-body">
+                        <div className="tv__block-meta-row">
+                          <span className="tv__block-kind" style={{ color: block.kindColor }}>{block.kind}</span>
+                          {block.meta && (
+                            <span className="tv__block-meta">· {block.meta}</span>
+                          )}
+                        </div>
+                        <div className="tv__block-title">{block.title}</div>
+                        {block.sub && (
+                          <div className="tv__block-sub">{block.sub}</div>
+                        )}
+                        {block.price && (
+                          <div className="tv__block-price">{block.price}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            {payments.length === 0 ? (
+              <p style={{ color: '#8A90A2', textAlign: 'center', padding: 40 }}>
+                No payments yet.
+              </p>
+            ) : (
+              <div className="tv__payments">
+                {payments.map((p) => (
+                  <div key={p.transaction_id} className="tv__payment-row">
+                    <div className="tv__payment-info">
+                      <div className="tv__payment-amount">{p.currency} {p.amount.toLocaleString()}</div>
+                      <div className="tv__payment-meta">
+                        {p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Awaiting payment'}
+                        {p.payment_method ? ` · ${p.payment_method}` : ''}
+                      </div>
+                    </div>
+                    <span className={`tv__payment-status tv__payment-status--${p.status}`}>{p.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="tv__footer">
         <div>
-          <div className="tv__total-label">Total</div>
-          <div className="tv__total-value">{td.value}</div>
+          <div className="tv__total-label">{showPayFlow ? 'Outstanding balance' : 'Total'}</div>
+          <div className="tv__total-value">{showPayFlow ? `${payCurrency} ${outstanding.toLocaleString()}` : td.value}</div>
         </div>
         <div className="tv__footer-actions">
-          <button
-            onClick={() => ctx.toastAction('Change request sent')}
-            className="tv__btn-secondary"
-          >
-            Request changes
-          </button>
-          <button
-            onClick={() => {
-              ctx.toastAction('Trip accepted by traveler');
-              navigate('/app/trips/' + (isRealId && tripId ? tripId : mockTid));
-            }}
-            className="tv__btn-accept"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            Accept this trip
-          </button>
+          {showPayFlow ? (
+            outstanding > 0 ? (
+              <button onClick={openPay} className="tv__btn-accept">
+                Pay now
+              </button>
+            ) : (
+              <span className="tv__paid-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Fully paid
+              </span>
+            )
+          ) : (
+            <>
+              <button
+                onClick={() => ctx.toastAction('Change request sent')}
+                className="tv__btn-secondary"
+              >
+                Request changes
+              </button>
+              <button
+                onClick={() => {
+                  ctx.toastAction('Trip accepted by traveler');
+                  navigate('/app/trips/' + (isRealId && tripId ? tripId : mockTid));
+                }}
+                className="tv__btn-accept"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Accept this trip
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {payOpen && (
+        <div className="tv__pay-backdrop" onClick={() => !paying && setPayOpen(false)}>
+          <div className="tv__pay-card" onClick={e => e.stopPropagation()}>
+            <h3 className="tv__pay-title">Pay for your trip</h3>
+            <p className="tv__pay-sub">Outstanding balance: {payCurrency} {outstanding.toLocaleString()}</p>
+
+            <label className="tv__pay-option">
+              <input type="radio" name="pay-mode" checked={payMode === 'full'} onChange={() => setPayMode('full')} />
+              <span>Pay outstanding balance in full — {payCurrency} {outstanding.toLocaleString()}</span>
+            </label>
+
+            {canPayCustom && (
+              <label className="tv__pay-option">
+                <input type="radio" name="pay-mode" checked={payMode === 'custom'} onChange={() => setPayMode('custom')} />
+                <span>Pay a different amount</span>
+              </label>
+            )}
+
+            {payMode === 'custom' && canPayCustom && (
+              <div className="tv__pay-amount-field">
+                <span className="tv__pay-amount-prefix">{payCurrency}</span>
+                <input
+                  type="number"
+                  min={MIN_CUSTOM_PAYMENT}
+                  max={outstanding}
+                  value={customAmount}
+                  onChange={e => setCustomAmount(e.target.value)}
+                  placeholder={`${MIN_CUSTOM_PAYMENT} - ${outstanding}`}
+                />
+              </div>
+            )}
+
+            {payError && <div className="tv__pay-error">{payError}</div>}
+
+            <div className="tv__pay-actions">
+              <button onClick={() => setPayOpen(false)} className="tv__btn-secondary" disabled={paying}>Cancel</button>
+              <button onClick={handlePay} className="tv__btn-accept" disabled={paying}>
+                {paying ? 'Redirecting…' : 'Continue to payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -249,6 +477,13 @@ function travDaysToDays(itineraryDays: ItinDayLike[]): Day[] {
       addBlock: () => {},
     };
   });
+}
+
+function fmtFlightTime(dt: string | null): string {
+  if (!dt) return 'TBD';
+  const d = new Date(dt.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return 'TBD';
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function fmtDateRange(start: string | null, end: string | null): string {

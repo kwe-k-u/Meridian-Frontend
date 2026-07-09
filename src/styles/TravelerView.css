@@ -315,3 +315,265 @@
   flex: 1;
   padding: 0 20px;
 }
+
+/* ── Tabs (Itinerary / Payments) ── */
+.tv__tabs-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.tv__tab-btn {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-sans);
+}
+
+.tv__tab-btn--active {
+  font-weight: 600;
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* ── Flights / Stays ── */
+.tv__flights,
+.tv__stays {
+  margin-bottom: 24px;
+}
+
+.tv__travel-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+}
+
+.tv__travel-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+  background: #EEF0F4;
+}
+
+.tv__travel-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tv__travel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.tv__travel-meta {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.tv__travel-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.tv__travel-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tv__travel-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+  white-space: nowrap;
+}
+
+.tv__travel-status {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: #EEF0F4;
+  color: #5B6172;
+  white-space: nowrap;
+}
+
+.tv__travel-status--booked,
+.tv__travel-status--confirmed {
+  background: #E3F7EF;
+  color: #0E9F6E;
+}
+
+.tv__travel-status--cancelled {
+  background: #FDECEC;
+  color: #D64545;
+}
+
+/* ── Payments ── */
+.tv__payments {
+  margin-bottom: 24px;
+}
+
+.tv__payment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+}
+
+.tv__payment-amount {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.tv__payment-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  text-transform: capitalize;
+}
+
+.tv__payment-status {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: #EEF0F4;
+  color: #5B6172;
+}
+
+.tv__payment-status--completed {
+  background: #E3F7EF;
+  color: #0E9F6E;
+}
+
+.tv__payment-status--pending {
+  background: #FEF3C7;
+  color: #D97706;
+}
+
+.tv__payment-status--failed,
+.tv__payment-status--refunded {
+  background: #FDECEC;
+  color: #D64545;
+}
+
+/* ── Pay button / fully-paid badge ── */
+.tv__paid-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #0E9F6E;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ── Pay modal ── */
+.tv__pay-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(22, 20, 58, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+
+.tv__pay-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  max-width: 420px;
+  width: 100%;
+}
+
+.tv__pay-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 6px;
+}
+
+.tv__pay-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 18px;
+}
+
+.tv__pay-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tv__pay-amount-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+
+.tv__pay-amount-prefix {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.tv__pay-amount-field input {
+  border: none;
+  outline: none;
+  font-size: 14px;
+  font-family: var(--font-sans);
+  width: 100%;
+  background: transparent;
+  color: var(--text-heading);
+}
+
+.tv__pay-error {
+  font-size: 12.5px;
+  color: #D64545;
+  margin-bottom: 10px;
+}
+
+.tv__pay-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}

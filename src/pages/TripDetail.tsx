@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
 import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse } from '../types/app';
 import AddItemModal, { type EditingDayItem } from '../components/modals/AddItemModal';
@@ -48,7 +49,7 @@ const itemTypeKind: Record<string, string> = {
   venue: 'Venue',
 };
 
-function dayToBlocks(day: NonNullable<ItineraryResponse['itinerary_days']>[number]): DayBlock[] {
+function dayToBlocks(day: NonNullable<ItineraryResponse['itinerary_days']>[number], format: (amount: number, from?: string) => string): DayBlock[] {
   const blocks: DayBlock[] = [];
   if (day.destinations) {
     day.destinations.forEach(d => {
@@ -62,7 +63,7 @@ function dayToBlocks(day: NonNullable<ItineraryResponse['itinerary_days']>[numbe
         meta: d.destination?.country ?? '',
         title: d.destination?.name ?? d.activities ?? 'Activity',
         sub: d.activities ?? '',
-        price: d.cost ? `${d.currency ?? ''} ${d.cost}` : '',
+        price: d.cost ? format(Number(d.cost), d.currency ?? 'GHS') : '',
       });
     });
   }
@@ -82,7 +83,7 @@ function dayToBlocks(day: NonNullable<ItineraryResponse['itinerary_days']>[numbe
   return blocks;
 }
 
-function itineraryDaysToDays(itineraryDays: NonNullable<ItineraryResponse['itinerary_days']>): Day[] {
+function itineraryDaysToDays(itineraryDays: NonNullable<ItineraryResponse['itinerary_days']>, format: (amount: number, from?: string) => string): Day[] {
   return itineraryDays.map((d, i) => {
     const dt = d.date ? new Date(d.date) : null;
     const dow = dt ? dt.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() : '';
@@ -94,14 +95,14 @@ function itineraryDaysToDays(itineraryDays: NonNullable<ItineraryResponse['itine
       day: dayNum,
       mon,
       title: d.title ?? `Day ${d.day_number}`,
-      blocks: dayToBlocks(d),
+      blocks: dayToBlocks(d, format),
       hasSuggestion: false,
       addBlock: () => {},
     };
   });
 }
 
-function itineraryFlightsToFlights(flights: NonNullable<ItineraryResponse['itinerary_flights']>): Flight[] {
+function itineraryFlightsToFlights(flights: NonNullable<ItineraryResponse['itinerary_flights']>, format: (amount: number, from?: string) => string): Flight[] {
   return flights.map(f => ({
     code: (f.airline ?? 'XX').substring(0, 2).toUpperCase(),
     airline: f.airline ?? 'Unknown',
@@ -110,7 +111,7 @@ function itineraryFlightsToFlights(flights: NonNullable<ItineraryResponse['itine
       ? `${Math.round((new Date(f.arrival_datetime).getTime() - new Date(f.departure_datetime).getTime()) / 3600000)}h`
       : '',
     stops: 'Direct',
-    price: f.cost ? `${f.currency ?? 'GHS'} ${Number(f.cost).toLocaleString()}` : '',
+    price: f.cost ? format(f.cost, f.currency ?? 'GHS') : '',
     cta: f.status === 'booked' ? 'Selected' : 'Select',
     logoBg: '#2B63F6',
     recDisplay: 'none',
@@ -119,12 +120,12 @@ function itineraryFlightsToFlights(flights: NonNullable<ItineraryResponse['itine
   }));
 }
 
-function itineraryStaysToStays(accommodation: NonNullable<ItineraryResponse['itinerary_accommodation']>): Stay[] {
+function itineraryStaysToStays(accommodation: NonNullable<ItineraryResponse['itinerary_accommodation']>, format: (amount: number, from?: string) => string): Stay[] {
   return accommodation.map(a => ({
     name: a.accommodation_name,
     loc: a.address ?? '',
     rating: '4.5',
-    price: a.cost ? `${a.currency ?? 'GHS'} ${Number(a.cost).toLocaleString()}` : '',
+    price: a.cost ? format(a.cost, a.currency ?? 'GHS') : '',
     cover: '#EAF0FF',
     recDisplay: 'none',
     border: '#ECEDF2',
@@ -156,6 +157,7 @@ export default function TripDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const ctx = useApp();
+  const { format } = useCurrency();
   // A real trip_id is a prefixed string like "TRP_..." (never all-digits), so "does the
   // param look like a plain number" is how we tell real trips apart from mock trip indices.
   const isRealId = tripId ? !/^\d+$/.test(tripId) : false;
@@ -213,6 +215,7 @@ export default function TripDetail() {
   const [generatingItinerary, setGeneratingItinerary] = useState(false);
   const [removingDayId, setRemovingDayId] = useState<string | null>(null);
   const [removingItinerary, setRemovingItinerary] = useState(false);
+  const [addingOption, setAddingOption] = useState(false);
   const [apiCalls, setApiCalls] = useState<CallResponse[]>([]);
   const [newCallTitle, setNewCallTitle] = useState('');
   const [addingCall, setAddingCall] = useState(false);
@@ -223,6 +226,10 @@ export default function TripDetail() {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
   const [payingWithMoolre, setPayingWithMoolre] = useState(false);
+  // Sidebar tab (Cost summary / Payments / Agent activity) — these used to be two always-open
+  // cards (with Payments nested inside Cost summary), switched to a single tabbed card so the
+  // user can flip between them instead of scrolling a long stacked sidebar.
+  const [sidebarTab, setSidebarTab] = useState<'cost' | 'payments' | 'activity'>('cost');
 
   // Real calls for this trip (Calls tab) — kept separate from the trip/itinerary fetch above
   // since calls aren't nested under TripResponse.
@@ -291,14 +298,14 @@ export default function TripDetail() {
       traveler: trav,
       dates: fmtDateRange(apiTrip.start_date, apiTrip.end_date),
       where: apiTrip.description?.split('.')[0] ?? apiTrip.trip_name,
-      value: apiTrip.budget ? `GHS ${Number(apiTrip.budget).toLocaleString()}` : mockTd.value,
+      value: apiTrip.budget ? format(Number(apiTrip.budget), 'GHS') : mockTd.value,
       status: sm.display as TripStatus,
       statusBg: sm.bg,
       statusFg: sm.fg,
       gradient: sm.gradient,
       origin: apiTrip.customers?.[0]?.last_name ?? 'Traveler',
     };
-  }, [apiTrip, mockTd]);
+  }, [apiTrip, mockTd, format]);
 
   const tripTb = useMemo(() => {
     if (!apiTrip) return mockTb;
@@ -330,6 +337,26 @@ export default function TripDetail() {
   const td = tripTd;
   const tb = tripTb;
 
+  // The "X itinerary options ready for review" note (tip banner + the small label above the
+  // option pills) is meant as a one-time nudge right after generation, not a permanent
+  // fixture — for real trips tb.headline stays "ready for review" forever once any itinerary
+  // exists, regardless of what the trip's status becomes afterwards (see tripTb above, which
+  // only branches on hasItins). Auto-hide it a while after it first appears; every other
+  // banner variant (drafting, confirmed, booked, etc.) is unaffected and keeps showing as before.
+  const isReadyForReviewNotice = tb.headline.includes('ready for review');
+  const [readyNoticeDismissed, setReadyNoticeDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!isReadyForReviewNotice) {
+      setReadyNoticeDismissed(false);
+      return;
+    }
+    const timer = setTimeout(() => setReadyNoticeDismissed(true), 8000);
+    return () => clearTimeout(timer);
+  }, [isReadyForReviewNotice]);
+
+  const showReadyNotice = !isReadyForReviewNotice || !readyNoticeDismissed;
+
   // Maps the active option letter (A/B/C/D/E) to an index into apiTrip.itineraries. Each
   // itinerary the backend generates becomes the next letter in order (see
   // TripController::generateItinerary's `$optionLetter`), so this only needs array position,
@@ -360,7 +387,10 @@ export default function TripDetail() {
     const ic = tripCosts?.itineraries[selectedItineraryIndex] ?? tripCosts?.itineraries[0];
     if (ic) {
       const c = ic.currency;
-      const fmt = (n: number) => `${c} ${n.toLocaleString()}`;
+      // `currency` below stays the itinerary's native currency (what the record-payment form
+      // and Moolre both submit amounts in) — only these displayed row/fee/total strings get
+      // converted to the preferred currency, via `fmt`.
+      const fmt = (n: number) => format(n, c);
       return {
         rows: [
           { label: 'Flights', value: fmt(ic.flights) },
@@ -380,7 +410,7 @@ export default function TripDetail() {
       const activitiesCost = (selectedItinerary.itinerary_days ?? []).reduce((sum, d) =>
         sum + (d.destinations ?? []).reduce((s2, dst) => s2 + Number(dst.cost ?? 0), 0), 0);
       const currency = selectedItinerary.itinerary_flights?.[0]?.currency ?? selectedItinerary.itinerary_accommodation?.[0]?.currency ?? 'GHS';
-      const fmt = (n: number) => `${currency} ${n.toLocaleString()}`;
+      const fmt = (n: number) => format(n, currency);
       const subTotal = flightsCost + staysCost + activitiesCost;
       const fee = Math.round(subTotal * 0.05);
       const total = subTotal + fee;
@@ -398,7 +428,7 @@ export default function TripDetail() {
       };
     }
     return null;
-  }, [tripCosts, selectedItinerary, selectedItineraryIndex]);
+  }, [tripCosts, selectedItinerary, selectedItineraryIndex, format]);
 
   const costs = computedCosts?.rows ?? td.costs ?? [];
   const costTotal = computedCosts?.total ?? td.total ?? '';
@@ -408,7 +438,7 @@ export default function TripDetail() {
   const costCurrency = computedCosts?.currency ?? 'GHS';
 
   const rawDays = hasApiData && selectedItinerary?.itinerary_days
-    ? itineraryDaysToDays(selectedItinerary.itinerary_days)
+    ? itineraryDaysToDays(selectedItinerary.itinerary_days, format)
     : apiTrip
     ? [{ di: 0, dow: '', day: '01', mon: '', title: 'Day 1', blocks: [], addBlock: () => {} }]
     : ctx.getDays(tid, activeOption);
@@ -531,6 +561,33 @@ export default function TripDetail() {
       await refreshTrip();
     } finally {
       setRemovingItinerary(false);
+    }
+  };
+
+  // Adds a brand-new blank itinerary option (e.g. "Option C") alongside whatever already
+  // exists, named by the next unused letter — same letter-assignment scheme as the options
+  // list itself (options[i].letter = A + i) and TripController::generateItinerary's own
+  // auto-naming. Only meaningful for real trips; mock trips have no backend itinerary to add
+  // to, so this just points the agent at "Generate options" instead.
+  const handleAddOption = async () => {
+    if (!apiTrip) {
+      ctx.toastAction('Generate an itinerary first to add more options.');
+      return;
+    }
+    setAddingOption(true);
+    try {
+      const letter = String.fromCharCode(65 + options.length);
+      await ApiService.createItinerary({
+        trip_id: apiTrip.trip_id,
+        itinerary_name: `Option ${letter}`,
+        start_city: selectedItinerary?.start_city ?? undefined,
+        start_date: apiTrip.start_date ?? undefined,
+        end_date: apiTrip.end_date ?? undefined,
+      });
+      await refreshTrip();
+      setActiveOption(letter);
+    } finally {
+      setAddingOption(false);
     }
   };
 
@@ -747,11 +804,11 @@ export default function TripDetail() {
   }));
 
   const flights = selectedItinerary?.itinerary_flights
-    ? itineraryFlightsToFlights(selectedItinerary.itinerary_flights)
+    ? itineraryFlightsToFlights(selectedItinerary.itinerary_flights, format)
     : apiTrip ? [] : ctx.getFlights();
 
   const stays = selectedItinerary?.itinerary_accommodation
-    ? itineraryStaysToStays(selectedItinerary.itinerary_accommodation)
+    ? itineraryStaysToStays(selectedItinerary.itinerary_accommodation, format)
     : apiTrip ? [] : ctx.getStays();
 
   const activitiesData = ctx.getActivities().map(a => ({
@@ -770,7 +827,7 @@ export default function TripDetail() {
           destinationId: d.destination_id,
           name: d.destination?.name ?? d.activities ?? 'Activity',
           meta: `${day.title || 'Day ' + day.day_number}${d.destination?.country ? ' · ' + d.destination.country : ''}`,
-          price: d.cost ? `${d.currency ?? ''} ${d.cost}` : '',
+          price: d.cost ? format(Number(d.cost), d.currency ?? 'GHS') : '',
           item: d,
         })),
       )
@@ -821,6 +878,13 @@ export default function TripDetail() {
 
   const handleOpenTravelerView = () => {
     navigate('/travel/' + (isRealId && tripId ? tripId : tid));
+  };
+
+  // Opens the traveler's public trip-pack link in a new tab, for the agent to hand off to
+  // the traveler (copy the URL, screen-share it, etc.) without losing their own place in the
+  // dashboard — unlike handleOpenTravelerView above, which navigates the current tab away.
+  const handleShareTravelerView = () => {
+    window.open('/travel/' + (isRealId && tripId ? tripId : tid), '_blank', 'noopener,noreferrer');
   };
 
   const options: TripOption[] = useMemo(() => {
@@ -927,8 +991,8 @@ export default function TripDetail() {
                   {apiTrip.status === 'inquiry' && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>Preview</button>
-                      <button onClick={() => handleStatusTransition('booked')} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }} disabled={updatingStatus}>
-                        Share & Book
+                      <button onClick={handleShareTravelerView} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}>
+                        Share trip
                       </button>
                     </>
                   )}
@@ -983,37 +1047,41 @@ export default function TripDetail() {
           </div>
         </div>
 
-        <div className="td-tip-banner" style={{ background: tb.bg, borderColor: tb.border }}>
-          <div className="td-tip-row">
-            <div className="td-tip-icon" style={{ background: tb.iconBg }}>
-              {tb.icon}
-            </div>
-            <div className="td-tip-content">
-              <div className="td-tip-headline" style={{ color: tb.fg }}>
-                {tb.headline}
+        {showReadyNotice && (
+          <div className="td-tip-banner" style={{ background: tb.bg, borderColor: tb.border }}>
+            <div className="td-tip-row">
+              <div className="td-tip-icon" style={{ background: tb.iconBg }}>
+                {tb.icon}
               </div>
-              <div className="td-tip-desc" style={{ color: tb.descColor, marginBottom: tb.showRefs ? 12 : 0 }}>
-                {tb.desc}
-              </div>
-              {tb.showRefs && tb.refs.length > 0 && (
-                <div className="td-tip-refs">
-                  {tb.refs.map((r, i) => (
-                    <span key={i} className="td-tip-ref" style={{ borderColor: tb.chipBorder }}>
-                      <span className="td-tip-ref-label">{r.label}:</span>
-                      <span className="td-tip-ref-value">{r.value}</span>
-                    </span>
-                  ))}
+              <div className="td-tip-content">
+                <div className="td-tip-headline" style={{ color: tb.fg }}>
+                  {tb.headline}
                 </div>
-              )}
+                <div className="td-tip-desc" style={{ color: tb.descColor, marginBottom: tb.showRefs ? 12 : 0 }}>
+                  {tb.desc}
+                </div>
+                {tb.showRefs && tb.refs.length > 0 && (
+                  <div className="td-tip-refs">
+                    {tb.refs.map((r, i) => (
+                      <span key={i} className="td-tip-ref" style={{ borderColor: tb.chipBorder }}>
+                        <span className="td-tip-ref-label">{r.label}:</span>
+                        <span className="td-tip-ref-value">{r.value}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {tb.showOptions && options.length > 0 && (
           <div className="mb-24">
-            <div className="td-options-label">
-              {optLabel}
-            </div>
+            {showReadyNotice && (
+              <div className="td-options-label">
+                {optLabel}
+              </div>
+            )}
             <div className="td-options-row">
               {options.map((opt) => {
                 const isActive = activeOption === opt.letter;
@@ -1093,9 +1161,13 @@ export default function TripDetail() {
                   </div>
                 );
               })}
-              <div className="td-add-option">
+              <div
+                className="td-add-option"
+                onClick={addingOption ? undefined : handleAddOption}
+                style={addingOption ? { opacity: 0.6, cursor: 'default' } : undefined}
+              >
                 <span className="td-add-option-plus">+</span>
-                <span className="td-add-option-label">Add option</span>
+                <span className="td-add-option-label">{addingOption ? 'Adding…' : 'Add option'}</span>
               </div>
             </div>
             {apiTrip && selectedItinerary && (
@@ -1817,141 +1889,153 @@ export default function TripDetail() {
 
             <div className="td-sticky-sidebar">
               <div className="td-right-card">
-                <div className="td-right-card-header">
-                  <div className="td-right-card-title">
+                <div className="td-tabs-bar">
+                  <button className={'td-tab-btn' + (sidebarTab === 'cost' ? ' td-tab-btn--active' : '')} onClick={() => setSidebarTab('cost')}>
                     Cost summary
-                  </div>
+                  </button>
+                  <button className={'td-tab-btn' + (sidebarTab === 'payments' ? ' td-tab-btn--active' : '')} onClick={() => setSidebarTab('payments')}>
+                    Payments
+                  </button>
+                  <button className={'td-tab-btn' + (sidebarTab === 'activity' ? ' td-tab-btn--active' : '')} onClick={() => setSidebarTab('activity')}>
+                    Agent activity
+                  </button>
                 </div>
-                <div className="td-cost-body">
-                  {costs.map((c, i) => (
-                    <div
-                      key={i}
-                      className="td-cost-row"
-                    >
-                      <span className="td-cost-label">
-                        {c.label}
+
+                {sidebarTab === 'cost' && (
+                  <div className="td-cost-body">
+                    {costs.map((c, i) => (
+                      <div
+                        key={i}
+                        className="td-cost-row"
+                      >
+                        <span className="td-cost-label">
+                          {c.label}
+                        </span>
+                        <span className="td-cost-value">
+                          {c.value}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="td-cost-total">
+                      <span className="td-cost-total-label">
+                        Total
                       </span>
-                      <span className="td-cost-value">
-                        {c.value}
+                      <span className="td-cost-total-value">
+                        {costTotal}
                       </span>
                     </div>
-                  ))}
-                  <div className="td-cost-total">
-                    <span className="td-cost-total-label">
-                      Total
-                    </span>
-                    <span className="td-cost-total-value">
-                      {costTotal}
-                    </span>
-                  </div>
-                  <div className="td-cost-fee">
-                    {costFee}
-                  </div>
-                  {apiTrip && (
-                    <div className="td-record-payment">
-                      {showPaymentForm ? (
-                        <div className="td-payment-form">
-                          <input
-                            value={paymentAmount}
-                            onChange={e => setPaymentAmount(e.target.value)}
-                            placeholder={`Amount (${costCurrency})`}
-                            type="number"
-                            className="td-call-input"
-                          />
-                          <input
-                            value={paymentMethod}
-                            onChange={e => setPaymentMethod(e.target.value)}
-                            placeholder="Method (e.g. Paystack, bank transfer)"
-                            className="td-call-input"
-                          />
-                          <div className="td-payment-form-actions">
-                            <button
-                              onClick={() => { setShowPaymentForm(false); setPaymentAmount(''); setPaymentMethod(''); }}
-                              className="td-action-btn"
-                              style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={handlePayWithMoolre}
-                              disabled={payingWithMoolre || savingPayment || !paymentAmount.trim()}
-                              className="td-action-btn"
-                              style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}
-                            >
-                              {payingWithMoolre ? 'Redirecting…' : 'Pay with Mobile Money'}
-                            </button>
-                            <button
-                              onClick={handleRecordPayment}
-                              disabled={savingPayment || payingWithMoolre || !paymentAmount.trim()}
-                              className="td-action-btn"
-                              style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }}
-                            >
-                              {savingPayment ? 'Saving...' : 'Record manually'}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button onClick={() => setShowPaymentForm(true)} className="td-dashed-btn">
-                          + Record payment
-                        </button>
-                      )}
+                    <div className="td-cost-fee">
+                      {costFee}
                     </div>
-                  )}
-                  {payments.length > 0 && (
-                    <>
-                      <div className="td-cost-divider" />
-                      <div className="td-cost-pay-heading">Payments</div>
-                      {payments.map((p, i) => (
-                        <div key={i} className="td-pay-row">
-                          <div className="td-pay-info">
-                            <span className="td-pay-method">{p.payment_method ?? 'Unknown'}</span>
-                            <span className="td-pay-status" data-status={p.status}>
-                              {p.status}
-                            </span>
-                            {p.paid_at && (
-                              <span className="td-pay-date">{new Date(p.paid_at).toLocaleDateString()}</span>
-                            )}
+                  </div>
+                )}
+
+                {sidebarTab === 'payments' && (
+                  <div className="td-cost-body">
+                    {apiTrip && (
+                      <div className="td-record-payment">
+                        {showPaymentForm ? (
+                          <div className="td-payment-form">
+                            <input
+                              value={paymentAmount}
+                              onChange={e => setPaymentAmount(e.target.value)}
+                              placeholder={`Amount (${costCurrency})`}
+                              type="number"
+                              className="td-call-input"
+                            />
+                            <input
+                              value={paymentMethod}
+                              onChange={e => setPaymentMethod(e.target.value)}
+                              placeholder="Method (e.g. Paystack, bank transfer)"
+                              className="td-call-input"
+                            />
+                            <div className="td-payment-form-actions">
+                              <button
+                                onClick={() => { setShowPaymentForm(false); setPaymentAmount(''); setPaymentMethod(''); }}
+                                className="td-action-btn"
+                                style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handlePayWithMoolre}
+                                disabled={payingWithMoolre || savingPayment || !paymentAmount.trim()}
+                                className="td-action-btn"
+                                style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}
+                              >
+                                {payingWithMoolre ? 'Redirecting…' : 'Pay with Mobile Money'}
+                              </button>
+                              <button
+                                onClick={handleRecordPayment}
+                                disabled={savingPayment || payingWithMoolre || !paymentAmount.trim()}
+                                className="td-action-btn"
+                                style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }}
+                              >
+                                {savingPayment ? 'Saving...' : 'Record manually'}
+                              </button>
+                            </div>
                           </div>
-                          <span className="td-pay-amount">{costCurrency} {Number(p.amount).toLocaleString()}</span>
-                        </div>
-                      ))}
-                      <div className="td-cost-divider" />
-                      <div className="td-summary-rows">
-                        {costSummary && (
-                          <>
-                            <div className="td-summary-row">
-                              <span>Total paid</span>
-                              <span className="td-summary-paid">{costCurrency} {Number(costSummary.total_paid).toLocaleString()}</span>
-                            </div>
-                            <div className="td-summary-row">
-                              <span>Pending</span>
-                              <span className="td-summary-pending">{costCurrency} {Number(costSummary.total_pending).toLocaleString()}</span>
-                            </div>
-                            <div className="td-summary-row td-summary-outstanding">
-                              <span>Outstanding</span>
-                              <span>{costCurrency} {Number(costSummary.outstanding).toLocaleString()}</span>
-                            </div>
-                          </>
+                        ) : (
+                          <button onClick={() => setShowPaymentForm(true)} className="td-dashed-btn">
+                            + Record payment
+                          </button>
                         )}
                       </div>
-                    </>
-                  )}
-                </div>
-              </div>
+                    )}
+                    {payments.length > 0 ? (
+                      <>
+                        <div className="td-cost-divider" />
+                        {payments.map((p, i) => (
+                          <div key={i} className="td-pay-row">
+                            <div className="td-pay-info">
+                              <span className="td-pay-method">{p.payment_method ?? 'Unknown'}</span>
+                              <span className="td-pay-status" data-status={p.status}>
+                                {p.status}
+                              </span>
+                              {p.paid_at && (
+                                <span className="td-pay-date">{new Date(p.paid_at).toLocaleDateString()}</span>
+                              )}
+                            </div>
+                            <span className="td-pay-amount">{format(p.amount, p.currency)}</span>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <p style={{ color: '#8A90A2', textAlign: 'center', padding: '20px 0', fontSize: 13 }}>
+                        No payments recorded yet.
+                      </p>
+                    )}
+                    {costSummary && (
+                      <>
+                        <div className="td-cost-divider" />
+                        <div className="td-summary-rows">
+                          <div className="td-summary-row">
+                            <span>Total paid</span>
+                            <span className="td-summary-paid">{format(Number(costSummary.total_paid), costCurrency)}</span>
+                          </div>
+                          <div className="td-summary-row">
+                            <span>Pending</span>
+                            <span className="td-summary-pending">{format(Number(costSummary.total_pending), costCurrency)}</span>
+                          </div>
+                          <div className="td-summary-row td-summary-outstanding">
+                            <span>Outstanding</span>
+                            <span>{format(Number(costSummary.outstanding), costCurrency)}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
 
-              <div className="td-right-card">
-                <div className="td-agent-header">
-                  <span className="td-agent-dot" />
-                  <span className="td-agent-title">
-                    Agent activity
-                  </span>
-                </div>
-                <div className="td-agent-name-row">
-                  <span className="td-agent-name">
-                    {tripAgent}
-                  </span>
-                </div>
-                {agentFeed.map((f, i) => (
+                {sidebarTab === 'activity' && (
+                  <>
+                    <div className="td-agent-name-row">
+                      <span className="td-agent-dot" style={{ marginRight: 6 }} />
+                      <span className="td-agent-name">
+                        {tripAgent}
+                      </span>
+                    </div>
+                    {agentFeed.map((f, i) => (
                   <div
                     key={i}
                     className="td-agent-item"
@@ -1983,6 +2067,8 @@ export default function TripDetail() {
                     </div>
                   </div>
                 ))}
+                  </>
+                )}
               </div>
             </div>
           </div>

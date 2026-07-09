@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import logoWordmark from '../assets/logo/logo_wordmark.svg'
 import ImageCarousel from '../components/ImageCarousel'
@@ -21,9 +21,10 @@ import '../styles/AuthPage.css'
 
 function AuthPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const auth = useAuth()
-  const [mode, setMode] = useState<'login' | 'signup'>('signup')
+  const [mode, setMode] = useState<'login' | 'signup'>(location.pathname === '/login' ? 'login' : 'signup')
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState(() => {
     const s = searchParams.get('step')
@@ -46,6 +47,17 @@ function AuthPage() {
   const [errorMessage, setErrorMessage] = useState('')
 
   const isLogin = mode === 'login'
+
+  // Where to send the user after a successful login/signup. Only accept an internal path
+  // (never `//host` or an absolute URL) so this can't be turned into an open redirect, and
+  // never bounce back into the auth pages themselves.
+  const getSafeNext = () => {
+    const next = searchParams.get('next')
+    if (next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/login') && !next.startsWith('/signup')) {
+      return next
+    }
+    return '/app/dashboard'
+  }
 
   // Detect Google onboarding (pre-filled step 2 from query params)
   useEffect(() => {
@@ -79,7 +91,7 @@ function AuthPage() {
     try {
       const response = await ApiService.loginUser({ email, password })
       auth.login(response)
-      navigate('/app/dashboard')
+      navigate(getSafeNext())
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to log in.')
     } finally {
@@ -110,7 +122,7 @@ function AuthPage() {
       // `else` branch below is just a defensive fallback that shouldn't normally trigger.
       if (response.access_token) {
         auth.login(response)
-        navigate('/app/dashboard')
+        navigate(getSafeNext())
       } else {
         navigate('/login')
       }
@@ -134,6 +146,7 @@ function AuthPage() {
               country: company.country || '',
               city_of_operation: company.city_of_operation || '',
               status: company.status,
+              preferred_currency: company.preferred_currency,
               created_at: company.created_at,
               updated_at: company.updated_at,
               pivot: {
@@ -151,7 +164,7 @@ function AuthPage() {
             token_type: 'bearer',
             user: updatedUser,
           })
-          navigate('/app/dashboard')
+          navigate(getSafeNext())
         } catch {
           setErrorMessage(message)
         }
@@ -173,9 +186,11 @@ function AuthPage() {
 
       // If the user has no company, redirect to company creation flow
       if (!response.user.companies?.length) {
-        navigate(`/signup?step=2&email=${encodeURIComponent(google.email || '')}&name=${encodeURIComponent(google.displayName || '')}`, { replace: true })
+        const next = searchParams.get('next')
+        const nextParam = next ? `&next=${encodeURIComponent(next)}` : ''
+        navigate(`/signup?step=2&email=${encodeURIComponent(google.email || '')}&name=${encodeURIComponent(google.displayName || '')}${nextParam}`, { replace: true })
       } else {
-        navigate('/app/dashboard')
+        navigate(getSafeNext())
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to sign in with Google.')

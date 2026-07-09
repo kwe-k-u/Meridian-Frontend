@@ -20,7 +20,7 @@ import type {
   ItineraryDayResponse, ItineraryFlightResponse, ItineraryAccommodationResponse,
   DestinationResponse, AirportResponse, CompanyResponse, CallResponse, CallActionItemResponse,
   SubscriptionTierResponse, CompanySubscriptionResponse, MoolreCheckoutResponse,
-  FlightSearchResponse, HotelSearchResponse,
+  FlightSearchResponse, HotelSearchResponse, CurrencyRatesResponse,
 } from '../types/app';
 
 export class ApiService {
@@ -368,6 +368,7 @@ export class ApiService {
     company_name: string;
     country: string;
     city_of_operation: string;
+    preferred_currency: string;
   }>): Promise<CompanyResponse> {
     const res = await axios.put(`${ApiService.BASE_URL}/companies/${id}`, data);
     return res.data;
@@ -712,6 +713,36 @@ export class ApiService {
 
   public static async checkMoolrePaymentStatus(transactionId: string): Promise<TransactionResponse> {
     const res = await axios.get(`${ApiService.BASE_URL}/payments/moolre/${transactionId}/status`);
+    return res.data;
+  }
+
+  // ── Public traveler endpoints (no auth required — reachable via the shareable
+  // /travel/:tripId link, see TravelerView.tsx) ──
+  public static async getPublicTrip(tripId: string): Promise<TripResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/public/trips/${tripId}`);
+    return res.data;
+  }
+
+  public static async getPublicTripCosts(tripId: string): Promise<TripCostResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/public/trips/${tripId}/costs`);
+    return res.data;
+  }
+
+  public static async initiatePublicMoolreTripPayment(tripId: string, amount: number): Promise<MoolreCheckoutResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/public/payments/moolre/trip`, { trip_id: tripId, amount });
+    return res.data;
+  }
+
+  public static async checkPublicMoolrePaymentStatus(transactionId: string): Promise<TransactionResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/public/payments/moolre/${transactionId}/status`);
+    return res.data;
+  }
+
+  // ── Currency ──
+  // Public, static conversion table (see CurrencyController on the backend) — used by
+  // CurrencyContext to convert every displayed amount into the caller's preferred currency.
+  public static async getCurrencyRates(): Promise<CurrencyRatesResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/currency-rates`);
     return res.data;
   }
 }

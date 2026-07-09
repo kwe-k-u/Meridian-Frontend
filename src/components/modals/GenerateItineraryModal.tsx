@@ -25,7 +25,7 @@ export default function GenerateItineraryModal() {
   const [step, setStep] = useState<GenStep>('pick');
 
   // Refresh the trip list from the real API every time the modal opens, so "Draft"/"AI
-  // drafting" filtering below reflects real trips (falls back to mock data on failure).
+  // drafting"/"Inquiry" filtering below reflects real trips (falls back to mock data on failure).
   useEffect(() => {
     if (genItinOpen) fetchTripsList();
   }, [genItinOpen, fetchTripsList]);
@@ -39,7 +39,11 @@ export default function GenerateItineraryModal() {
 
   if (!genItinOpen) return null;
 
-  const trips = getTripsData().filter(t => t.status === 'Draft' || t.status === 'AI drafting');
+  // Trips still worth generating an itinerary for: not yet drafted ('Inquiry'), mid-draft
+  // ('Draft'), or already mid-generation ('AI drafting'). Anything past that (awaiting review,
+  // shared, confirmed, booked, ...) already has options and belongs in TripDetail's own
+  // "+ Add option" instead.
+  const trips = getTripsData().filter(t => t.status === 'Draft' || t.status === 'AI drafting' || t.status === 'Inquiry');
 
   const handleSelectTrip = (idx: number) => {
     setSelectedIdx(idx);
@@ -111,7 +115,7 @@ export default function GenerateItineraryModal() {
             <div className="gim-trip-list">
               {trips.length === 0 ? (
                 <div className="gim-empty">
-                  No draft trips yet. Start by creating a new trip.
+                  No trips ready for an itinerary yet. Start by creating a new trip.
                 </div>
               ) : (
                 trips.map((t: TripItem) => {

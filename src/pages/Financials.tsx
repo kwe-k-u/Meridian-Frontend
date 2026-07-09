@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
 import type { TransactionResponse, FinStat, ChartBar } from '../types/app';
 import '../styles/Financials.css';
@@ -12,11 +13,6 @@ const statusMeta: Record<string, { bg: string; fg: string }> = {
   completed: { bg: '#E3F7EF', fg: '#0E9F6E' },
   failed: { bg: '#FDECEC', fg: '#D64545' },
   refunded: { bg: '#F0EBFF', fg: '#6B46C1' },
-};
-
-const fmtCurrency = (n: number, currency = 'GHS') => {
-  const v = Number(n);
-  return currency === 'GHS' ? 'GHS ' + v.toLocaleString() : '$' + v.toLocaleString();
 };
 
 const fmtDate = (d: string | null) => {
@@ -37,6 +33,7 @@ const fmtDate = (d: string | null) => {
 export default function Financials() {
   const navigate = useNavigate();
   const ctx = useApp();
+  const { convert, format } = useCurrency();
 
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,21 +57,27 @@ export default function Financials() {
     const pending = transactions.filter(t => t.status === 'pending');
     const refunded = transactions.filter(t => t.status === 'refunded');
 
+    // Transactions can each carry their own currency (a trip payment might genuinely be
+    // recorded in USD) — normalize every amount to GHS before summing, otherwise a mixed-
+    // currency batch would just add raw numbers together regardless of what they're in.
+    const sumGHS = (list: TransactionResponse[]) =>
+      list.reduce((s, t) => s + convert(t.amount, t.currency, 'GHS'), 0);
+
     // Note: `revenue` and `paidOut` are computed identically (sum of all completed
     // transactions) — there's currently no distinction between "revenue recognized" and
     // "cash actually paid out to the agency" (e.g. minus a platform fee or payout delay).
-    const revenue = completed.reduce((s, t) => s + t.amount, 0);
-    const outstanding = pending.reduce((s, t) => s + t.amount, 0);
-    const paidOut = completed.reduce((s, t) => s + t.amount, 0);
-    const refunds = refunded.reduce((s, t) => s + t.amount, 0);
+    const revenue = sumGHS(completed);
+    const outstanding = sumGHS(pending);
+    const paidOut = sumGHS(completed);
+    const refunds = sumGHS(refunded);
 
     return [
-      { label: 'Revenue', value: fmtCurrency(revenue), delta: `From ${completed.length} transactions`, deltaColor: '#1DB954' },
-      { label: 'Outstanding', value: fmtCurrency(outstanding), delta: `${pending.length} pending payments`, deltaColor: '#F59E0B' },
-      { label: 'Paid out', value: fmtCurrency(paidOut), delta: `${completed.length} completed`, deltaColor: '#2B63F6' },
-      { label: 'Refunds', value: fmtCurrency(refunds), delta: `${refunded.length} this period`, deltaColor: '#EF4444' },
+      { label: 'Revenue', value: format(revenue, 'GHS'), delta: `From ${completed.length} transactions`, deltaColor: '#1DB954' },
+      { label: 'Outstanding', value: format(outstanding, 'GHS'), delta: `${pending.length} pending payments`, deltaColor: '#F59E0B' },
+      { label: 'Paid out', value: format(paidOut, 'GHS'), delta: `${completed.length} completed`, deltaColor: '#2B63F6' },
+      { label: 'Refunds', value: format(refunds, 'GHS'), delta: `${refunded.length} this period`, deltaColor: '#EF4444' },
     ];
-  }, [transactions]);
+  }, [transactions, convert, format]);
 
   const chart: ChartBar[] = useMemo(() => {
     const byMonth: Record<string, number> = {};
@@ -83,7 +86,7 @@ export default function Financials() {
       .forEach(t => {
         const d = new Date(t.paid_at!);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        byMonth[key] = (byMonth[key] || 0) + t.amount;
+        byMonth[key] = (byMonth[key] || 0) + convert(t.amount, t.currency, 'GHS');
       });
 
     const keys = Object.keys(byMonth).sort();
@@ -100,12 +103,12 @@ export default function Financials() {
       return {
         label: monthNames[monthIdx] || key,
         h: `${pct}px`,
-        value: fmtCurrency(val).replace('GHS ', ''),
+        value: format(val, 'GHS').replace(/^\S+\s/, ''),
         barBg: '#2B63F6',
         barLabelColor: '#15161B',
       };
     });
-  }, [transactions]);
+  }, [transactions, convert, format]);
 
   // Clicking a trip-payment row opens the linked trip; subscription payments have no trip
   // to open, so those just show a quick summary toast instead.
@@ -115,7 +118,7 @@ export default function Financials() {
       navigate(`/app/trips/${tripId}`);
       return;
     }
-    ctx.toastAction?.(`Transaction: ${tx.transaction_id} — ${fmtCurrency(tx.amount)}`);
+    ctx.toastAction?.(`Transaction: ${tx.transaction_id} — ${format(tx.amount, tx.currency)}`);
   };
 
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
@@ -165,8 +168,9 @@ export default function Financials() {
           <div>
             <p className="payout-label">Next payout</p>
             <p className="payout-amount">
-              {fmtCurrency(
-                transactions.filter(t => t.status === 'completed').reduce((s, t) => s + t.amount, 0)
+              {format(
+                transactions.filter(t => t.status === 'completed').reduce((s, t) => s + convert(t.amount, t.currency, 'GHS'), 0),
+                'GHS'
               )}
             </p>
             <p className="payout-date">Estimated processing soon</p>
@@ -218,7 +222,7 @@ export default function Financials() {
                   )}
                 </span>
                 <span>
-                  <span className="td">{fmtCurrency(tx.amount, tx.currency)}</span>
+                  <span className="td">{format(tx.amount, tx.currency)}</span>
                   {tx.paid_at && <span className="hint">{fmtDate(tx.paid_at)}</span>}
                 </span>
               </div>

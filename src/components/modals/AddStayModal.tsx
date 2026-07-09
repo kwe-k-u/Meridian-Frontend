@@ -192,7 +192,7 @@ export default function AddStayModal({ open, itineraryId, startCity, editing, on
                 placeholder="e.g. Accra hotels, Dubai Marina"
               />
 
-              <div className="aim-cost-row">
+              <div className="aim-row-2">
                 <div className="aim-cost-field">
                   <label className="aim-label">Check-in</label>
                   <input
@@ -281,7 +281,7 @@ export default function AddStayModal({ open, itineraryId, startCity, editing, on
                 placeholder="e.g. Deluxe king room"
               />
 
-              <div className="aim-cost-row">
+              <div className="aim-row-2">
                 <div className="aim-cost-field">
                   <label className="aim-label">Check-in</label>
                   <input

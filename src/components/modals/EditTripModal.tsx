@@ -84,7 +84,7 @@ export default function EditTripModal({ open, trip, fallbackName, onClose, onSav
             rows={3}
           />
 
-          <div className="aim-cost-row">
+          <div className="aim-row-2">
             <div className="aim-cost-field">
               <label className="aim-label">Start date</label>
               <input

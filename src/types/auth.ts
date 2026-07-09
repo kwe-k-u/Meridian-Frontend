@@ -35,6 +35,8 @@ export interface Company {
   country: string;
   city_of_operation: string;
   status: number;
+  // Which currency this company's amounts display in app-wide — see CurrencyContext.
+  preferred_currency: string;
   created_at: string;
   updated_at: string;
   // See the identical comment on CompanyUser.pivot in types/app.ts: is_default/is_enabled

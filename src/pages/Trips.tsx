@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
 import type { TripResponse, TripStatus } from '../types/app';
 import '../styles/Trips.css';
@@ -71,6 +72,7 @@ const filterDefs: { label: string; match: (status: string) => boolean }[] = [
 
 export default function Trips() {
   const navigate = useNavigate();
+  const { format } = useCurrency();
   const [activeFilter, setActiveFilter] = useState(0);
   const [trips, setTrips] = useState<TripResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -157,7 +159,7 @@ export default function Trips() {
               </div>
 
               <div className="trip-value trip-cell">
-                {t.budget ? `GHS ${Number(t.budget).toLocaleString()}` : '—'}
+                {t.budget ? format(Number(t.budget), 'GHS') : '—'}
               </div>
             </div>
           );

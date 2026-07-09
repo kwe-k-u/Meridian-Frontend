@@ -4,7 +4,7 @@
 // and syncs the auth token with ApiService for automatic HTTP header injection.
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import type { UserProfile, LoginResponse, UpdateProfilePayload } from '../types/auth';
+import type { UserProfile, LoginResponse, UpdateProfilePayload, Company } from '../types/auth';
 import { ApiService } from '../services/api-service';
 
 interface AuthContextType {
@@ -14,6 +14,7 @@ interface AuthContextType {
   login: (data: LoginResponse) => void;
   logout: () => void;
   updateProfile: (payload: UpdateProfilePayload) => Promise<void>;
+  updateCompanyInProfile: (companyId: string, patch: Partial<Company>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -69,8 +70,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Patches one company within user.companies in place (e.g. after Settings > Workspace saves
+  // a new preferred_currency) — company updates go through ApiService.updateCompany directly
+  // rather than through updateProfile above (that's for the user's own profile fields), so
+  // nothing else refreshes the cached `user.companies` array; without this, every screen that
+  // reads a company field (like preferred_currency, via CurrencyContext) would keep showing
+  // the stale value until the next login.
+  const updateCompanyInProfile = useCallback((companyId: string, patch: Partial<Company>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const updated = {
+        ...prev,
+        companies: prev.companies.map(c => c.company_id === companyId ? { ...c, ...patch } : c),
+      };
+      const stored = localStorage.getItem('auth');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.user = updated;
+        localStorage.setItem('auth', JSON.stringify(parsed));
+      }
+      return updated;
+    });
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, logout, updateProfile: updateProfileFn }}>
+    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, logout, updateProfile: updateProfileFn, updateCompanyInProfile }}>
       {children}
     </AuthContext.Provider>
   );

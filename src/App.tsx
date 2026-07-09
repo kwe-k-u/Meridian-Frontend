@@ -1,17 +1,15 @@
 // ── App ──────────────────────────────────────────────────────
 // Root component defining the app's route structure:
 // - Public routes: /, /login, /signup, /forgot-password
-// - Traveler view: /travel/:tripId (wrapped in AppProvider)
-// - Authenticated app: /app/* (wrapped in MainLayout with sidebar/topbar)
-//
-// Note: none of the /app/* routes actually check auth.isAuthenticated — there's no
-// protected-route wrapper here or in MainLayout.tsx. An unauthenticated visitor can
-// navigate straight to e.g. /app/dashboard by URL; the page will render but its API calls
-// will fail (no Bearer token set), typically showing empty/error states rather than
-// redirecting to /login.
+// - Traveler view: /travel/:tripId (wrapped in AppProvider, no auth required — it's a
+//   shareable link sent to travelers who don't have Meridian accounts)
+// - Authenticated app: /app/* (wrapped in MainLayout with sidebar/topbar), gated by
+//   ProtectedRoute — an unauthenticated visitor is redirected to /login?next=<page>, and
+//   AuthPage sends them back to that page after they sign in.
 
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { CurrencyProvider } from './contexts/CurrencyContext'
 import AuthPage from './pages/AuthPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import { AppProvider } from './contexts/AppContext'
@@ -27,36 +25,43 @@ import Settings from './pages/Settings'
 import Help from './pages/Help'
 import GuideArticle from './pages/GuideArticle'
 import TravelerView from './components/TravelerView'
+import TravelerPaymentCallback from './pages/TravelerPaymentCallback'
 import MainLayout from './components/Layout/MainLayout'
+import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<AuthPage />} />
-        <Route path="/signup" element={<AuthPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route element={<AppProvider><Outlet /></AppProvider>}>
-          <Route path="/travel/:tripId" element={<TravelerView />} />
-          <Route path="/app" element={<MainLayout />}>
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="trips" element={<Trips />} />
-            <Route path="trips/:tripId" element={<TripDetail />} />
-            <Route path="messages" element={<Messages />} />
-            <Route path="messages/:convoId" element={<Messages />} />
-            <Route path="travelers" element={<Travelers />} />
-            <Route path="financials" element={<Financials />} />
-            <Route path="pricing" element={<Pricing />} />
-            <Route path="payments/callback" element={<PaymentCallback />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="settings/:tab" element={<Settings />} />
-            <Route path="help" element={<Help />} />
-            <Route path="help/:guideId" element={<GuideArticle />} />
+      <CurrencyProvider>
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/signup" element={<AuthPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route element={<AppProvider><Outlet /></AppProvider>}>
+            <Route path="/travel/:tripId" element={<TravelerView />} />
+            <Route path="/travel/:tripId/payment-callback" element={<TravelerPaymentCallback />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="/app" element={<MainLayout />}>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<Dashboard />} />
+                <Route path="trips" element={<Trips />} />
+                <Route path="trips/:tripId" element={<TripDetail />} />
+                <Route path="messages" element={<Messages />} />
+                <Route path="messages/:convoId" element={<Messages />} />
+                <Route path="travelers" element={<Travelers />} />
+                <Route path="financials" element={<Financials />} />
+                <Route path="pricing" element={<Pricing />} />
+                <Route path="payments/callback" element={<PaymentCallback />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="settings/:tab" element={<Settings />} />
+                <Route path="help" element={<Help />} />
+                <Route path="help/:guideId" element={<GuideArticle />} />
+              </Route>
+            </Route>
           </Route>
-        </Route>
-      </Routes>
+        </Routes>
+      </CurrencyProvider>
     </AuthProvider>
   )
 }

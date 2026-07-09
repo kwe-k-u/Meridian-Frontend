@@ -23,22 +23,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
 
   // Restore the session from localStorage on first mount, so a page refresh doesn't log
-  // the user out. If the stored value is missing/corrupt, just clear it and stay logged out
-  // rather than throwing — there's no server round trip involved here (the token itself is
-  // only validated lazily, the next time an API call actually uses it).
+  // the user out. After restoring the token we immediately call /auth/me to get a fresh
+  // user object — this picks up companies, role, and any profile changes that happened
+  // since the token was issued without requiring the user to log out and back in.
   useEffect(() => {
     const stored = localStorage.getItem('auth');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (parsed.token && parsed.user) {
-          setToken(parsed.token);
-          setUser(parsed.user);
-          ApiService.setAuthToken(parsed.token);
-        }
-      } catch {
-        localStorage.removeItem('auth');
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed.token && parsed.user) {
+        setToken(parsed.token);
+        setUser(parsed.user);
+        ApiService.setAuthToken(parsed.token);
+        ApiService.getMe().then(data => {
+          setUser(data.user);
+          parsed.user = data.user;
+          localStorage.setItem('auth', JSON.stringify(parsed));
+        }).catch(() => {});
       }
+    } catch {
+      localStorage.removeItem('auth');
     }
   }, []);
 

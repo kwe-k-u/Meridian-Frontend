@@ -27,7 +27,7 @@ export type BillingPeriod = 'monthly' | 'annual';
 
 export type ChannelType = 'whatsapp' | 'gmail' | 'instagram';
 
-export type SettingsTab = 'profile' | 'workspace' | 'team' | 'roles' | 'channels' | 'notifications';
+export type SettingsTab = 'profile' | 'workspace' | 'team' | 'roles' | 'channels' | 'notifications' | 'ai';
 
 export type ConnectStep = 'pick' | 'auth' | 'sync' | 'done';
 
@@ -44,6 +44,8 @@ export interface DayBlock {
   sub: string;
   price: string;
   remove?: () => void;
+  entityId?: string;
+  entityType?: 'flight' | 'stay' | 'destination';
 }
 
 export interface Day {
@@ -527,6 +529,11 @@ export interface MoolreCheckoutResponse {
   authorization_url: string;
 }
 
+export interface GenerateItineraryApiResponse {
+  itinerary: ItineraryResponse;
+  all_options: ItineraryResponse[];
+}
+
 export interface ItineraryResponse {
   itinerary_id: string;
   trip_id: string;
@@ -670,6 +677,20 @@ export interface TripResponse {
   company?: { company_id: string; company_name: string };
   customers?: { customer_id: string; first_name: string; last_name: string; pivot: { role: string } }[];
   itineraries?: ItineraryResponse[];
+  calls?: CallResponse[];
+  trip_payments?: {
+    transaction_id: string;
+    trip_id: string;
+    notes: string | null;
+    transaction?: {
+      transaction_id: string;
+      amount: number;
+      currency: string;
+      status: string;
+      payment_method: string | null;
+      paid_at: string | null;
+    };
+  }[];
 }
 
 export interface DestinationResponse {

@@ -16,7 +16,7 @@ import axios from 'axios';
 import type { LoginResponse } from '../types/auth';
 import type {
   DashboardResponse, ApiPaginatedResponse,
-  CustomerResponse, TransactionResponse, TripResponse, TripCostResponse, ItineraryResponse,
+  CustomerResponse, TransactionResponse, TripResponse, TripCostResponse, ItineraryResponse, GenerateItineraryApiResponse,
   ItineraryDayResponse, ItineraryFlightResponse, ItineraryAccommodationResponse,
   DestinationResponse, AirportResponse, CompanyResponse, CallResponse, CallActionItemResponse,
   SubscriptionTierResponse, CompanySubscriptionResponse, MoolreCheckoutResponse,
@@ -149,6 +149,11 @@ export class ApiService {
 		}
 		throw new Error(errorMessage);
 	}
+  }
+
+  public static async getMe(): Promise<{ user: LoginResponse['user'] }> {
+    const response = await axios.get(`${ApiService.BASE_URL}/auth/me`);
+    return response.data;
   }
 
   public static async updateProfile(payload: {
@@ -332,7 +337,7 @@ export class ApiService {
     priorities?: string[];
     notes?: string;
     start_city?: string;
-  }): Promise<ItineraryResponse> {
+  }): Promise<GenerateItineraryApiResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/trips/${id}/generate-itinerary`, preferences ?? {});
     return res.data;
   }

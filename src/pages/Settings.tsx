@@ -25,6 +25,7 @@ const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
   { key: 'roles', label: 'Roles' },
   { key: 'channels', label: 'Channels' },
   { key: 'notifications', label: 'Notifications' },
+  { key: 'ai', label: 'AI & Models' },
 ];
 
 // ── TabBar ─────────────────────────────────────────────────────
@@ -499,6 +500,57 @@ function EditProfile() {
   );
 }
 
+// ── AI & Models ────────────────────────────────────────────────
+// Lets the company select their preferred AI model for itinerary generation.
+// Preference is persisted in localStorage under 'meridian_ai_provider' so it
+// survives page reloads without requiring a backend settings field.
+
+const AI_PROVIDERS = [
+  { id: '',          label: 'Auto (recommended)', sub: 'Uses best available model, falls back automatically', icon: '✦' },
+  { id: 'gemini',    label: 'Gemini 2.5 Flash Lite', sub: 'Google — free tier, fast responses',            icon: 'G' },
+  { id: 'openai',    label: 'GPT-4o Mini',            sub: 'OpenAI — strong reasoning, reliable output',   icon: 'O' },
+  { id: 'anthropic', label: 'Claude Haiku',            sub: 'Anthropic — concise, structured output',      icon: 'A' },
+];
+
+export const MERIDIAN_AI_PROVIDER_KEY = 'meridian_ai_provider';
+
+function AiSettings() {
+  const [selected, setSelected] = useState<string>(() => localStorage.getItem(MERIDIAN_AI_PROVIDER_KEY) ?? '');
+
+  const handleSelect = (id: string) => {
+    setSelected(id);
+    localStorage.setItem(MERIDIAN_AI_PROVIDER_KEY, id);
+  };
+
+  return (
+    <div className="settings-section">
+      <div className="field-row">
+        <label className="field-label">Default model for itinerary generation</label>
+        <p className="field-hint">This model is used whenever you generate trip options. Auto uses Gemini first and falls back to OpenAI or Claude if quota is exceeded.</p>
+      </div>
+      <div className="ai-model-grid">
+        {AI_PROVIDERS.map(p => (
+          <button
+            key={p.id}
+            className={`ai-model-card${selected === p.id ? ' selected' : ''}`}
+            onClick={() => handleSelect(p.id)}
+          >
+            <div className="ai-model-icon">{p.icon}</div>
+            <div className="ai-model-info">
+              <div className="ai-model-name">{p.label}</div>
+              <div className="ai-model-sub">{p.sub}</div>
+            </div>
+            {selected === p.id && <div className="ai-model-check">✓</div>}
+          </button>
+        ))}
+      </div>
+      <p className="field-hint" style={{ marginTop: 16 }}>
+        You can also override the model per generation in the "Generate itinerary" modal.
+      </p>
+    </div>
+  );
+}
+
 // ── Settings (main) ────────────────────────────────────────────
 
 export default function Settings() {
@@ -515,6 +567,7 @@ export default function Settings() {
         {currentTab === 'roles' && <Roles />}
         {currentTab === 'channels' && <ChannelsSection />}
         {currentTab === 'notifications' && <Notifications />}
+        {currentTab === 'ai' && <AiSettings />}
       </div>
     </div>
   );

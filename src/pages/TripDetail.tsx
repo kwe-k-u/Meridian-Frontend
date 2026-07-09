@@ -297,6 +297,7 @@ export default function TripDetail() {
   const [refineModel, setRefineModel] = useState('claude-sonnet-5');
   const [refineFor, setRefineFor] = useState<'all' | string>('all');
   const [refineTitle, setRefineTitle] = useState('');
+  const [refineIncludeEvents, setRefineIncludeEvents] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [generationHistory, setGenerationHistory] = useState<GenerationSnapshot[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -331,7 +332,7 @@ export default function TripDetail() {
     }
   };
 
-  const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string; start_city?: string; model?: string; snapshotTitle?: string }) => {
+  const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string; start_city?: string; model?: string; snapshotTitle?: string; include_events?: boolean }) => {
     if (!tripId || !isRealId) {
       ctx.generateOptions();
       return;
@@ -869,6 +870,7 @@ export default function TripDetail() {
       notes: context || undefined,
       model: refineModel,
       snapshotTitle: refineTitle.trim() || undefined,
+      include_events: refineIncludeEvents,
     });
     setRefineText('');
     setRefineImageName(null);
@@ -2722,6 +2724,16 @@ Questions? Simply reply to this email or reach out directly.`
                 </select>
               </div>
             )}
+
+            {/* Events toggle */}
+            <label className="td-refine-events-toggle">
+              <input
+                type="checkbox"
+                checked={refineIncludeEvents}
+                onChange={e => setRefineIncludeEvents(e.target.checked)}
+              />
+              <span>Include real events from Ticketmaster</span>
+            </label>
 
             <div className="td-refine-toolbar">
               <button

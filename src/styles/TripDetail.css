@@ -2255,6 +2255,23 @@
   line-height: 1.6;
 }
 .td-refine-textarea:focus { outline: none; border-color: #2B63F6; box-shadow: 0 0 0 3px rgba(43,99,246,0.08); }
+.td-refine-events-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  margin-top: 4px;
+}
+.td-refine-events-toggle input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: #2B63F6;
+  cursor: pointer;
+  flex-shrink: 0;
+}
 .td-refine-toolbar {
   display: flex;
   gap: 8px;

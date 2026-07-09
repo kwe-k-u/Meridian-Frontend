@@ -339,6 +339,8 @@ export class ApiService {
     start_city?: string;
     model?: string;
     include_events?: boolean;
+    flight_departure_time?: string;
+    return_flight_time?: string;
   }): Promise<GenerateItineraryApiResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/trips/${id}/generate-itinerary`, preferences ?? {});
     return res.data;

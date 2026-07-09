@@ -298,6 +298,8 @@ export default function TripDetail() {
   const [refineFor, setRefineFor] = useState<'all' | string>('all');
   const [refineTitle, setRefineTitle] = useState('');
   const [refineIncludeEvents, setRefineIncludeEvents] = useState(true);
+  const [flightDepTime, setFlightDepTime] = useState('');
+  const [returnFlightTime, setReturnFlightTime] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [generationHistory, setGenerationHistory] = useState<GenerationSnapshot[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -339,7 +341,7 @@ export default function TripDetail() {
     return id ? (map[id] ?? id) : 'AI';
   };
 
-  const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string; start_city?: string; model?: string; snapshotTitle?: string; include_events?: boolean }) => {
+  const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string; start_city?: string; model?: string; snapshotTitle?: string; include_events?: boolean; flight_departure_time?: string; return_flight_time?: string }) => {
     if (!tripId || !isRealId) {
       ctx.generateOptions();
       return;
@@ -347,7 +349,14 @@ export default function TripDetail() {
     setGeneratingItinerary(true);
     setGenerateError(null);
     try {
-      const result = await ApiService.generateItinerary(tripId, prefs);
+      // Merge persistent flight times into every generate call so the AI always
+      // knows the outbound/return schedule without the user re-entering it each time.
+      const enrichedPrefs = {
+        ...prefs,
+        ...(flightDepTime ? { flight_departure_time: flightDepTime } : {}),
+        ...(returnFlightTime ? { return_flight_time: returnFlightTime } : {}),
+      };
+      const result = await ApiService.generateItinerary(tripId, enrichedPrefs);
 
       // Notify if the requested model was unavailable and a fallback was used
       if (result.skipped_providers?.length && result.provider_used) {
@@ -1683,6 +1692,27 @@ Questions? Simply reply to this email or reach out directly.`
                     )}
                   </div>
                 )}
+                {/* Flight times — only shown when a start city is set, since that implies flying */}
+                {selectedItinerary?.start_city && (
+                  <div className="td-flight-time-row">
+                    <span className="td-flight-time-label">✈ Departs</span>
+                    <input
+                      type="time"
+                      className="td-flight-time-input"
+                      value={flightDepTime}
+                      onChange={e => setFlightDepTime(e.target.value)}
+                      title="Outbound flight departure time from start city"
+                    />
+                    <span className="td-flight-time-sep">Returns</span>
+                    <input
+                      type="time"
+                      className="td-flight-time-input"
+                      value={returnFlightTime}
+                      onChange={e => setReturnFlightTime(e.target.value)}
+                      title="Return flight departure time"
+                    />
+                  </div>
+                )}
                 <button className="td-refine-btn" onClick={() => setRefineOpen(true)} disabled={generatingItinerary}>
                   ✦ Refine results
                 </button>
@@ -2745,6 +2775,30 @@ Questions? Simply reply to this email or reach out directly.`
                 </select>
               </div>
             )}
+
+            {/* Flight times — helps AI plan Day 1 and the last day around flight schedules */}
+            <div className="td-refine-flight-times">
+              <div className="td-refine-flight-time-field">
+                <label className="td-refine-label">✈ Outbound departure</label>
+                <input
+                  type="time"
+                  className="td-refine-time-input"
+                  value={flightDepTime}
+                  onChange={e => setFlightDepTime(e.target.value)}
+                  placeholder="--:--"
+                />
+              </div>
+              <div className="td-refine-flight-time-field">
+                <label className="td-refine-label">✈ Return departure</label>
+                <input
+                  type="time"
+                  className="td-refine-time-input"
+                  value={returnFlightTime}
+                  onChange={e => setReturnFlightTime(e.target.value)}
+                  placeholder="--:--"
+                />
+              </div>
+            </div>
 
             {/* Events toggle */}
             <label className="td-refine-events-toggle">

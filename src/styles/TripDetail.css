@@ -1925,8 +1925,39 @@
 .td-chat-bottom-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: space-between;
   padding: 10px 4px 0;
+}
+
+/* Flight time row — appears below start city when start city is set */
+.td-flight-time-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.td-flight-time-label,
+.td-flight-time-sep {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.td-flight-time-input {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  width: 108px;
+  cursor: pointer;
+}
+.td-flight-time-input:focus {
+  outline: none;
+  border-color: #2B63F6;
 }
 
 .td-chat-regen-btn {
@@ -2255,6 +2286,34 @@
   line-height: 1.6;
 }
 .td-refine-textarea:focus { outline: none; border-color: #2B63F6; box-shadow: 0 0 0 3px rgba(43,99,246,0.08); }
+.td-refine-flight-times {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.td-refine-flight-time-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 130px;
+}
+.td-refine-time-input {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+.td-refine-time-input:focus {
+  outline: none;
+  border-color: #2B63F6;
+}
+
 .td-refine-events-toggle {
   display: flex;
   align-items: center;

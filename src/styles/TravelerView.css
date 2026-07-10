@@ -86,6 +86,91 @@
   font-weight: 600;
 }
 
+/* ── Trip overview card ── */
+.tv__overview {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #E5E7EB);
+  border-radius: 16px;
+  padding: 24px 28px;
+  margin-bottom: 28px;
+}
+@media (prefers-color-scheme: dark) {
+  .tv__overview { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
+}
+:root[data-theme="dark"] .tv__overview { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
+:root[data-theme="light"] .tv__overview { background: #fff; border-color: #E5E7EB; }
+
+.tv__overview-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 18px 24px;
+  margin-bottom: 20px;
+}
+.tv__ov-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tv__ov-key {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9CA3AF;
+}
+.tv__ov-val {
+  font-size: 14px;
+  font-weight: 500;
+  color: inherit;
+  line-height: 1.4;
+}
+.tv__ov-includes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border, #E5E7EB);
+}
+@media (prefers-color-scheme: dark) {
+  .tv__ov-includes { border-top-color: rgba(255,255,255,0.1); }
+}
+:root[data-theme="dark"] .tv__ov-includes { border-top-color: rgba(255,255,255,0.1); }
+:root[data-theme="light"] .tv__ov-includes { border-top-color: #E5E7EB; }
+
+.tv__ov-includes-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9CA3AF;
+  margin-right: 4px;
+}
+.tv__ov-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.tv__ov-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+.tv__ov-chip--flight { background: #EBF1FF; color: #2B63F6; }
+.tv__ov-chip--hotel  { background: #E3F7EF; color: #059669; }
+.tv__ov-chip--events { background: #FFF3E0; color: #B7791F; }
+@media (prefers-color-scheme: dark) {
+  .tv__ov-chip--flight { background: rgba(43,99,246,0.18); }
+  .tv__ov-chip--hotel  { background: rgba(5,150,105,0.18); }
+  .tv__ov-chip--events { background: rgba(183,121,31,0.18); }
+}
+:root[data-theme="dark"] .tv__ov-chip--flight { background: rgba(43,99,246,0.18); }
+:root[data-theme="dark"] .tv__ov-chip--hotel  { background: rgba(5,150,105,0.18); }
+:root[data-theme="dark"] .tv__ov-chip--events { background: rgba(183,121,31,0.18); }
+:root[data-theme="light"] .tv__ov-chip--flight { background: #EBF1FF; }
+:root[data-theme="light"] .tv__ov-chip--hotel  { background: #E3F7EF; }
+:root[data-theme="light"] .tv__ov-chip--events { background: #FFF3E0; }
+
 /* ── Accepted banner ── */
 .tv__accepted-banner {
   display: flex;

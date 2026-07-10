@@ -21,7 +21,7 @@ export type Screen = 'dashboard' | 'trips' | 'tripDetail' | 'messages' | 'travel
 // backend values like `planning`/`in_progress` to these display strings).
 export type TripStatus = 'Draft' | 'AI drafting' | 'Awaiting review' | 'Shared' | 'Changes requested' | 'Confirmed' | 'Booked' | 'Completed' | 'Inquiry' | 'In Progress' | 'Cancelled';
 
-export type BuilderTab = 'itinerary' | 'flights' | 'stays' | 'activities' | 'calls';
+export type BuilderTab = 'itinerary' | 'flights' | 'stays' | 'activities' | 'events' | 'calls';
 
 export type BillingPeriod = 'monthly' | 'annual';
 
@@ -165,6 +165,7 @@ export interface Flight {
   recDisplay: string;
   border: string;
   bg: string;
+  booking_url?: string | null;
 }
 
 export interface Stay {
@@ -177,6 +178,7 @@ export interface Stay {
   border: string;
   bg: string;
   tags: string[];
+  booking_url?: string | null;
 }
 
 export interface Activity {
@@ -564,6 +566,17 @@ export interface ItineraryResponse {
   itinerary_days?: ItineraryDayResponse[];
   itinerary_flights?: ItineraryFlightResponse[];
   itinerary_accommodation?: ItineraryAccommodationResponse[];
+  source_links?: {
+    flights_url?: string | null;
+    hotels_url?: string | null;
+    events_url?: string | null;
+  } | null;
+}
+
+export interface FlightLeg {
+  label: string;
+  date: string;
+  time: string;
 }
 
 export interface ItineraryDayResponse {

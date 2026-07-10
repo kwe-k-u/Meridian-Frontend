@@ -159,6 +159,48 @@ export default function TravelerView() {
           )}
         </div>
 
+        {/* Trip overview — structured database fields */}
+        {apiTrip && (
+          <div className="tv__overview">
+            <div className="tv__overview-fields">
+              {(apiTrip.start_date || apiTrip.end_date) && (
+                <div className="tv__ov-field">
+                  <span className="tv__ov-key">Travel dates</span>
+                  <span className="tv__ov-val">{fmtDateRange(apiTrip.start_date, apiTrip.end_date)}</span>
+                </div>
+              )}
+              {apiTrip.start_date && apiTrip.end_date && (
+                <div className="tv__ov-field">
+                  <span className="tv__ov-key">Duration</span>
+                  <span className="tv__ov-val">{tripDurationDays(apiTrip.start_date, apiTrip.end_date)} days</span>
+                </div>
+              )}
+              {apiTrip.budget && (
+                <div className="tv__ov-field">
+                  <span className="tv__ov-key">Budget</span>
+                  <span className="tv__ov-val">USD {Number(apiTrip.budget).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+            {itineraries.length > 0 && (
+              <div className="tv__ov-includes">
+                <span className="tv__ov-includes-label">What's covered:</span>
+                <div className="tv__ov-chips">
+                  {itineraries.some(it => (it.itinerary_flights ?? []).length > 0) && (
+                    <span className="tv__ov-chip tv__ov-chip--flight">✈ Flights</span>
+                  )}
+                  {itineraries.some(it => (it.itinerary_accommodation ?? []).length > 0) && (
+                    <span className="tv__ov-chip tv__ov-chip--hotel">🏨 Hotel</span>
+                  )}
+                  {itineraries.some(it => (it.itinerary_days ?? []).some(d => (d.destinations ?? []).length > 0)) && (
+                    <span className="tv__ov-chip tv__ov-chip--events">🎟 Events & activities</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Accepted success banner */}
         {acceptedOption && (
           <div className="tv__accepted-banner">
@@ -479,6 +521,10 @@ function buildDayBlocks(day: ItinDayLike) {
     });
   });
   return blocks;
+}
+
+function tripDurationDays(start: string, end: string): number {
+  return Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000);
 }
 
 function fmtDateRange(start: string | null, end: string | null): string {

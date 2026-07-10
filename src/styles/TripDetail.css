@@ -1137,6 +1137,82 @@
   cursor: pointer;
   line-height: 18px;
 }
+/* ── Events Tab ── */
+.td-events-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.td-events-day-group {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.td-events-day-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-alt, #F7F8FC);
+  border-bottom: 1px solid var(--border);
+}
+@media (prefers-color-scheme: dark) {
+  .td-events-day-header { background: rgba(255,255,255,0.04); }
+}
+:root[data-theme="dark"] .td-events-day-header { background: rgba(255,255,255,0.04); }
+:root[data-theme="light"] .td-events-day-header { background: #F7F8FC; }
+.td-events-day-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2B63F6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.td-events-day-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.td-event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.td-event-row:last-child { border-bottom: none; }
+.td-event-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.td-event-body {
+  flex: 1;
+  min-width: 0;
+}
+.td-event-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.td-event-activities {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 6px;
+  white-space: pre-line;
+}
+.td-event-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.td-event-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
 /* ── Call Logs Tab ── */
 .td-calls-grid {
   display: grid;
@@ -1931,34 +2007,125 @@
   padding: 10px 4px 0;
 }
 
+/* Departure city row in draft card */
+.td-brief-departure-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0 2px;
+}
+.td-brief-departure-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.td-brief-departure-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1.5px solid var(--border);
+  background: var(--input-bg, var(--surface));
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.td-brief-departure-input:focus {
+  border-color: #2B63F6;
+}
 /* Flight time row — appears below start city when start city is set */
-.td-flight-time-row {
+/* ── Flight legs (replaces old single departure/return time inputs) ── */
+.td-flight-legs,
+.td-brief-flight-legs,
+.td-refine-flight-legs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0 6px;
+}
+.td-flight-legs-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.td-flight-legs-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.td-leg-add-btn {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2B63F6;
+  background: none;
+  border: 1px dashed #2B63F6;
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  opacity: 0.8;
+}
+.td-leg-add-btn:hover { opacity: 1; }
+.td-leg-row {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
-.td-flight-time-label,
-.td-flight-time-sep {
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-.td-flight-time-input {
-  padding: 4px 8px;
+.td-leg-label {
+  width: 90px;
+  padding: 4px 7px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg);
   color: var(--text);
   font-size: 12px;
   font-family: var(--font-sans);
-  width: 108px;
+}
+.td-leg-date {
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  flex: 1;
+  min-width: 130px;
+}
+.td-leg-time {
+  width: 98px;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-sans);
   cursor: pointer;
 }
-.td-flight-time-input:focus {
-  outline: none;
-  border-color: #2B63F6;
+.td-leg-label:focus,
+.td-leg-date:focus,
+.td-leg-time:focus { outline: none; border-color: #2B63F6; }
+.td-leg-remove-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
+.td-leg-remove-btn:hover { color: #E3404B; background: #FEF2F2; }
 
 .td-chat-regen-btn {
   padding: 8px 16px;
@@ -2304,21 +2471,35 @@
   white-space: nowrap;
   margin-right: 2px;
 }
-.td-service-toggle {
-  display: flex;
+.td-service-pill {
+  display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12.5px;
-  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
   cursor: pointer;
   user-select: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
 }
-.td-service-toggle input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  accent-color: #2B63F6;
-  cursor: pointer;
-  flex-shrink: 0;
+.td-service-pill:hover {
+  border-color: #2B63F6;
+  color: #2B63F6;
+}
+.td-service-pill--on {
+  background: #2B63F6;
+  border-color: #2B63F6;
+  color: #fff;
+}
+.td-service-pill--on:hover {
+  background: #1a52e0;
+  border-color: #1a52e0;
+  color: #fff;
 }
 
 /* Brief card service row */
@@ -2342,50 +2523,61 @@
   flex-wrap: wrap;
   margin-top: 4px;
 }
-.td-refine-service-toggle {
+/* td-refine-service-toggle replaced by shared .td-service-pill */
+
+/* td-refine-flight-times replaced by shared .td-refine-flight-legs + .td-leg-* */
+
+/* ── Agent-only source links (backs up AI generation decisions) ── */
+.td-source-links {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text);
-  cursor: pointer;
-  user-select: none;
-}
-.td-refine-service-toggle input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
-  accent-color: #2B63F6;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.td-refine-flight-times {
-  display: flex;
-  gap: 12px;
   flex-wrap: wrap;
-  margin-top: 4px;
-}
-.td-refine-flight-time-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-width: 130px;
-}
-.td-refine-time-input {
-  padding: 7px 10px;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 10px 14px;
+  background: var(--bg-alt, #F7F8FC);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 13px;
-  font-family: var(--font-sans);
-  cursor: pointer;
+  border-radius: 10px;
+  font-size: 12px;
 }
-.td-refine-time-input:focus {
-  outline: none;
-  border-color: #2B63F6;
+@media (prefers-color-scheme: dark) {
+  .td-source-links { background: rgba(255,255,255,0.04); }
 }
+:root[data-theme="dark"] .td-source-links { background: rgba(255,255,255,0.04); }
+:root[data-theme="light"] .td-source-links { background: #F7F8FC; }
+.td-source-links-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.td-source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #2B63F6;
+  text-decoration: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #EBF1FF;
+  transition: background 0.12s;
+}
+.td-source-link:hover { background: #d6e4ff; }
+
+/* Inline per-item source link (on individual flight rows and stay cards) */
+.td-item-source-link {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #2B63F6;
+  text-decoration: none;
+  white-space: nowrap;
+  opacity: 0.8;
+  transition: opacity 0.12s;
+}
+.td-item-source-link:hover { opacity: 1; text-decoration: underline; }
 
 .td-refine-events-toggle {
   display: flex;

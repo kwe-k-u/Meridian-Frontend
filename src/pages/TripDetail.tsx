@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { ApiService } from '../services/api-service';
-import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse, SkippedProvider } from '../types/app';
+import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse, SkippedProvider, FlightLeg } from '../types/app';
 import AddItemModal, { type EditingDayItem } from '../components/modals/AddItemModal';
 import AddFlightModal from '../components/modals/AddFlightModal';
 import AddStayModal from '../components/modals/AddStayModal';
@@ -154,6 +154,7 @@ function itineraryFlightsToFlights(flights: NonNullable<ItineraryResponse['itine
     recDisplay: 'none',
     border: '#ECEDF2',
     bg: '#fff',
+    booking_url: f.booking_url ?? null,
   }));
 }
 
@@ -168,6 +169,7 @@ function itineraryStaysToStays(accommodation: NonNullable<ItineraryResponse['iti
     border: '#ECEDF2',
     bg: '#fff',
     tags: a.room_type ? [a.room_type] : [],
+    booking_url: a.booking_url ?? null,
   }));
 }
 
@@ -300,8 +302,19 @@ export default function TripDetail() {
   const [includeFlights, setIncludeFlights] = useState(true);
   const [includeStays, setIncludeStays] = useState(true);
   const [includeEvents, setIncludeEvents] = useState(true);
-  const [flightDepTime, setFlightDepTime] = useState('');
-  const [returnFlightTime, setReturnFlightTime] = useState('');
+  const [draftStartCity, setDraftStartCity] = useState('');
+  const [flightLegs, setFlightLegs] = useState<FlightLeg[]>([
+    { label: 'Outbound', date: '', time: '' },
+    { label: 'Return',   date: '', time: '' },
+  ]);
+  const updateLeg = (i: number, field: keyof FlightLeg, val: string) =>
+    setFlightLegs(legs => legs.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  const addLeg = () => setFlightLegs(legs => [
+    ...legs.slice(0, -1),
+    { label: '', date: '', time: '' },
+    legs[legs.length - 1],
+  ]);
+  const removeLeg = (i: number) => setFlightLegs(legs => legs.filter((_, idx) => idx !== i));
   const [isListening, setIsListening] = useState(false);
   const [generationHistory, setGenerationHistory] = useState<GenerationSnapshot[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -352,14 +365,17 @@ export default function TripDetail() {
     setGenerateError(null);
     try {
       // Merge all persistent generation settings into every call — service toggles,
-      // flight times — so Regenerate and the initial generate button honour them too.
+      // flight legs — so Regenerate and the initial generate button honour them too.
+      // start_city from the current itinerary is always included as a fallback so
+      // flight search runs on Regenerate even when the caller doesn't pass it explicitly.
+      const activeLegs = flightLegs.filter(l => l.date || l.time);
       const enrichedPrefs = {
+        ...(selectedItinerary?.start_city ? { start_city: selectedItinerary.start_city } : {}),
         ...prefs,
         include_flights: includeFlights,
         include_stays: includeStays,
         include_events: includeEvents,
-        ...(flightDepTime ? { flight_departure_time: flightDepTime } : {}),
-        ...(returnFlightTime ? { return_flight_time: returnFlightTime } : {}),
+        ...(activeLegs.length ? { flight_legs: activeLegs } : {}),
       };
       const result = await ApiService.generateItinerary(tripId, enrichedPrefs);
 
@@ -1267,6 +1283,7 @@ Questions? Simply reply to this email or reach out directly.`
     { key: 'flights' as const, label: 'Flights' },
     { key: 'stays' as const, label: 'Stays' },
     { key: 'activities' as const, label: 'Activities' },
+    { key: 'events' as const, label: 'Events' },
     // Calls is accessible via the "Client calls" button below the chat cards, not a builder tab
   ];
 
@@ -1274,11 +1291,12 @@ Questions? Simply reply to this email or reach out directly.`
   const tabFlights = builderTab === 'flights';
   const tabStays = builderTab === 'stays';
   const tabActs = builderTab === 'activities';
+  const tabEvents = builderTab === 'events';
   const tabCalls = builderTab === 'calls';
 
   const handleGenerateOptions = () => {
     if (isRealId) {
-      handleGenerateItinerary();
+      handleGenerateItinerary(draftStartCity ? { start_city: draftStartCity } : undefined);
     } else {
       ctx.openGenItin();
     }
@@ -1685,18 +1703,18 @@ Questions? Simply reply to this email or reach out directly.`
             {apiTrip && (
               <div className="td-services-row">
                 <span className="td-services-label">Include:</span>
-                <label className="td-service-toggle">
-                  <input type="checkbox" checked={includeFlights} onChange={e => setIncludeFlights(e.target.checked)} />
-                  <span>✈ Flights</span>
-                </label>
-                <label className="td-service-toggle">
-                  <input type="checkbox" checked={includeStays} onChange={e => setIncludeStays(e.target.checked)} />
-                  <span>🏨 Hotels</span>
-                </label>
-                <label className="td-service-toggle">
-                  <input type="checkbox" checked={includeEvents} onChange={e => setIncludeEvents(e.target.checked)} />
-                  <span>🎟 Events</span>
-                </label>
+                <button
+                  className={`td-service-pill${includeFlights ? ' td-service-pill--on' : ''}`}
+                  onClick={() => setIncludeFlights(f => !f)}
+                >✈ Flights</button>
+                <button
+                  className={`td-service-pill${includeStays ? ' td-service-pill--on' : ''}`}
+                  onClick={() => setIncludeStays(f => !f)}
+                >🏨 Hotels</button>
+                <button
+                  className={`td-service-pill${includeEvents ? ' td-service-pill--on' : ''}`}
+                  onClick={() => setIncludeEvents(f => !f)}
+                >🎟 Events</button>
               </div>
             )}
 
@@ -1715,27 +1733,39 @@ Questions? Simply reply to this email or reach out directly.`
                     )}
                   </div>
                 )}
-                {/* Flight times — only shown when a start city is set, since that implies flying */}
-                {selectedItinerary?.start_city && (
-                  <div className="td-flight-time-row">
-                    <span className="td-flight-time-label">✈ Departs</span>
-                    <input
-                      type="time"
-                      className="td-flight-time-input"
-                      value={flightDepTime}
-                      onChange={e => setFlightDepTime(e.target.value)}
-                      title="Outbound flight departure time from start city"
-                    />
-                    <span className="td-flight-time-sep">Returns</span>
-                    <input
-                      type="time"
-                      className="td-flight-time-input"
-                      value={returnFlightTime}
-                      onChange={e => setReturnFlightTime(e.target.value)}
-                      title="Return flight departure time"
-                    />
+                {/* Flight legs — date + time per leg, multi-city supported */}
+                <div className="td-flight-legs">
+                  <div className="td-flight-legs-header">
+                    <span className="td-flight-legs-label">✈ Flight schedule</span>
+                    <button className="td-leg-add-btn" onClick={addLeg} title="Add a city stop">+ city</button>
                   </div>
-                )}
+                  {flightLegs.map((leg, i) => (
+                    <div key={i} className="td-leg-row">
+                      <input
+                        type="text"
+                        className="td-leg-label"
+                        value={leg.label}
+                        onChange={e => updateLeg(i, 'label', e.target.value)}
+                        placeholder={i === 0 ? 'Outbound' : i === flightLegs.length - 1 ? 'Return' : 'City stop'}
+                      />
+                      <input
+                        type="date"
+                        className="td-leg-date"
+                        value={leg.date}
+                        onChange={e => updateLeg(i, 'date', e.target.value)}
+                      />
+                      <input
+                        type="time"
+                        className="td-leg-time"
+                        value={leg.time}
+                        onChange={e => updateLeg(i, 'time', e.target.value)}
+                      />
+                      {flightLegs.length > 2 && i !== 0 && i !== flightLegs.length - 1 && (
+                        <button className="td-leg-remove-btn" onClick={() => removeLeg(i)}>×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 <button className="td-refine-btn" onClick={() => setRefineOpen(true)} disabled={generatingItinerary}>
                   ✦ Refine results
                 </button>
@@ -1925,18 +1955,60 @@ Questions? Simply reply to this email or reach out directly.`
                 </p>
                 <div className="td-brief-services">
                   <span className="td-brief-services-label">Include live data:</span>
-                  <label className="td-service-toggle">
-                    <input type="checkbox" checked={includeFlights} onChange={e => setIncludeFlights(e.target.checked)} />
-                    <span>✈ Flights</span>
-                  </label>
-                  <label className="td-service-toggle">
-                    <input type="checkbox" checked={includeStays} onChange={e => setIncludeStays(e.target.checked)} />
-                    <span>🏨 Hotels</span>
-                  </label>
-                  <label className="td-service-toggle">
-                    <input type="checkbox" checked={includeEvents} onChange={e => setIncludeEvents(e.target.checked)} />
-                    <span>🎟 Events</span>
-                  </label>
+                  <button
+                    className={`td-service-pill${includeFlights ? ' td-service-pill--on' : ''}`}
+                    onClick={() => setIncludeFlights(f => !f)}
+                  >✈ Flights</button>
+                  <button
+                    className={`td-service-pill${includeStays ? ' td-service-pill--on' : ''}`}
+                    onClick={() => setIncludeStays(f => !f)}
+                  >🏨 Hotels</button>
+                  <button
+                    className={`td-service-pill${includeEvents ? ' td-service-pill--on' : ''}`}
+                    onClick={() => setIncludeEvents(f => !f)}
+                  >🎟 Events</button>
+                </div>
+                <div className="td-brief-departure-row">
+                  <label className="td-brief-departure-label">Departure city</label>
+                  <input
+                    type="text"
+                    className="td-brief-departure-input"
+                    value={draftStartCity}
+                    onChange={e => setDraftStartCity(e.target.value)}
+                    placeholder="e.g. Accra, New York, London"
+                  />
+                </div>
+                <div className="td-brief-flight-legs">
+                  <div className="td-flight-legs-header">
+                    <span className="td-flight-legs-label">✈ Flight schedule</span>
+                    <button className="td-leg-add-btn" onClick={addLeg} title="Add a city stop">+ city</button>
+                  </div>
+                  {flightLegs.map((leg, i) => (
+                    <div key={i} className="td-leg-row">
+                      <input
+                        type="text"
+                        className="td-leg-label"
+                        value={leg.label}
+                        onChange={e => updateLeg(i, 'label', e.target.value)}
+                        placeholder={i === 0 ? 'Outbound' : i === flightLegs.length - 1 ? 'Return' : 'City stop'}
+                      />
+                      <input
+                        type="date"
+                        className="td-leg-date"
+                        value={leg.date}
+                        onChange={e => updateLeg(i, 'date', e.target.value)}
+                      />
+                      <input
+                        type="time"
+                        className="td-leg-time"
+                        value={leg.time}
+                        onChange={e => updateLeg(i, 'time', e.target.value)}
+                      />
+                      {flightLegs.length > 2 && i !== 0 && i !== flightLegs.length - 1 && (
+                        <button className="td-leg-remove-btn" onClick={() => removeLeg(i)}>×</button>
+                      )}
+                    </div>
+                  ))}
                 </div>
                 <button
                   onClick={handleGenerateOptions}
@@ -2145,11 +2217,31 @@ Questions? Simply reply to this email or reach out directly.`
                     >
                       {addingDay ? '+ Adding...' : '+ Add day'}
                     </button>
+                    {selectedItinerary?.source_links && Object.values(selectedItinerary.source_links).some(Boolean) && (
+                      <div className="td-source-links">
+                        <span className="td-source-links-label">Generation sources:</span>
+                        {selectedItinerary.source_links.flights_url && (
+                          <a href={selectedItinerary.source_links.flights_url} target="_blank" rel="noopener noreferrer" className="td-source-link">✈ View flights search</a>
+                        )}
+                        {selectedItinerary.source_links.hotels_url && (
+                          <a href={selectedItinerary.source_links.hotels_url} target="_blank" rel="noopener noreferrer" className="td-source-link">🏨 View hotels search</a>
+                        )}
+                        {selectedItinerary.source_links.events_url && (
+                          <a href={selectedItinerary.source_links.events_url} target="_blank" rel="noopener noreferrer" className="td-source-link">🎟 View events</a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {tabFlights && (
                   <div>
+                    {selectedItinerary?.source_links?.flights_url && (
+                      <div className="td-source-links" style={{ marginBottom: 12 }}>
+                        <span className="td-source-links-label">Source:</span>
+                        <a href={selectedItinerary.source_links.flights_url} target="_blank" rel="noopener noreferrer" className="td-source-link">✈ Open Google Flights search →</a>
+                      </div>
+                    )}
                     <p className="td-flights-desc">
                       Select flights for this itinerary. Prices shown per person.
                     </p>
@@ -2178,6 +2270,9 @@ Questions? Simply reply to this email or reach out directly.`
                             <div className="td-flight-price">
                               {f.price}
                             </div>
+                            {f.booking_url && (
+                              <a href={f.booking_url} target="_blank" rel="noopener noreferrer" className="td-item-source-link">View source →</a>
+                            )}
                             {apiTrip && selectedItinerary?.itinerary_flights?.[i]?.flight_id && (
                               <button
                                 onClick={() => handleRemoveFlight(i)}
@@ -2211,6 +2306,12 @@ Questions? Simply reply to this email or reach out directly.`
 
                 {tabStays && (
                   <div>
+                    {selectedItinerary?.source_links?.hotels_url && (
+                      <div className="td-source-links" style={{ marginBottom: 12 }}>
+                        <span className="td-source-links-label">Source:</span>
+                        <a href={selectedItinerary.source_links.hotels_url} target="_blank" rel="noopener noreferrer" className="td-source-link">🏨 Open hotels search →</a>
+                      </div>
+                    )}
                     <p className="td-stays-desc">
                       Select stays for this itinerary. All prices shown per night.
                     </p>
@@ -2246,6 +2347,9 @@ Questions? Simply reply to this email or reach out directly.`
                                 {st.price}
                                 <span className="td-stay-price-unit"> / night</span>
                               </span>
+                              {st.booking_url && (
+                                <a href={st.booking_url} target="_blank" rel="noopener noreferrer" className="td-item-source-link">View source →</a>
+                              )}
                               {apiTrip && selectedItinerary?.itinerary_accommodation?.[i]?.accommodation_id ? (
                                 <div className="td-stay-actions">
                                   <button
@@ -2377,6 +2481,74 @@ Questions? Simply reply to this email or reach out directly.`
                           </div>
                         ))}
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {tabEvents && (
+                  <div>
+                    {selectedItinerary?.source_links?.events_url && (
+                      <div className="td-source-links" style={{ marginBottom: 12 }}>
+                        <span className="td-source-links-label">Source:</span>
+                        <a href={selectedItinerary.source_links.events_url} target="_blank" rel="noopener noreferrer" className="td-source-link">🎟 Open Ticketmaster events search →</a>
+                      </div>
+                    )}
+                    <p className="td-acts-desc">Events and experiences woven into this itinerary.</p>
+                    {apiTrip ? (
+                      <>
+                        {realActivities && realActivities.length > 0 ? (
+                          <div className="td-events-timeline">
+                            {(selectedItinerary?.itinerary_days ?? []).map((day, di) => {
+                              const dests = day.destinations ?? [];
+                              if (dests.length === 0) return null;
+                              const dt = day.date ? new Date(day.date) : null;
+                              return (
+                                <div key={di} className="td-events-day-group">
+                                  <div className="td-events-day-header">
+                                    <span className="td-events-day-label">
+                                      {dt
+                                        ? dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                                        : `Day ${day.day_number}`}
+                                    </span>
+                                    {day.title && <span className="td-events-day-title">{day.title}</span>}
+                                  </div>
+                                  {dests.map((dest, ei) => (
+                                    <div key={ei} className="td-event-row">
+                                      <div className="td-event-icon">🎟</div>
+                                      <div className="td-event-body">
+                                        <div className="td-event-name">{dest.destination?.name ?? 'Event'}</div>
+                                        {dest.activities && (
+                                          <div className="td-event-activities">{dest.activities}</div>
+                                        )}
+                                        <div className="td-event-meta-row">
+                                          {dest.cost ? (
+                                            <span className="td-event-price">{dest.currency ?? ''} {Number(dest.cost).toLocaleString()}</span>
+                                          ) : null}
+                                          {dest.booking_url && (
+                                            <a href={dest.booking_url} target="_blank" rel="noopener noreferrer" className="td-item-source-link">View source →</a>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="td-acts-empty">No events added yet. Generate an itinerary with events enabled to populate this tab.</p>
+                        )}
+                        <button
+                          onClick={handleOpenAddActivity}
+                          className="td-dashed-btn"
+                          style={{ marginTop: 12 }}
+                          disabled={bootstrapping}
+                        >
+                          {bootstrapping ? 'One moment…' : '+ Add event'}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="td-acts-empty">Open a real trip to manage events.</p>
                     )}
                   </div>
                 )}
@@ -2814,45 +2986,55 @@ Questions? Simply reply to this email or reach out directly.`
               </div>
             )}
 
-            {/* Flight times — helps AI plan Day 1 and the last day around flight schedules */}
-            <div className="td-refine-flight-times">
-              <div className="td-refine-flight-time-field">
-                <label className="td-refine-label">✈ Outbound departure</label>
-                <input
-                  type="time"
-                  className="td-refine-time-input"
-                  value={flightDepTime}
-                  onChange={e => setFlightDepTime(e.target.value)}
-                  placeholder="--:--"
-                />
+            {/* Flight legs — date + time per leg, multi-city supported */}
+            <div className="td-refine-flight-legs">
+              <div className="td-flight-legs-header">
+                <span className="td-refine-label">✈ Flight schedule</span>
+                <button className="td-leg-add-btn" onClick={addLeg} title="Add a city stop">+ city</button>
               </div>
-              <div className="td-refine-flight-time-field">
-                <label className="td-refine-label">✈ Return departure</label>
-                <input
-                  type="time"
-                  className="td-refine-time-input"
-                  value={returnFlightTime}
-                  onChange={e => setReturnFlightTime(e.target.value)}
-                  placeholder="--:--"
-                />
-              </div>
+              {flightLegs.map((leg, i) => (
+                <div key={i} className="td-leg-row">
+                  <input
+                    type="text"
+                    className="td-leg-label"
+                    value={leg.label}
+                    onChange={e => updateLeg(i, 'label', e.target.value)}
+                    placeholder={i === 0 ? 'Outbound' : i === flightLegs.length - 1 ? 'Return' : 'City stop'}
+                  />
+                  <input
+                    type="date"
+                    className="td-leg-date"
+                    value={leg.date}
+                    onChange={e => updateLeg(i, 'date', e.target.value)}
+                  />
+                  <input
+                    type="time"
+                    className="td-leg-time"
+                    value={leg.time}
+                    onChange={e => updateLeg(i, 'time', e.target.value)}
+                  />
+                  {flightLegs.length > 2 && i !== 0 && i !== flightLegs.length - 1 && (
+                    <button className="td-leg-remove-btn" onClick={() => removeLeg(i)}>×</button>
+                  )}
+                </div>
+              ))}
             </div>
 
             {/* Service toggles — shared with the main chat area */}
             <div className="td-refine-services-row">
               <span className="td-refine-label">Include live data:</span>
-              <label className="td-refine-service-toggle">
-                <input type="checkbox" checked={includeFlights} onChange={e => setIncludeFlights(e.target.checked)} />
-                <span>✈ Flights</span>
-              </label>
-              <label className="td-refine-service-toggle">
-                <input type="checkbox" checked={includeStays} onChange={e => setIncludeStays(e.target.checked)} />
-                <span>🏨 Hotels</span>
-              </label>
-              <label className="td-refine-service-toggle">
-                <input type="checkbox" checked={includeEvents} onChange={e => setIncludeEvents(e.target.checked)} />
-                <span>🎟 Events</span>
-              </label>
+              <button
+                className={`td-service-pill${includeFlights ? ' td-service-pill--on' : ''}`}
+                onClick={() => setIncludeFlights(f => !f)}
+              >✈ Flights</button>
+              <button
+                className={`td-service-pill${includeStays ? ' td-service-pill--on' : ''}`}
+                onClick={() => setIncludeStays(f => !f)}
+              >🏨 Hotels</button>
+              <button
+                className={`td-service-pill${includeEvents ? ' td-service-pill--on' : ''}`}
+                onClick={() => setIncludeEvents(f => !f)}
+              >🎟 Events</button>
             </div>
 
             <div className="td-refine-toolbar">

@@ -2,10 +2,21 @@
 
 /* ── Page Layout ── */
 .travelers-page {
-  padding: 24px 32px;
-  max-width: 1200px;
-  margin: 0 auto;
+  display: flex;
+  height: 100%;
+  overflow: hidden;
   font-family: var(--font-sans);
+}
+
+.travelers-main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 32px;
+  overflow-y: auto;
+}
+
+.travelers-page--split .travelers-main {
+  max-width: none;
 }
 
 /* ── Toolbar ── */
@@ -14,6 +25,20 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.travelers-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.travelers-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .travelers-title {
@@ -23,11 +48,77 @@
   margin: 0;
 }
 
+.travelers-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 9px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.travelers-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.travelers-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.travelers-search {
+  padding: 8px 12px 8px 32px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--text-heading);
+  background: var(--bg-card);
+  outline: none;
+  width: 200px;
+  font-family: var(--font-sans);
+}
+
+.travelers-search:focus { border-color: var(--primary); }
+
+/* View toggle */
+.travelers-view-toggle {
+  display: flex;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tvt-btn {
+  padding: 7px 10px;
+  border: none;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tvt-btn + .tvt-btn { border-left: 1.5px solid var(--border); }
+
+.tvt-btn.active {
+  background: var(--primary);
+  color: #fff;
+}
+
 .travelers-add-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 20px;
+  padding: 9px 18px;
   border-radius: var(--radius-md);
   border: none;
   background: var(--primary);
@@ -37,29 +128,58 @@
   cursor: pointer;
   line-height: 20px;
   font-family: var(--font-sans);
+  white-space: nowrap;
 }
 
-.travelers-add-btn:hover {
-  background: var(--primary-hover);
-}
+.travelers-add-btn:hover { background: var(--primary-hover); }
 
 /* ── Loading / Empty States ── */
 .travelers-loading {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   padding: 60px 0;
   color: var(--text-muted);
-  font-size: 15px;
+  font-size: 14px;
 }
+
+.travelers-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: tr-spin 0.7s linear infinite;
+}
+
+@keyframes tr-spin { to { transform: rotate(360deg); } }
 
 .travelers-empty {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding: 80px 0;
-  color: var(--text-muted);
+  gap: 8px;
 }
 
-.travelers-empty p {
-  margin: 0 0 16px;
-  font-size: 15px;
+.travelers-empty-icon {
+  font-size: 40px;
+  margin-bottom: 8px;
+  opacity: 0.4;
+}
+
+.travelers-empty-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0;
+}
+
+.travelers-empty-sub {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
 }
 
 /* ── Table ── */
@@ -269,4 +389,943 @@
 @keyframes scaleIn {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
+}
+
+/* ── Card grid ── */
+.trav-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.trav-card {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.trav-card:hover {
+  border-color: #2B63F6;
+  box-shadow: 0 4px 20px rgba(43,99,246,0.1);
+  transform: translateY(-2px);
+}
+
+.trav-card--active {
+  border-color: #2B63F6;
+  background: #F4F7FF;
+}
+
+.trav-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.trav-card-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.trav-card-status-wrap { padding-top: 2px; }
+
+.trav-card-status {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.trav-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.trav-card-email {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trav-card-nat {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+
+.trav-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+
+.trav-card-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.trav-card-stat-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+}
+
+.trav-card-stat-num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.trav-card-stat-num--muted {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.trav-card-stat-label {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.trav-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.trav-card-action-btn {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: var(--font-sans);
+}
+
+.trav-card-action-btn:hover { border-color: #2B63F6; color: #2B63F6; }
+
+.trav-card-action-btn--danger { color: #D64545; border-color: #FDECEC; }
+.trav-card-action-btn--danger:hover { border-color: #D64545; background: #FDECEC; color: #D64545; }
+
+/* ── Detail panel ── */
+.trav-detail-panel {
+  width: 400px;
+  min-width: 380px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: trav-slide-in 0.22s ease both;
+}
+
+@keyframes trav-slide-in {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+.trav-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px 20px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.trav-detail-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.trav-detail-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.trav-detail-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin-bottom: 4px;
+}
+
+.trav-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trav-detail-meta span {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trav-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.trav-detail-edit-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trav-detail-edit-btn:hover { border-color: #2B63F6; color: #2B63F6; }
+
+.trav-detail-close-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trav-detail-close-btn:hover { border-color: #D64545; color: #D64545; }
+
+/* Stats row */
+.trav-detail-stats {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.trav-detail-stat {
+  flex: 1;
+  padding: 14px 0;
+  text-align: center;
+  border-right: 1px solid var(--border);
+}
+
+.trav-detail-stat:last-child { border-right: none; }
+
+.trav-detail-stat-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-heading);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 2px;
+}
+
+.trav-detail-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+/* Tabs */
+.trav-detail-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.trav-detail-tab {
+  flex: 1;
+  padding: 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.trav-detail-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* Body */
+.trav-detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.trav-detail-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* Overview */
+.trav-detail-info-grid { display: flex; flex-direction: column; gap: 0; }
+
+.trav-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+
+.trav-info-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.trav-info-val {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-heading);
+  text-align: right;
+  word-break: break-all;
+}
+
+.trav-detail-notes {
+  font-size: 13.5px;
+  color: var(--text);
+  line-height: 1.6;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+}
+
+/* Trips in overview */
+.trav-trips-loading, .trav-trips-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 16px 0;
+  text-align: center;
+}
+
+.trav-trip-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.trav-trip-row:hover { background: var(--bg); margin: 0 -20px; padding: 10px 20px; }
+
+.trav-trip-name {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.trav-trip-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.trav-trip-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-heading);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Trips tab */
+.trav-trip-card {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.trav-trip-card:hover { border-color: #2B63F6; }
+
+.trav-trip-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.trav-trip-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-heading);
+  flex: 1;
+}
+
+.trav-trip-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.trav-trip-card-desc { font-size: 12px; }
+
+.trav-trip-card-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Finances tab */
+.trav-finance-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.trav-finance-card {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: center;
+  background: var(--bg);
+}
+
+.trav-finance-card-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.trav-finance-card-num {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.trav-finance-table {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.trav-finance-th-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  gap: 8px;
+}
+
+.trav-finance-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s;
+  gap: 8px;
+  align-items: center;
+}
+
+.trav-finance-row:hover { background: var(--bg); }
+.trav-finance-row:last-child { border-bottom: none; }
+
+.trav-finance-trip-name {
+  font-weight: 600;
+  color: var(--text-heading);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trav-finance-date, .trav-finance-amount { color: var(--text-muted); }
+
+.trav-finance-amount {
+  font-weight: 700;
+  color: var(--text-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.trav-finance-total-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  padding: 12px 14px;
+  border-top: 2px solid var(--border);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-heading);
+  background: var(--bg);
+  gap: 8px;
+}
+
+.trav-finance-total {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.trav-finance-invoice-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.trav-finance-invoice-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  font-family: var(--font-sans);
+}
+
+.trav-finance-invoice-btn:hover { border-color: var(--primary); color: var(--primary); }
+.trav-finance-invoice-btn--primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.trav-finance-invoice-btn--primary:hover { opacity: 0.9; }
+
+/* Messages tab */
+.trav-messages {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0;
+}
+
+.trav-msg-thread {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+  min-height: 200px;
+}
+
+.trav-msg-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  padding: 40px 0;
+  text-align: center;
+}
+
+.trav-msg-empty p { margin: 0; }
+
+.trav-msg-empty-icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.trav-msg-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.trav-msg-row--agent { flex-direction: row-reverse; }
+
+.trav-msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.trav-msg-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 75%;
+}
+
+.trav-msg-row--agent .trav-msg-bubble-wrap { align-items: flex-end; }
+
+.trav-msg-bubble {
+  padding: 9px 13px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.trav-msg-row--traveler .trav-msg-bubble {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px 12px 12px 12px;
+}
+
+.trav-msg-row--agent .trav-msg-bubble {
+  background: var(--primary);
+  color: #fff;
+  border-radius: 12px 4px 12px 12px;
+}
+
+.trav-msg-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.trav-msg-compose {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.trav-msg-input {
+  flex: 1;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  background: var(--bg-card);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+.trav-msg-input:focus { border-color: var(--primary); }
+
+.trav-msg-send-btn {
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+}
+
+.trav-msg-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Trip search in detail */
+.trav-trips-search-wrap {
+  margin-bottom: 12px;
+}
+
+.trav-trips-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--text-heading);
+  background: var(--bg-card);
+  outline: none;
+  font-family: var(--font-sans);
+}
+
+.trav-trips-search:focus { border-color: var(--primary); }
+
+/* Multi-traveller badge */
+.trav-trip-multi-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.trav-trip-multi-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #EAF0FF;
+  color: #2B63F6;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.trav-trip-multi-names {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Financial log trip cards ── */
+.trav-fin-trip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trav-fin-trip-card {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.trav-fin-trip-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.trav-fin-trip-header:hover { background: var(--bg); }
+
+.trav-fin-trip-info { flex: 1; min-width: 0; }
+
+.trav-fin-trip-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.trav-fin-trip-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.trav-fin-trip-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.trav-fin-trip-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.trav-fin-chevron {
+  font-size: 16px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+  line-height: 1;
+}
+.trav-fin-chevron.open { transform: rotate(90deg); }
+
+.trav-fin-trip-body {
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  animation: td-slide-in 0.15s ease both;
+}
+
+.trav-fin-section-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.trav-fin-cost-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.trav-fin-cost-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.trav-fin-cost-fee {
+  color: var(--text-muted);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 5px;
+  margin-top: 3px;
+}
+
+.trav-fin-cost-total {
+  font-weight: 700;
+  color: var(--text-heading);
+  font-size: 13.5px;
+  border-top: 1px solid var(--border);
+  padding-top: 5px;
+  margin-top: 3px;
+}
+
+.trav-fin-no-data {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
+.trav-fin-payment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+.trav-fin-payment-row:last-of-type { border-bottom: none; }
+
+.trav-fin-payment-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.trav-fin-pay-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+.trav-fin-pay-status--completed { background: #E3F7EF; color: #0E9F6E; }
+.trav-fin-pay-status--pending   { background: #FFF8E6; color: #B7791F; }
+.trav-fin-pay-status--failed    { background: #FDECEC; color: #D64545; }
+
+.trav-fin-pay-method { font-size: 13px; color: var(--text-heading); font-weight: 500; }
+.trav-fin-pay-date   { font-size: 12px; color: var(--text-muted); }
+.trav-fin-pay-amount { font-size: 13px; font-weight: 700; color: var(--text-heading); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+.trav-fin-summary {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.trav-fin-sum-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.trav-fin-sum-paid    { color: #0E9F6E; font-weight: 700; }
+.trav-fin-sum-pending { color: #B7791F; font-weight: 600; }
+.trav-fin-sum-outstanding { font-weight: 700; color: var(--text-heading); border-top: 1px solid var(--border); padding-top: 5px; margin-top: 3px; }
+
+.trav-fin-trip-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
 }

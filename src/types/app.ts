@@ -21,13 +21,13 @@ export type Screen = 'dashboard' | 'trips' | 'tripDetail' | 'messages' | 'travel
 // backend values like `planning`/`in_progress` to these display strings).
 export type TripStatus = 'Draft' | 'AI drafting' | 'Awaiting review' | 'Shared' | 'Changes requested' | 'Confirmed' | 'Booked' | 'Completed' | 'Inquiry' | 'In Progress' | 'Cancelled';
 
-export type BuilderTab = 'itinerary' | 'flights' | 'stays' | 'activities' | 'calls';
+export type BuilderTab = 'itinerary' | 'flights' | 'stays' | 'activities' | 'events' | 'calls';
 
 export type BillingPeriod = 'monthly' | 'annual';
 
 export type ChannelType = 'whatsapp' | 'gmail' | 'instagram';
 
-export type SettingsTab = 'profile' | 'workspace' | 'team' | 'roles' | 'channels' | 'notifications';
+export type SettingsTab = 'profile' | 'workspace' | 'team' | 'roles' | 'channels' | 'notifications' | 'ai';
 
 export type ConnectStep = 'pick' | 'auth' | 'sync' | 'done';
 
@@ -44,6 +44,8 @@ export interface DayBlock {
   sub: string;
   price: string;
   remove?: () => void;
+  entityId?: string;
+  entityType?: 'flight' | 'stay' | 'destination';
 }
 
 export interface Day {
@@ -163,6 +165,7 @@ export interface Flight {
   recDisplay: string;
   border: string;
   bg: string;
+  booking_url?: string | null;
 }
 
 export interface Stay {
@@ -175,6 +178,7 @@ export interface Stay {
   border: string;
   bg: string;
   tags: string[];
+  booking_url?: string | null;
 }
 
 export interface Activity {
@@ -527,6 +531,19 @@ export interface MoolreCheckoutResponse {
   authorization_url: string;
 }
 
+export interface SkippedProvider {
+  name: string;
+  reason: 'rate_limited' | 'credit_exhausted';
+  retry_after_seconds: number | null;
+}
+
+export interface GenerateItineraryApiResponse {
+  itinerary: ItineraryResponse;
+  all_options: ItineraryResponse[];
+  provider_used?: string;
+  skipped_providers?: SkippedProvider[];
+}
+
 export interface ItineraryResponse {
   itinerary_id: string;
   trip_id: string;
@@ -549,6 +566,17 @@ export interface ItineraryResponse {
   itinerary_days?: ItineraryDayResponse[];
   itinerary_flights?: ItineraryFlightResponse[];
   itinerary_accommodation?: ItineraryAccommodationResponse[];
+  source_links?: {
+    flights_url?: string | null;
+    hotels_url?: string | null;
+    events_url?: string | null;
+  } | null;
+}
+
+export interface FlightLeg {
+  label: string;
+  date: string;
+  time: string;
 }
 
 export interface ItineraryDayResponse {
@@ -670,6 +698,20 @@ export interface TripResponse {
   company?: { company_id: string; company_name: string };
   customers?: { customer_id: string; first_name: string; last_name: string; pivot: { role: string } }[];
   itineraries?: ItineraryResponse[];
+  calls?: CallResponse[];
+  trip_payments?: {
+    transaction_id: string;
+    trip_id: string;
+    notes: string | null;
+    transaction?: {
+      transaction_id: string;
+      amount: number;
+      currency: string;
+      status: string;
+      payment_method: string | null;
+      paid_at: string | null;
+    };
+  }[];
 }
 
 export interface DestinationResponse {

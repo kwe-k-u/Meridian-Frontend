@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useApp } from '../../contexts/AppContext';
 import { ApiService } from '../../services/api-service';
 import type { TransactionResponse } from '../../types/app';
+import { TransactionStatus } from '../../types/app';
 import '../../styles/Topbar.css';
 
 function usePageInfo() {
@@ -152,7 +153,7 @@ export default function Topbar() {
                 <div className="notif-list">
                   {transactions.map(t => {
                     const isRead = readIds.has(t.transaction_id);
-                    const isPaid = t.status === 'completed' || t.status === 'paid';
+                    const isPaid = t.status === TransactionStatus.COMPLETED;
                     const clientName = t.client_name
                       ?? t.trip_payment?.trip?.customers?.[0]
                         ? `${t.trip_payment!.trip!.customers![0].first_name} ${t.trip_payment!.trip!.customers![0].last_name}`

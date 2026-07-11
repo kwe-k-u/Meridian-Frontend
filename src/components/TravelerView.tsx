@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
-import type { TripResponse, ItineraryResponse } from '../types/app';
+import type { TripResponse, ItineraryResponse, TripCostResponse } from '../types/app';
+import { ItineraryStatus } from '../types/app';
 import logoM from '../assets/logo/logo_m.svg';
 import '../styles/TravelerView.css';
 
@@ -28,6 +30,7 @@ export default function TravelerView() {
   const navigate = useNavigate();
   const location = useLocation();
   const ctx = useApp();
+  const currencyCtx = useCurrency();
   const isRealId = tripId ? !/^\d+$/.test(tripId) : false;
   const mockTid = tripId ? (isRealId ? 0 : parseInt(tripId, 10)) : 0;
 
@@ -35,6 +38,7 @@ export default function TravelerView() {
   const urlOption = new URLSearchParams(location.search).get('option')?.toUpperCase() ?? null;
 
   const [apiTrip, setApiTrip] = useState<TripResponse | null>(null);
+  const [tripCosts, setTripCosts] = useState<TripCostResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedOption, setExpandedOption] = useState<string | null>(urlOption);
   const [acceptedOption, setAcceptedOption] = useState<string | null>(null);
@@ -45,30 +49,61 @@ export default function TravelerView() {
   const [feedbackOptionLetter, setFeedbackOptionLetter] = useState<string | null>(null);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [payView, setPayView] = useState<'choice' | 'custom'>('choice');
+  const [payOutstandingRaw, setPayOutstandingRaw] = useState(0);
+  const [payInvoiceCurrency, setPayInvoiceCurrency] = useState('GHS');
+  const [payAmount, setPayAmount] = useState('');
+  const [payError, setPayError] = useState<string | null>(null);
+  const [payingWithMoolre, setPayingWithMoolre] = useState(false);
 
   useEffect(() => {
     if (!tripId || !isRealId) { setLoading(false); return; }
     setLoading(true);
-    ApiService.getTrip(tripId)
+    ApiService.getPublicTrip(tripId)
       .then(setApiTrip)
       .catch(() => {})
       .finally(() => setLoading(false));
+    ApiService.getPublicTripCosts(tripId)
+      .then(setTripCosts)
+      .catch(() => {});
   }, [tripId, isRealId]);
 
-  const { td: mockTd } = ctx.getTripDetail(mockTid, 'A');
+  // A traveler who already chose an option (in an earlier visit, or after the agent confirms
+  // it directly) shouldn't be re-greeted with every option on reload — pick up whichever
+  // itinerary the backend already has past DRAFT/PLANNING and treat it as accepted.
+  useEffect(() => {
+    if (!apiTrip) return;
+    const acceptedIdx = (apiTrip.itineraries ?? []).findIndex(it =>
+      it.status === ItineraryStatus.CONFIRMED
+      || it.status === ItineraryStatus.IN_PROGRESS
+      || it.status === ItineraryStatus.COMPLETED
+    );
+    if (acceptedIdx === -1) return;
+    const letter = String.fromCharCode(65 + acceptedIdx);
+    setAcceptedOption(letter);
+    setExpandedOption(letter);
+  }, [apiTrip]);
 
-  const tripName = apiTrip?.trip_name ?? mockTd.name;
-  const tripWhere = apiTrip?.description?.split('.')[0] ?? apiTrip?.trip_name ?? mockTd.where;
+  const tripName = apiTrip?.trip_name ?? 'Trip';
+  const tripWhere = apiTrip?.description?.split('.')[0] ?? apiTrip?.trip_name ?? '';
   const travelerNames = apiTrip
     ? (apiTrip.customers ?? []).map(c => `${c.first_name} ${c.last_name}`).join(', ') || 'Traveler'
-    : mockTd.traveler;
-  const tripDates = apiTrip?.start_date ? fmtDateRange(apiTrip.start_date, apiTrip.end_date) : mockTd.dates;
+    : 'Traveler';
+  const tripDates = apiTrip?.start_date ? fmtDateRange(apiTrip.start_date, apiTrip.end_date) : 'TBD';
   const agentName = apiTrip?.created_by
     ? (typeof apiTrip.created_by === 'object' ? (apiTrip.created_by as { display_name?: string }).display_name ?? 'Your travel agent' : 'Your travel agent')
     : 'Your travel agent';
 
   const itineraries: ItineraryResponse[] = apiTrip?.itineraries ?? [];
   const isAgent = !!(ctx as unknown as { user?: unknown }).user;
+
+  // All prices on this page are shown in GHS regardless of the currency they were recorded
+  // in (flights/stays/activities can each carry their own currency) — Moolre only settles in
+  // GHS, so converting everything to GHS up front keeps what the traveler sees consistent
+  // with what they'll actually be charged.
+  const toGHS = (amount: number, from: string) => currencyCtx.convert(amount, from, 'GHS');
+  const fmtGHS = (amount: number) => `GHS ${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 
   const computeOptionCost = (itin: ItineraryResponse) => {
     const fc = (itin.itinerary_flights ?? []).reduce((s, f) => s + (f.cost ?? 0), 0);
@@ -82,19 +117,61 @@ export default function TravelerView() {
     const sub = fc + sc + ac;
     const fee = Math.round(sub * 0.05);
     const total = sub + fee;
-    const fmt = (n: number) => n > 0 ? `${cur} ${n.toLocaleString()}` : '—';
-    return { flights: fmt(fc), accommodation: fmt(sc), activities: fmt(ac), fee: fmt(fee), total: fmt(total), hasData: total > 0 };
+    const fmt = (n: number) => n > 0 ? fmtGHS(toGHS(n, cur)) : '—';
+    return { flights: fmt(fc), accommodation: fmt(sc), activities: fmt(ac), fee: fmt(fee), total: fmt(total), totalRaw: total, currency: cur, hasData: total > 0 };
   };
 
   const handleAcceptOption = async (itin: ItineraryResponse, letter: string) => {
     setAccepting(true);
     try {
-      if (isRealId) await ApiService.updateItinerary(itin.itinerary_id, { status: 'confirmed' });
+      if (isRealId) await ApiService.updateItinerary(itin.itinerary_id, { status: ItineraryStatus.CONFIRMED });
     } catch { /* optimistic */ }
     finally {
       setAccepting(false);
       setAcceptedOption(letter);
+      setExpandedOption(letter);
     }
+  };
+
+  // `outstandingRaw`/`invoiceCurrency` stay in the itinerary's own currency (whatever the
+  // backend's outstanding-balance check compares against) — only the choice/custom UI works
+  // in GHS. See handleSubmitCustom for where a GHS entry gets converted back before sending.
+  const openPayModal = (outstandingRaw: number, invoiceCurrency: string) => {
+    setPayOutstandingRaw(outstandingRaw);
+    setPayInvoiceCurrency(invoiceCurrency);
+    setPayView('choice');
+    setPayAmount('');
+    setPayError(null);
+    setPayModalOpen(true);
+  };
+
+  const payOutstandingGHS = toGHS(payOutstandingRaw, payInvoiceCurrency);
+
+  const startMoolrePayment = async (amountInInvoiceCurrency: number) => {
+    if (!tripId || !isRealId) { setPayError('Payment is not available for this trip.'); return; }
+    setPayError(null);
+    setPayingWithMoolre(true);
+    try {
+      const checkout = await ApiService.initiatePublicMoolreTripPayment(tripId, Math.round(amountInInvoiceCurrency * 100) / 100);
+      window.location.href = checkout.authorization_url;
+    } catch (err) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setPayError(message ?? 'Could not start the payment. Please try again.');
+      setPayingWithMoolre(false);
+    }
+  };
+
+  const handlePayFull = () => {
+    if (payOutstandingRaw <= 0) { setPayError('This trip has no outstanding balance.'); return; }
+    startMoolrePayment(payOutstandingRaw);
+  };
+
+  const handleSubmitCustom = () => {
+    const amount = Number(payAmount);
+    if (!payAmount.trim() || Number.isNaN(amount) || amount <= 0) { setPayError('Enter a valid amount.'); return; }
+    if (payOutstandingGHS >= 50 && amount <= 50) { setPayError('Custom payments must be more than GHS 50.'); return; }
+    if (amount > payOutstandingGHS + 0.01) { setPayError(`Amount can't exceed the outstanding balance of ${fmtGHS(payOutstandingGHS)}.`); return; }
+    startMoolrePayment(currencyCtx.convert(amount, 'GHS', payInvoiceCurrency));
   };
 
   const openFeedback = (letter: string | null = null) => {
@@ -226,16 +303,19 @@ export default function TravelerView() {
         {itineraries.length > 0 ? (
           <>
             <div className="tv__options-intro">
-              <h2 className="tv__section-title">Choose your itinerary</h2>
+              <h2 className="tv__section-title">{acceptedOption ? 'Your itinerary' : 'Choose your itinerary'}</h2>
               <p className="tv__options-sub">
-                We've crafted {itineraries.length} personalised option{itineraries.length !== 1 ? 's' : ''} just for you.
-                {urlOption ? ` Option ${urlOption} has been highlighted for your review.` : ' Tap any card to explore the full details.'}
+                {acceptedOption
+                  ? "Here's the option you chose. Review the details below and pay when you're ready."
+                  : <>We've crafted {itineraries.length} personalised option{itineraries.length !== 1 ? 's' : ''} just for you.
+                    {urlOption ? ` Option ${urlOption} has been highlighted for your review.` : ' Tap any card to explore the full details.'}</>}
               </p>
             </div>
 
             {itineraries.map((itin, i) => {
               const letter = String.fromCharCode(65 + i);
-              const isExpanded = expandedOption === letter;
+              if (acceptedOption && letter !== acceptedOption) return null;
+              const isExpanded = expandedOption === letter || acceptedOption === letter;
               const isAccepted = acceptedOption === letter;
               const cost = computeOptionCost(itin);
               const days = itin.itinerary_days ?? [];
@@ -332,7 +412,7 @@ export default function TravelerView() {
                                         </div>
                                         <div className="tv__block-title">{block.title}</div>
                                         {block.sub && <div className="tv__block-sub">{block.sub}</div>}
-                                        {block.price && <div className="tv__block-price">{block.price}</div>}
+                                        {block.priceRaw != null && <div className="tv__block-price">{fmtGHS(toGHS(block.priceRaw, block.priceCurrency))}</div>}
                                       </div>
                                     </div>
                                   ))}
@@ -346,7 +426,7 @@ export default function TravelerView() {
                       {/* Flights */}
                       {flights.length > 0 && (
                         <div className="tv__section">
-                          <div className="tv__sub-heading">✈️ Flights</div>
+                          <div className="tv__sub-heading"> Flights</div>
                           {flights.map((f, fi) => (
                             <div key={fi} className="tv__flight-row">
                               <div className="tv__flight-code">{(f.airline ?? 'XX').substring(0, 2).toUpperCase()}</div>
@@ -357,7 +437,7 @@ export default function TravelerView() {
                                   {f.departure_datetime && ' · ' + new Date(f.departure_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </div>
                               </div>
-                              {f.cost && <div className="tv__flight-price">{f.currency ?? ''} {Number(f.cost).toLocaleString()}</div>}
+                              {f.cost && <div className="tv__flight-price">{fmtGHS(toGHS(Number(f.cost), f.currency ?? 'GHS'))}</div>}
                             </div>
                           ))}
                         </div>
@@ -366,7 +446,7 @@ export default function TravelerView() {
                       {/* Stays */}
                       {stays.length > 0 && (
                         <div className="tv__section">
-                          <div className="tv__sub-heading">🏨 Accommodation</div>
+                          <div className="tv__sub-heading"> Accommodation</div>
                           {stays.map((s, si) => (
                             <div key={si} className="tv__stay-row">
                               <div className="tv__stay-icon">🏨</div>
@@ -375,7 +455,7 @@ export default function TravelerView() {
                                 {s.address && <div className="tv__stay-loc">{s.address}</div>}
                                 {s.room_type && <div className="tv__stay-room">{s.room_type}</div>}
                               </div>
-                              {s.cost && <div className="tv__stay-price">{s.currency ?? ''} {Number(s.cost).toLocaleString()}<span>/night</span></div>}
+                              {s.cost && <div className="tv__stay-price">{fmtGHS(toGHS(Number(s.cost), s.currency ?? 'GHS'))}<span>/night</span></div>}
                             </div>
                           ))}
                         </div>
@@ -384,9 +464,28 @@ export default function TravelerView() {
                       {/* Accept / Feedback CTA */}
                       <div className="tv__opt-cta">
                         {isAccepted ? (
-                          <div className="tv__opt-accepted-msg">
-                            ✓ You've accepted this option — your agent will be in touch!
-                          </div>
+                          <>
+                            <div className="tv__opt-accepted-msg">
+                              ✓ You've accepted this option — your agent will be in touch!
+                            </div>
+                            {isRealId && (() => {
+                              // Backend's outstanding balance spans every itinerary on the trip
+                              // (not just this accepted option) — see MoolrePaymentController::
+                              // calculateOutstanding — so use it once it's loaded rather than
+                              // this card's own total, which would drift once anything's paid.
+                              const outstandingRaw = tripCosts ? tripCosts.summary.outstanding : cost.totalRaw;
+                              return outstandingRaw > 0 ? (
+                                <button
+                                  className="tv__accept-btn"
+                                  onClick={() => openPayModal(outstandingRaw, cost.currency)}
+                                >
+                                  💳 Pay now
+                                </button>
+                              ) : (
+                                <div className="tv__paid-badge">✓ Fully paid</div>
+                              );
+                            })()}
+                          </>
                         ) : (
                           <button
                             className="tv__accept-btn"
@@ -484,6 +583,73 @@ export default function TravelerView() {
           </div>
         </div>
       )}
+
+      {/* Pay modal */}
+      {payModalOpen && (
+        <div className="tv__pay-backdrop" onClick={e => { if (e.target === e.currentTarget && !payingWithMoolre) setPayModalOpen(false); }}>
+          <div className="tv__pay-card">
+            {payView === 'choice' ? (
+              <>
+                <div className="tv__pay-title">Pay for your trip</div>
+                <p className="tv__pay-sub">Outstanding balance: {fmtGHS(payOutstandingGHS)}</p>
+                <div className="tv__pay-option" onClick={handlePayFull}>
+                   Pay in full — {fmtGHS(payOutstandingGHS)}
+                </div>
+                <div className="tv__pay-option" onClick={() => { setPayError(null); setPayView('custom'); }}>
+                  Pay Your Own Amount
+                </div>
+                {payError && <div className="tv__pay-error">{payError}</div>}
+                <div className="tv__pay-actions">
+                  <button
+                    className="tv__feedback-cancel"
+                    onClick={() => setPayModalOpen(false)}
+                    disabled={payingWithMoolre}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="tv__pay-title">Custom payment</div>
+                <p className="tv__pay-sub">
+                  {payOutstandingGHS < 50
+                    ? `Enter an amount up to ${fmtGHS(payOutstandingGHS)}.`
+                    : `Enter an amount more than GHS 50, up to ${fmtGHS(payOutstandingGHS)}.`}
+                </p>
+                <div className="tv__pay-amount-field">
+                  <span className="tv__pay-amount-prefix">GHS</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={payAmount}
+                    onChange={e => setPayAmount(e.target.value)}
+                    placeholder="Amount"
+                    autoFocus
+                  />
+                </div>
+                {payError && <div className="tv__pay-error">{payError}</div>}
+                <div className="tv__pay-actions">
+                  <button
+                    className="tv__feedback-cancel"
+                    onClick={() => { setPayError(null); setPayView('choice'); }}
+                    disabled={payingWithMoolre}
+                  >
+                    Back
+                  </button>
+                  <button
+                    className="tv__feedback-submit"
+                    onClick={handleSubmitCustom}
+                    disabled={payingWithMoolre || !payAmount.trim()}
+                  >
+                    {payingWithMoolre ? 'Redirecting…' : 'Continue to payment'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -515,7 +681,7 @@ const kindMeta: Record<string, { icon: string; iconBg: string; kindColor: string
 };
 
 function buildDayBlocks(day: ItinDayLike) {
-  const blocks: { kind: string; kindColor: string; icon: string; iconBg: string; meta: string; title: string; sub: string; price: string }[] = [];
+  const blocks: { kind: string; kindColor: string; icon: string; iconBg: string; meta: string; title: string; sub: string; priceRaw: number | null; priceCurrency: string }[] = [];
   (day.destinations ?? []).forEach(d => {
     const itemKind = ({ activity: 'Activity', dining: 'Dining', transfer: 'Transfer', venue: 'Venue' } as Record<string, string>)[d.item_type ?? ''] ?? 'Activity';
     const m = kindMeta[itemKind] ?? kindMeta.Activity;
@@ -527,7 +693,8 @@ function buildDayBlocks(day: ItinDayLike) {
       meta: d.destination?.country ?? '',
       title: d.destination?.name ?? d.activities ?? 'Activity',
       sub: d.activities ?? '',
-      price: d.cost ? `${d.currency ?? ''} ${d.cost}` : '',
+      priceRaw: d.cost ? Number(d.cost) : null,
+      priceCurrency: d.currency ?? 'GHS',
     });
   });
   return blocks;

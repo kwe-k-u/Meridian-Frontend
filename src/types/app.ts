@@ -17,9 +17,67 @@ export type Screen = 'dashboard' | 'trips' | 'tripDetail' | 'messages' | 'travel
 // Union of every status label the UI can show for a trip. Mixes two vocabularies:
 // the original mock-data labels ('Draft', 'AI drafting', 'Awaiting review', ...) and the
 // real backend TripStatus enum values re-labeled for display ('Inquiry', 'In Progress',
-// 'Cancelled' — see apiStatusMeta in AppContext.tsx/TripDetail.tsx/Trips.tsx, which maps
-// backend values like `planning`/`in_progress` to these display strings).
-export type TripStatus = 'Draft' | 'AI drafting' | 'Awaiting review' | 'Shared' | 'Changes requested' | 'Confirmed' | 'Booked' | 'Completed' | 'Inquiry' | 'In Progress' | 'Cancelled';
+// 'Cancelled' — see apiStatusMeta in constants/app.ts, which maps backend TripStatus values
+// like `planning`/`in_progress` to these display strings).
+export type TripStatusLabel = 'Draft' | 'AI drafting' | 'Awaiting review' | 'Shared' | 'Changes requested' | 'Confirmed' | 'Booked' | 'Completed' | 'Inquiry' | 'In Progress' | 'Cancelled';
+
+// Real backend status enums — must be kept in sync with App\Enums\TripStatus and
+// App\Enums\ItineraryStatus on Meridian-Backend. Unlike TripStatusLabel above (a display
+// string), these are the literal values stored in the database and sent/received over the API.
+export const TripStatus = {
+  INQUIRY: 'inquiry',
+  PLANNING: 'planning',
+  BOOKED: 'booked',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+} as const;
+export type TripStatus = typeof TripStatus[keyof typeof TripStatus];
+
+export const ItineraryStatus = {
+  DRAFT: 'draft',
+  PLANNING: 'planning',
+  CONFIRMED: 'confirmed',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+} as const;
+export type ItineraryStatus = typeof ItineraryStatus[keyof typeof ItineraryStatus];
+
+// Mirrors App\Enums\FlightStatus / App\Enums\AccommodationStatus on the backend (both share
+// the same pending -> booked -> confirmed lifecycle, or cancelled at any point).
+export const FlightStatus = {
+  PENDING: 'pending',
+  BOOKED: 'booked',
+  CONFIRMED: 'confirmed',
+  CANCELLED: 'cancelled',
+} as const;
+export type FlightStatus = typeof FlightStatus[keyof typeof FlightStatus];
+
+export const AccommodationStatus = {
+  PENDING: 'pending',
+  BOOKED: 'booked',
+  CONFIRMED: 'confirmed',
+  CANCELLED: 'cancelled',
+} as const;
+export type AccommodationStatus = typeof AccommodationStatus[keyof typeof AccommodationStatus];
+
+// Mirrors App\Enums\TransactionStatus.
+export const TransactionStatus = {
+  PENDING: 'pending',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  REFUNDED: 'refunded',
+} as const;
+export type TransactionStatus = typeof TransactionStatus[keyof typeof TransactionStatus];
+
+// Mirrors App\Enums\CallActionItemStatus.
+export const CallActionItemStatus = {
+  PENDING: 'pending',
+  CHECKED: 'checked',
+  ARCHIVED: 'archived',
+} as const;
+export type CallActionItemStatus = typeof CallActionItemStatus[keyof typeof CallActionItemStatus];
 
 export type BuilderTab = 'itinerary' | 'flights' | 'stays' | 'activities' | 'events' | 'calls';
 
@@ -90,7 +148,7 @@ export interface TripItem {
   avatarBg: string;
   where: string;
   dates: string;
-  status: TripStatus;
+  status: TripStatusLabel;
   statusBg: string;
   statusFg: string;
   value: string;
@@ -106,7 +164,7 @@ export interface TripDetailData {
   dates: string;
   where: string;
   value: string;
-  status: TripStatus;
+  status: TripStatusLabel;
   statusBg: string;
   statusFg: string;
   gradient: string;
@@ -503,7 +561,7 @@ export interface TransactionResponse {
   transaction_id: string;
   amount: number;
   currency: string;
-  status: string;
+  status: TransactionStatus;
   payment_method: string | null;
   transaction_reference: string | null;
   paid_at: string | null;
@@ -559,7 +617,7 @@ export interface ItineraryResponse {
   description: string | null;
   start_date: string | null;
   end_date: string | null;
-  status: string;
+  status: ItineraryStatus;
   created_at: string;
   updated_at: string;
   trip?: { trip_id: string; trip_name: string; company_id: string };
@@ -664,7 +722,7 @@ export interface ItineraryFlightResponse {
   currency: string | null;
   booking_reference: string | null;
   booking_url: string | null;
-  status: string;
+  status: FlightStatus;
 }
 
 export interface ItineraryAccommodationResponse {
@@ -679,7 +737,7 @@ export interface ItineraryAccommodationResponse {
   currency: string | null;
   booking_reference: string | null;
   booking_url: string | null;
-  status: string;
+  status: AccommodationStatus;
 }
 
 export interface TripResponse {
@@ -692,7 +750,7 @@ export interface TripResponse {
   start_date: string | null;
   end_date: string | null;
   budget: string | null;
-  status: string;
+  status: TripStatus;
   created_at: string;
   updated_at: string;
   company?: { company_id: string; company_name: string };
@@ -707,7 +765,7 @@ export interface TripResponse {
       transaction_id: string;
       amount: number;
       currency: string;
-      status: string;
+      status: TransactionStatus;
       payment_method: string | null;
       paid_at: string | null;
     };
@@ -734,7 +792,7 @@ export interface CallActionItemResponse {
   action_item_id: string;
   call_id: string;
   description: string;
-  status: string;
+  status: CallActionItemStatus;
 }
 
 export interface CallResponse {
@@ -849,7 +907,7 @@ export interface TripCostResponse {
 export interface DashboardTrip {
   trip_id: string;
   trip_name: string;
-  status: string;
+  status: TripStatus;
   start_date: string | null;
   end_date: string | null;
 }

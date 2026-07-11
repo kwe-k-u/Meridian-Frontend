@@ -4,6 +4,7 @@ import { useApp } from '../contexts/AppContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
 import type { DashboardResponse, GuideCard } from '../types/app';
+import { apiStatusMeta } from '../constants/app';
 import '../styles/Dashboard.css';
 
 // ── Dashboard ─────────────────────────────────────────────────
@@ -27,15 +28,6 @@ const getInitials = (name: string) =>
   name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
 const avatarColors = ['#2B63F6', '#0E9F6E', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
-
-const defaultStatusCfg: Record<string, { label: string; bg: string; fg: string }> = {
-  in_progress: { label: 'In progress', bg: '#E3F7EF', fg: '#0E9F6E' },
-  planning: { label: 'Planning', bg: '#F4F7FF', fg: '#2B63F6' },
-  booked: { label: 'Booked', bg: '#F0EBFF', fg: '#6B46C1' },
-  inquiry: { label: 'Inquiry', bg: '#FEF3C7', fg: '#D97706' },
-  completed: { label: 'Completed', bg: '#E3F7EF', fg: '#0E9F6E' },
-  cancelled: { label: 'Cancelled', bg: '#FDECEC', fg: '#D64545' },
-};
 
 const guideCover: Record<string, string> = {
   connect: 'linear-gradient(135deg,#1B5BBE,#5AA0FF)',
@@ -129,17 +121,17 @@ function Dashboard() {
 
   const tripsInMotion = dashboardData
     ? dashboardData.latest_trips.map((t, i) => {
-        const sc = defaultStatusCfg[t.status] ?? { label: t.status, bg: '#EEF0F4', fg: '#5B6172' };
+        const sc = apiStatusMeta[t.status];
         return {
           id: t.trip_id,
           name: t.trip_name,
           initials: getInitials(t.trip_name),
           cover: avatarColors[i % avatarColors.length],
-          status: sc.label,
+          status: sc.display,
           statusBg: sc.bg,
           statusFg: sc.fg,
           dates: `${fmtDate(t.start_date)} - ${fmtDate(t.end_date)}`,
-          next: sc.label,
+          next: sc.display,
         };
       })
     : [];

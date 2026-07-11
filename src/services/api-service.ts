@@ -22,6 +22,7 @@ import type {
   SubscriptionTierResponse, CompanySubscriptionResponse, MoolreCheckoutResponse,
   FlightSearchResponse, HotelSearchResponse, CurrencyRatesResponse,
 } from '../types/app';
+import { TripStatus, ItineraryStatus, FlightStatus, AccommodationStatus, TransactionStatus, CallActionItemStatus } from '../types/app';
 
 export class ApiService {
   private static BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000/api';
@@ -256,7 +257,7 @@ export class ApiService {
     payment_method?: string;
     transaction_reference?: string;
     notes?: string;
-    status?: string;
+    status?: TransactionStatus;
   }): Promise<TransactionResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/transactions/trip`, data);
     return res.data;
@@ -269,13 +270,13 @@ export class ApiService {
     currency?: string;
     payment_method?: string;
     transaction_reference?: string;
-    status?: string;
+    status?: TransactionStatus;
   }): Promise<TransactionResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/transactions/subscription`, data);
     return res.data;
   }
 
-  public static async updateTransactionStatus(id: string, status: string): Promise<TransactionResponse> {
+  public static async updateTransactionStatus(id: string, status: TransactionStatus): Promise<TransactionResponse> {
     const res = await axios.put(`${ApiService.BASE_URL}/transactions/${id}/status`, { status });
     return res.data;
   }
@@ -299,7 +300,7 @@ export class ApiService {
     start_date?: string;
     end_date?: string;
     budget?: string;
-    status?: string;
+    status?: TripStatus;
   }): Promise<TripResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/trips`, data);
     return res.data;
@@ -311,7 +312,7 @@ export class ApiService {
     start_date: string;
     end_date: string;
     budget: string;
-    status: string;
+    status: TripStatus;
   }>): Promise<TripResponse> {
     const res = await axios.put(`${ApiService.BASE_URL}/trips/${id}`, data);
     return res.data;
@@ -321,7 +322,7 @@ export class ApiService {
     await axios.delete(`${ApiService.BASE_URL}/trips/${id}`);
   }
 
-  public static async updateTripStatus(id: string, status: string): Promise<TripResponse> {
+  public static async updateTripStatus(id: string, status: TripStatus): Promise<TripResponse> {
     const res = await axios.patch(`${ApiService.BASE_URL}/trips/${id}/status`, { status });
     return res.data;
   }
@@ -461,7 +462,7 @@ export class ApiService {
     description: string;
     start_date: string;
     end_date: string;
-    status: string;
+    status: ItineraryStatus;
   }>): Promise<ItineraryResponse> {
     const res = await axios.put(`${ApiService.BASE_URL}/itinerary/${id}`, data);
     return res.data;
@@ -510,7 +511,7 @@ export class ApiService {
     currency?: string;
     booking_reference?: string;
     booking_url?: string;
-    status?: string;
+    status?: FlightStatus;
   }): Promise<ItineraryFlightResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/itinerary/${itineraryId}/flights`, data);
     return res.data;
@@ -527,7 +528,7 @@ export class ApiService {
     currency: string;
     booking_reference: string;
     booking_url: string;
-    status: string;
+    status: FlightStatus;
   }>): Promise<ItineraryFlightResponse> {
     const res = await axios.put(`${ApiService.BASE_URL}/itinerary/flights/${flightId}`, data);
     return res.data;
@@ -561,7 +562,7 @@ export class ApiService {
     currency?: string;
     booking_reference?: string;
     booking_url?: string;
-    status?: string;
+    status?: AccommodationStatus;
   }): Promise<ItineraryAccommodationResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/itinerary/${itineraryId}/accommodation`, data);
     return res.data;
@@ -577,7 +578,7 @@ export class ApiService {
     currency: string;
     booking_reference: string;
     booking_url: string;
-    status: string;
+    status: AccommodationStatus;
   }>): Promise<ItineraryAccommodationResponse> {
     const res = await axios.put(`${ApiService.BASE_URL}/itinerary/accommodation/${accommodationId}`, data);
     return res.data;
@@ -673,7 +674,7 @@ export class ApiService {
 
   public static async updateCallActionItem(id: string, data: Partial<{
     description: string;
-    status: string;
+    status: CallActionItemStatus;
   }>): Promise<CallActionItemResponse> {
     const res = await axios.put(`${ApiService.BASE_URL}/calls/action-items/${id}`, data);
     return res.data;

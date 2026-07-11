@@ -6,6 +6,7 @@ import { ApiService } from '../../services/api-service';
 import { useAuth } from '../../contexts/AuthContext';
 import { MERIDIAN_AI_PROVIDER_KEY } from '../../pages/Settings';
 import type { CustomerResponse } from '../../types/app';
+import { TripStatus } from '../../types/app';
 
 // ── CreateTripModal ──────────────────────────────────────────────────────────
 // Two-mode trip creation:
@@ -53,6 +54,13 @@ export default function CreateTripModal() {
   const [isGuest, setIsGuest] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [showCreateTraveler, setShowCreateTraveler] = useState(false);
+  const [newFirstName, setNewFirstName] = useState('');
+  const [newLastName, setNewLastName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [creatingTraveler, setCreatingTraveler] = useState(false);
+  const [createTravelerError, setCreateTravelerError] = useState('');
 
   // Draft mode
   const [tripName, setTripName] = useState('');
@@ -90,6 +98,12 @@ export default function CreateTripModal() {
       setIsGuest(false);
       setGuestName('');
       setCustSearch('');
+      setSearchFocused(false);
+      setShowCreateTraveler(false);
+      setNewFirstName('');
+      setNewLastName('');
+      setNewEmail('');
+      setCreateTravelerError('');
       setMessages([{ role: 'ai', text: "Describe the trip you want to create — destination(s), dates, number of travelers, budget, and any preferences. I'll build the options from there." }]);
       setChatDraft('');
       setChatTripName('');
@@ -140,7 +154,7 @@ export default function CreateTripModal() {
       start_date: sd || undefined,
       end_date: ed || undefined,
       budget: bgt || undefined,
-      status: 'planning',
+      status: TripStatus.PLANNING,
     }).then(r => r.trip_id);
 
     if (selectedCustomer) {
@@ -219,6 +233,36 @@ export default function CreateTripModal() {
     `${c.first_name} ${c.last_name} ${c.email ?? ''}`.toLowerCase().includes(custSearch.toLowerCase())
   );
 
+  // Quick-create pattern mirrored from AssignTravelerModal — lets the agent create a real
+  // traveler profile right here instead of falling back to "Continue as guest" whenever the
+  // search comes up empty. The new customer becomes the selected traveler immediately.
+  const handleCreateTraveler = async () => {
+    if (!companyId || !newFirstName.trim() || !newLastName.trim()) return;
+    setCreatingTraveler(true);
+    setCreateTravelerError('');
+    try {
+      const created = await ApiService.createCustomer({
+        company_id: companyId,
+        first_name: newFirstName.trim(),
+        last_name: newLastName.trim(),
+        email: newEmail.trim() || null,
+      });
+      setCustomers(prev => [created, ...prev]);
+      setSelectedCustomer(created);
+      setIsGuest(false);
+      setShowCreateTraveler(false);
+      setNewFirstName('');
+      setNewLastName('');
+      setNewEmail('');
+      setCustSearch(`${created.first_name} ${created.last_name}`);
+      setSearchFocused(false);
+    } catch {
+      setCreateTravelerError('Could not create this traveler.');
+    } finally {
+      setCreatingTraveler(false);
+    }
+  };
+
   const handleOpenCreatedTrip = () => {
     closeCreate();
     navigate('/app/trips/' + (createdTripId ?? '0'), { state: { triggerGenerate: true } });
@@ -275,7 +319,10 @@ export default function CreateTripModal() {
     <>
       <style>{keyframes}</style>
       <div className="ctm-backdrop" onClick={closeCreate}>
-        <div className="ctm-card ctm-card--wide" onClick={e => e.stopPropagation()}>
+        <div
+          className={`ctm-card ctm-card--wide${(searchFocused || showCreateTraveler) ? ' ctm-card--dropdown-open' : ''}`}
+          onClick={e => e.stopPropagation()}
+        >
 
           {/* ── Customer selection ── */}
           {effectivePhase === 'customer' && (
@@ -285,38 +332,111 @@ export default function CreateTripModal() {
                   <div className="ctm-badge"><span>💬</span><span>Creating from {createFromConvo}'s chat</span></div>
                 )}
                 <h2 className="ctm-title">Who is this trip for?</h2>
-                <p className="ctm-sub">Select a traveler from your client list or continue as a guest.</p>
+                <p className="ctm-sub">Select a traveler from your client list, search to create a new one, or continue as a guest.</p>
 
-                <input
-                  className="ctm-input ctm-search"
-                  placeholder="Search by name or email…"
-                  value={custSearch}
-                  onChange={e => setCustSearch(e.target.value)}
-                />
+                <div className="ctm-search-wrap">
+                  <input
+                    className="ctm-input ctm-search"
+                    placeholder="Search by name or email…"
+                    value={custSearch}
+                    onChange={e => {
+                      setCustSearch(e.target.value);
+                      if (selectedCustomer) setSelectedCustomer(null);
+                    }}
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+                  />
 
-                <div className="ctm-customer-list">
-                  {loadingCustomers && <div className="ctm-customer-empty">Loading clients…</div>}
-                  {!loadingCustomers && filteredCustomers.length === 0 && custSearch && (
-                    <div className="ctm-customer-empty">No clients found.</div>
-                  )}
-                  {filteredCustomers.slice(0, 6).map(c => {
-                    const initials = `${c.first_name[0]}${c.last_name[0]}`.toUpperCase();
-                    const isSelected = selectedCustomer?.customer_id === c.customer_id;
-                    return (
-                      <div
-                        key={c.customer_id}
-                        className={`ctm-customer-row${isSelected ? ' selected' : ''}`}
-                        onClick={() => { setSelectedCustomer(c); setIsGuest(false); }}
-                      >
-                        <div className="ctm-customer-avatar">{initials}</div>
-                        <div className="ctm-customer-info">
-                          <div className="ctm-customer-name">{c.first_name} {c.last_name}</div>
-                          <div className="ctm-customer-email">{c.email ?? c.phone ?? ''}</div>
+                  {(searchFocused || showCreateTraveler) && (
+                    <div className="ctm-customer-list">
+                      {loadingCustomers && <div className="ctm-customer-empty">Loading clients…</div>}
+                      {!loadingCustomers && filteredCustomers.length === 0 && custSearch && !showCreateTraveler && (
+                        <div className="ctm-customer-empty">No clients found.</div>
+                      )}
+                      {!showCreateTraveler && filteredCustomers.slice(0, 6).map(c => {
+                        const initials = `${c.first_name[0]}${c.last_name[0]}`.toUpperCase();
+                        const isSelected = selectedCustomer?.customer_id === c.customer_id;
+                        return (
+                          <div
+                            key={c.customer_id}
+                            className={`ctm-customer-row${isSelected ? ' selected' : ''}`}
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => {
+                              setSelectedCustomer(c);
+                              setIsGuest(false);
+                              setCustSearch(`${c.first_name} ${c.last_name}`);
+                              setSearchFocused(false);
+                            }}
+                          >
+                            <div className="ctm-customer-avatar">{initials}</div>
+                            <div className="ctm-customer-info">
+                              <div className="ctm-customer-name">{c.first_name} {c.last_name}</div>
+                              <div className="ctm-customer-email">{c.email ?? c.phone ?? ''}</div>
+                            </div>
+                            {isSelected && <span className="ctm-customer-check">✓</span>}
+                          </div>
+                        );
+                      })}
+
+                      {!loadingCustomers && custSearch.trim() && !showCreateTraveler && (
+                        <div
+                          className="ctm-customer-row"
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => {
+                            const [first, ...rest] = custSearch.trim().split(/\s+/);
+                            setNewFirstName(first ?? '');
+                            setNewLastName(rest.join(' '));
+                            setCreateTravelerError('');
+                            setShowCreateTraveler(true);
+                          }}
+                        >
+                          <div className="ctm-customer-avatar ctm-guest-avatar">+</div>
+                          <div className="ctm-customer-info">
+                            <div className="ctm-customer-name">{`Create new traveler "${custSearch.trim()}"`}</div>
+                            <div className="ctm-customer-email">Not in your client list yet</div>
+                          </div>
                         </div>
-                        {isSelected && <span className="ctm-customer-check">✓</span>}
-                      </div>
-                    );
-                  })}
+                      )}
+
+                      {showCreateTraveler && (
+                        <div className="ctm-create-traveler-form">
+                          {createTravelerError && <p className="ctm-create-traveler-error">{createTravelerError}</p>}
+                          <input
+                            className="ctm-input"
+                            value={newFirstName}
+                            onChange={e => setNewFirstName(e.target.value)}
+                            placeholder="First name"
+                            autoFocus
+                          />
+                          <input
+                            className="ctm-input"
+                            value={newLastName}
+                            onChange={e => setNewLastName(e.target.value)}
+                            placeholder="Last name"
+                          />
+                          <input
+                            className="ctm-input"
+                            value={newEmail}
+                            onChange={e => setNewEmail(e.target.value)}
+                            placeholder="Email (optional)"
+                          />
+                          <div className="ctm-create-traveler-actions">
+                            <button type="button" className="ctm-btn-secondary" onClick={() => setShowCreateTraveler(false)}>
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              className="ctm-btn-primary"
+                              onClick={handleCreateTraveler}
+                              disabled={creatingTraveler || !newFirstName.trim() || !newLastName.trim()}
+                            >
+                              {creatingTraveler ? 'Creating…' : 'Create traveler'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="ctm-or-divider"><span>or</span></div>

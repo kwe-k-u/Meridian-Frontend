@@ -4,12 +4,25 @@
 // flows, and other placeholder data used throughout the UI during development/demo.
 
 import type {
-  Day, DayBlock, Conversation, TripItem, TripDetailData, CostItem, TripOption,
-  Flight, Stay, Activity, CallLog, CallDetail, FinStat, ChartBar, InvoiceItem, InvoiceDetail,
-  Plan, TravelerItem, TeamMember, RoleDef, Channel, NotifSetting, OnboardingTask,
+  Conversation, CallLog, CallDetail,
+  Plan, TeamMember, RoleDef, Channel, NotifSetting, OnboardingTask,
   GuideCard, GuideArticle, AgentFeedItem, ConnectPickItem, ConnectChannelView,
-  BillingPeriod, TripStatus, HeaderAction,
+  BillingPeriod, TripStatusLabel,
 } from '../types/app';
+import { TripStatus } from '../types/app';
+
+// Real TripStatus enum values (from the backend) mapped to a display label + colors/gradient.
+// This is the single source of truth for "what does `planning` look like in the UI" — used by
+// AppContext.tsx, TripDetail.tsx, Trips.tsx, and Dashboard.tsx. Keyed as Record<TripStatus, ...>
+// so TypeScript forces exhaustive coverage of every real backend status.
+export const apiStatusMeta: Record<TripStatus, { display: TripStatusLabel; bg: string; fg: string; gradient: string }> = {
+  [TripStatus.PLANNING]:    { display: 'Draft',       bg: '#EEF0F4', fg: '#5B6172', gradient: 'linear-gradient(135deg,#334155,#7889A6)' },
+  [TripStatus.INQUIRY]:     { display: 'Inquiry',     bg: '#FFF3E0', fg: '#B7791F', gradient: 'linear-gradient(135deg,#E08A2B,#F5C06B)' },
+  [TripStatus.BOOKED]:      { display: 'Booked',      bg: '#16143A', fg: '#FFFFFF', gradient: 'linear-gradient(135deg,#15803D,#5DBE7E)' },
+  [TripStatus.IN_PROGRESS]: { display: 'In Progress', bg: '#E3F7EF', fg: '#0E9F6E', gradient: 'linear-gradient(135deg,#0E7C8F,#36C5C0)' },
+  [TripStatus.COMPLETED]:   { display: 'Completed',   bg: '#EAF0FF', fg: '#2B63F6', gradient: 'linear-gradient(135deg,#1B5BBE,#5AA0FF)' },
+  [TripStatus.CANCELLED]:   { display: 'Cancelled',   bg: '#FDECEC', fg: '#D64545', gradient: 'linear-gradient(135deg,#C2410C,#F59E5B)' },
+};
 
 // Maps a mock TripStatus display label to a [background, foreground] color pair for badges.
 // Falls back to the 'Draft' colors for any status not in the table.
@@ -29,29 +42,29 @@ export function statusMeta(k: string): [string, string] {
 
 // Hand-written day-by-day itinerary for the "Asante–Mensah Honeymoon" demo trip
 // (trip index 0 in tripsData() / tripDetailData() below).
-export function asanteDays(): Day[] {
-  return [
-    {dow:'SAT',day:'04',mon:'Oct',title:'Accra → Santorini',blocks:[
-      {kind:'Flight',kindColor:'#2B63F6',icon:'✈️',iconBg:'#EAF0FF',meta:'07:40 · 11h 20m',title:'Turkish Airlines ACC→JTR',sub:'via Istanbul · 1 stop',price:'GHS 14,200'},
-      {kind:'Transfer',kindColor:'#0E9F6E',icon:'🚐',iconBg:'#E3F7EF',meta:'25 min',title:'Private transfer to Oia',sub:'Meet & greet at arrivals',price:'GHS 480'},
-      {kind:'Stay',kindColor:'#6B46C1',icon:'🏨',iconBg:'#F0EBFF',meta:'Check-in 15:00',title:'Canaves Oia Suites',sub:'3 nights · private plunge pool, sea view',price:'GHS 19,200'},
-      {kind:'Dining',kindColor:'#B7791F',icon:'🍽️',iconBg:'#FFF3E0',meta:'19:30',title:'Welcome dinner at Lauda',sub:'Caldera-view table reserved',price:'GHS 920'},
-    ],hasSuggestion:false},
-    {dow:'SUN',day:'05',mon:'Oct',title:'Santorini',blocks:[
-      {kind:'Activity',kindColor:'#0E9F6E',icon:'⛵',iconBg:'#E3F7EF',meta:'13:00 · 5h',title:'Private caldera catamaran cruise',sub:'Hot springs, Red Beach, sunset, BBQ aboard',price:'GHS 5,400'},
-    ],hasSuggestion:true,suggestion:'A couples sunset spa at the hotel — fits the honeymoon profile and the free morning.'},
-    {dow:'MON',day:'06',mon:'Oct',title:'Santorini',blocks:[
-      {kind:'Activity',kindColor:'#0E9F6E',icon:'👨‍🍳',iconBg:'#E3F7EF',meta:'11:00 · 3h',title:'Greek cooking class in Megalochori',sub:'Hands-on, with local wine pairing',price:'GHS 1,300'},
-    ],hasSuggestion:false},
-    {dow:'WED',day:'08',mon:'Oct',title:'Santorini → Amalfi Coast',blocks:[
-      {kind:'Flight',kindColor:'#2B63F6',icon:'✈️',iconBg:'#EAF0FF',meta:'09:15 · 6h',title:'JTR→NAP',sub:'via Athens · 1 stop',price:'GHS 6,100'},
-      {kind:'Stay',kindColor:'#6B46C1',icon:'🏨',iconBg:'#F0EBFF',meta:'Check-in 14:00',title:'Le Sirenuse — Positano, Sea View',sub:'4 nights · iconic terrace, Michelin dining',price:'GHS 22,000'},
-    ],hasSuggestion:false},
-    {dow:'SUN',day:'12',mon:'Oct',title:'Amalfi Coast',blocks:[
-      {kind:'Activity',kindColor:'#0E9F6E',icon:'🛵',iconBg:'#E3F7EF',meta:'10:00 · full day',title:'Private boat day to Capri',sub:'Blue Grotto, lunch in Marina Piccola',price:'GHS 4,400'},
-    ],hasSuggestion:false},
-  ];
-}
+// export function asanteDays(): Day[] {
+//   return [
+//     {dow:'SAT',day:'04',mon:'Oct',title:'Accra → Santorini',blocks:[
+//       {kind:'Flight',kindColor:'#2B63F6',icon:'✈️',iconBg:'#EAF0FF',meta:'07:40 · 11h 20m',title:'Turkish Airlines ACC→JTR',sub:'via Istanbul · 1 stop',price:'GHS 14,200'},
+//       {kind:'Transfer',kindColor:'#0E9F6E',icon:'🚐',iconBg:'#E3F7EF',meta:'25 min',title:'Private transfer to Oia',sub:'Meet & greet at arrivals',price:'GHS 480'},
+//       {kind:'Stay',kindColor:'#6B46C1',icon:'🏨',iconBg:'#F0EBFF',meta:'Check-in 15:00',title:'Canaves Oia Suites',sub:'3 nights · private plunge pool, sea view',price:'GHS 19,200'},
+//       {kind:'Dining',kindColor:'#B7791F',icon:'🍽️',iconBg:'#FFF3E0',meta:'19:30',title:'Welcome dinner at Lauda',sub:'Caldera-view table reserved',price:'GHS 920'},
+//     ],hasSuggestion:false},
+//     {dow:'SUN',day:'05',mon:'Oct',title:'Santorini',blocks:[
+//       {kind:'Activity',kindColor:'#0E9F6E',icon:'⛵',iconBg:'#E3F7EF',meta:'13:00 · 5h',title:'Private caldera catamaran cruise',sub:'Hot springs, Red Beach, sunset, BBQ aboard',price:'GHS 5,400'},
+//     ],hasSuggestion:true,suggestion:'A couples sunset spa at the hotel — fits the honeymoon profile and the free morning.'},
+//     {dow:'MON',day:'06',mon:'Oct',title:'Santorini',blocks:[
+//       {kind:'Activity',kindColor:'#0E9F6E',icon:'👨‍🍳',iconBg:'#E3F7EF',meta:'11:00 · 3h',title:'Greek cooking class in Megalochori',sub:'Hands-on, with local wine pairing',price:'GHS 1,300'},
+//     ],hasSuggestion:false},
+//     {dow:'WED',day:'08',mon:'Oct',title:'Santorini → Amalfi Coast',blocks:[
+//       {kind:'Flight',kindColor:'#2B63F6',icon:'✈️',iconBg:'#EAF0FF',meta:'09:15 · 6h',title:'JTR→NAP',sub:'via Athens · 1 stop',price:'GHS 6,100'},
+//       {kind:'Stay',kindColor:'#6B46C1',icon:'🏨',iconBg:'#F0EBFF',meta:'Check-in 14:00',title:'Le Sirenuse — Positano, Sea View',sub:'4 nights · iconic terrace, Michelin dining',price:'GHS 22,000'},
+//     ],hasSuggestion:false},
+//     {dow:'SUN',day:'12',mon:'Oct',title:'Amalfi Coast',blocks:[
+//       {kind:'Activity',kindColor:'#0E9F6E',icon:'🛵',iconBg:'#E3F7EF',meta:'10:00 · full day',title:'Private boat day to Capri',sub:'Blue Grotto, lunch in Marina Piccola',price:'GHS 4,400'},
+//     ],hasSuggestion:false},
+//   ];
+// }
 
 // [color, icon] per messaging channel — used by convoData() to decorate each conversation row.
 export const chMeta: Record<string, [string, string]> = {
@@ -71,21 +84,6 @@ export const gradients = {
   green: 'linear-gradient(135deg,#15803D,#5DBE7E)',
 };
 
-// Shorthand constructor for one itinerary DayBlock (flight/transfer/stay/dining/activity/venue),
-// looking up its icon/colors from `kind`. Used to build the D[2]/D[3]/D[4]/D[5] sample
-// itineraries in tripDetailData() below without repeating the icon/color boilerplate each time.
-function B(kind: string, title: string, sub: string, meta: string, price: string): DayBlock {
-  const k: Record<string, [string,string,string]> = {
-    Flight: ['✈️','#EAF0FF','#2B63F6'],
-    Transfer: ['🚐','#E3F7EF','#0E9F6E'],
-    Stay: ['🏨','#F0EBFF','#6B46C1'],
-    Dining: ['🍽️','#FFF3E0','#B7791F'],
-    Activity: ['⭐','#E3F7EF','#0E9F6E'],
-    Venue: ['🏢','#EAF0FF','#2B63F6'],
-  };
-  const v = k[kind] || ['•','#F2F4F9','#5B6172'];
-  return { kind, kindColor: v[2], icon: v[0], iconBg: v[1], title, sub, meta, price };
-}
 
 // Mock conversation/inbox data for the Messages page — one demo thread per channel/traveler.
 export function convoData(): Conversation[] {
@@ -140,26 +138,26 @@ export function convoData(): Conversation[] {
 // API trip data is available. Each tuple in `raw` is positional — see the destructure below
 // for what each index means (name, traveler, initials, avatar color, destination, dates,
 // status, budget, itinerary-option count, cover gradient, "next step" label).
-export function tripsData(): TripItem[] {
-  const raw: [string,string,string,string,string,string,TripStatus,string,number,string,string][] = [
-    ['Asante–Mensah Honeymoon','Ama & Kofi Asante','AA','#6B46C1','Santorini · Amalfi','4–14 Oct','Awaiting review','GHS 84,500',3,'linear-gradient(135deg,#1B5BBE,#5AA0FF)','Send options to traveler'],
-    ['Adjei Family Dubai','The Adjei Family','TA','#2B63F6','Dubai','12–19 Jul','AI drafting','GHS 41,200',1,'linear-gradient(135deg,#E08A2B,#F5C06B)','Meridian is drafting itinerary'],
-    ['Owusu Corporate Retreat','Owusu Group','OG','#0E9F6E','Cape Town','2–6 Aug','Shared','GHS 128,000',2,'linear-gradient(135deg,#0E7C8F,#36C5C0)','Waiting on traveler decision'],
-    ['Boateng Anniversary','Yaa Boateng','YB','#D64545','Zanzibar','9–15 Sep','Changes requested','GHS 38,900',2,'linear-gradient(135deg,#C2410C,#F59E5B)','Traveler asked for changes'],
-    ['Mensah Solo Tokyo','Kojo Mensah','KM','#16143A','Tokyo','1–9 Nov','Confirmed','GHS 52,300',1,'linear-gradient(135deg,#7C3AED,#B58CF5)','Awaiting deposit'],
-    ['Tetteh Group Lagos','Tetteh & co','TC','#B7791F','Lagos','28–30 Jun','Booked','GHS 22,400',1,'linear-gradient(135deg,#15803D,#5DBE7E)','All booked · departs 28 Jun'],
-    ['Sarpong Europe Tour','Nana Sarpong','NS','#2B63F6','Paris · Rome · Barcelona','18–30 Dec','Draft','GHS 96,700',1,'linear-gradient(135deg,#334155,#7889A6)','Discovery call summarised'],
-  ];
-  return raw.map((r) => {
-    const sm = statusMeta(r[6]);
-    return {
-      name: r[0], traveler: r[1], initials: r[2], avatarBg: r[3], where: r[4], dates: r[5],
-      status: r[6], statusBg: sm[0], statusFg: sm[1], value: r[7],
-      optsLabel: r[8] + (r[8] > 1 ? ' opts' : ' opt'), cover: r[9], next: r[10],
-      open: () => {},
-    };
-  });
-}
+// export function tripsData(): TripItem[] {
+//   const raw: [string,string,string,string,string,string,TripStatus,string,number,string,string][] = [
+//     ['Asante–Mensah Honeymoon','Ama & Kofi Asante','AA','#6B46C1','Santorini · Amalfi','4–14 Oct','Awaiting review','GHS 84,500',3,'linear-gradient(135deg,#1B5BBE,#5AA0FF)','Send options to traveler'],
+//     ['Adjei Family Dubai','The Adjei Family','TA','#2B63F6','Dubai','12–19 Jul','AI drafting','GHS 41,200',1,'linear-gradient(135deg,#E08A2B,#F5C06B)','Meridian is drafting itinerary'],
+//     ['Owusu Corporate Retreat','Owusu Group','OG','#0E9F6E','Cape Town','2–6 Aug','Shared','GHS 128,000',2,'linear-gradient(135deg,#0E7C8F,#36C5C0)','Waiting on traveler decision'],
+//     ['Boateng Anniversary','Yaa Boateng','YB','#D64545','Zanzibar','9–15 Sep','Changes requested','GHS 38,900',2,'linear-gradient(135deg,#C2410C,#F59E5B)','Traveler asked for changes'],
+//     ['Mensah Solo Tokyo','Kojo Mensah','KM','#16143A','Tokyo','1–9 Nov','Confirmed','GHS 52,300',1,'linear-gradient(135deg,#7C3AED,#B58CF5)','Awaiting deposit'],
+//     ['Tetteh Group Lagos','Tetteh & co','TC','#B7791F','Lagos','28–30 Jun','Booked','GHS 22,400',1,'linear-gradient(135deg,#15803D,#5DBE7E)','All booked · departs 28 Jun'],
+//     ['Sarpong Europe Tour','Nana Sarpong','NS','#2B63F6','Paris · Rome · Barcelona','18–30 Dec','Draft','GHS 96,700',1,'linear-gradient(135deg,#334155,#7889A6)','Discovery call summarised'],
+//   ];
+//   return raw.map((r) => {
+//     const sm = statusMeta(r[6]);
+//     return {
+//       name: r[0], traveler: r[1], initials: r[2], avatarBg: r[3], where: r[4], dates: r[5],
+//       status: r[6], statusBg: sm[0], statusFg: sm[1], value: r[7],
+//       optsLabel: r[8] + (r[8] > 1 ? ' opts' : ' opt'), cover: r[9], next: r[10],
+//       open: () => {},
+//     };
+//   });
+// }
 
 // Builds the full mock TripDetailData for one of the 7 demo trips (by its index in
 // tripsData()), for the given active itinerary-option letter. This is what AppContext's
@@ -171,222 +169,222 @@ export function tripsData(): TripItem[] {
 // of which option letter is active — but every caller passes it, matching the signature real
 // itinerary-backed trips need (see apiTripToTripDetail() in AppContext.tsx, which does use its
 // `opt` argument to pick a specific itinerary option).
-export function tripDetailData(index: number, _activeOption: string): TripDetailData {
-  const i = index;
-  const days = asanteDays();
+// export function tripDetailData(index: number, _activeOption: string): TripDetailData {
+//   const i = index;
+//   const days = asanteDays();
 
-  const D: Record<number, {
-    gradient: string;
-    origin: string;
-    brief?: string;
-    briefChips?: string[];
-    options: TripOption[];
-    days: Day[];
-    costs: CostItem[];
-    sentInfo?: string;
-    requestNote?: string;
-    depositInfo?: string;
-    depart?: string;
-    bookingRefs?: { label: string; value: string }[];
-  }> = {};
+//   const D: Record<number, {
+//     gradient: string;
+//     origin: string;
+//     brief?: string;
+//     briefChips?: string[];
+//     options: TripOption[];
+//     days: Day[];
+//     costs: CostItem[];
+//     sentInfo?: string;
+//     requestNote?: string;
+//     depositInfo?: string;
+//     depart?: string;
+//     bookingRefs?: { label: string; value: string }[];
+//   }> = {};
 
-  const g = gradients;
+//   const g = gradients;
 
-  D[0] = {
-    gradient: 'linear-gradient(120deg,#1B5BBE,#2B63F6 55%,#5AA0FF)',
-    origin: '💬 Originated from a WhatsApp enquiry · 12 Jun',
-    options: [
-      {letter:'A',name:'Santorini + Amalfi',sub:'Greece & Italy · 10 nts',cover:g.blue,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
-      {letter:'B',name:'Maldives',sub:'Overwater · 9 nts',cover:g.teal,rec:false,recDisplay:'none',border:'#ECEDF2',bg:'#fff',titleColor:'#15161B',onClick:()=>{}},
-      {letter:'C',name:'Zanzibar & Safari',sub:'Tanzania · 11 nts',cover:g.orange,rec:false,recDisplay:'none',border:'#ECEDF2',bg:'#fff',titleColor:'#15161B',onClick:()=>{}},
-    ],
-    days,
-    costs: [
-      {label:'Flights',value:'GHS 28,400'},
-      {label:'Stays',value:'GHS 41,200'},
-      {label:'Activities',value:'GHS 9,800'},
-      {label:'Transfers',value:'GHS 2,300'},
-      {label:'Meridian service fee',value:'GHS 2,800'},
-    ],
-  };
-  D[1] = {
-    gradient: g.gold,
-    origin: '✉️ Originated from a Gmail enquiry · 9 Jun',
-    brief: 'Family of four to Dubai in mid-July — kid-friendly, a desert safari and a couple of standout dinners. Budget ≈ GHS 41k.',
-    briefChips: ['👪 2 adults · 2 children','📅 12 – 19 Jul 2026','💰 Budget ≈ GHS 41,200','🏜️ Wants a desert safari'],
-    options: [
-      {letter:'A',name:'Dubai family week',sub:'UAE · 7 nts',cover:g.gold,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
-    ],
-    days: [],
-    costs: [],
-  };
-  D[2] = {
-    gradient: g.teal,
-    origin: '💬 Originated from a WhatsApp enquiry · 28 May',
-    options: [
-      {letter:'A',name:'Cape Town retreat',sub:'South Africa · 4 nts',cover:g.teal,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
-    ],
-    sentInfo: 'Sent to Owusu Group 2 days ago via WhatsApp',
-    days: [
-      {dow:'FRI',day:'02',mon:'Aug',title:'Accra → Cape Town',blocks:[
-        B('Flight','Accra (ACC) → Cape Town (CPT)','RwandAir · via Kigali · 1 stop','06:30 · 12h 10m','GHS 18,400'),
-        B('Transfer','Group coach to V&A Waterfront','Meet & greet for 12','25 min','GHS 1,200'),
-        B('Stay','One&Only Cape Town — 6 rooms','4 nights · marina view, breakfast','Check-in 14:00','GHS 52,000'),
-        B('Dining','Welcome dinner at The Test Kitchen','Private room reserved','19:30','GHS 3,200'),
-      ],hasSuggestion:false},
-      {dow:'SAT',day:'03',mon:'Aug',title:'Cape Town · team day',blocks:[
-        B('Venue','Private boardroom & breakout space','Half-day with AV + catering','09:00 · 4h','GHS 12,000'),
-        B('Activity','Table Mountain cableway & guided walk','Group of 12','14:00 · 3h','GHS 1,400'),
-        B('Dining','Stellenbosch wine-estate dinner','Coach there & back included','19:00','GHS 4,800'),
-      ],hasSuggestion:false},
-    ],
-    costs: [
-      {label:'Flights',value:'GHS 36,800'},
-      {label:'Stays',value:'GHS 52,000'},
-      {label:'Venue & AV',value:'GHS 12,000'},
-      {label:'Activities & dining',value:'GHS 18,400'},
-      {label:'Meridian service fee',value:'GHS 8,800'},
-    ],
-  };
-  D[3] = {
-    gradient: g.orange,
-    origin: '📸 Originated from an Instagram DM · 1 Jun',
-    options: [
-      {letter:'A',name:'Beachfront escape',sub:'Zanzibar · 6 nts',cover:g.orange,rec:false,recDisplay:'none',border:'#ECEDF2',bg:'#fff',titleColor:'#15161B',onClick:()=>{}},
-      {letter:'B',name:'Quiet north coast',sub:'Zanzibar · 6 nts',cover:g.teal,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
-    ],
-    requestNote: '"Loved option B but can we move the resort somewhere quieter, away from the main strip?"',
-    days: [
-      {dow:'TUE',day:'09',mon:'Sep',title:'Accra → Zanzibar',blocks:[
-        B('Flight','Accra (ACC) → Zanzibar (ZNZ)','Ethiopian · via Addis · 1 stop','08:10 · 11h 40m','GHS 9,800'),
-        B('Stay','Riu Palace Zanzibar — Nungwi','3 nights · busy main strip — flagged to change','Check-in 15:00','GHS 14,200'),
-        B('Dining','Beachfront BBQ dinner','By the pool','19:30','GHS 900'),
-      ],hasSuggestion:false},
-      {dow:'WED',day:'10',mon:'Sep',title:'Zanzibar',blocks:[
-        B('Activity','Spice farm guided tour','Tastings included','10:00 · 3h','GHS 700'),
-        B('Activity','Sunset dhow cruise','Private boat for two','17:00 · 2h','GHS 1,100'),
-      ],hasSuggestion:false},
-    ],
-    costs: [
-      {label:'Flights',value:'GHS 19,600'},
-      {label:'Stays',value:'GHS 14,200'},
-      {label:'Activities',value:'GHS 1,800'},
-      {label:'Transfers',value:'GHS 900'},
-      {label:'Meridian service fee',value:'GHS 2,400'},
-    ],
-  };
-  D[4] = {
-    gradient: g.purple,
-    origin: '💬 Originated from a WhatsApp enquiry · 20 May',
-    options: [
-      {letter:'A',name:'Tokyo solo explorer',sub:'Japan · 8 nts',cover:g.purple,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
-    ],
-    depositInfo: 'GHS 26,150 · 50%',
-    days: [
-      {dow:'SAT',day:'01',mon:'Nov',title:'Accra → Tokyo',blocks:[
-        B('Flight','Accra (ACC) → Tokyo (HND)','Turkish · via Istanbul · 1 stop','22:00 · 21h 30m','GHS 19,600'),
-        B('Transfer','Airport express to Shiodome','IC card loaded','40 min','GHS 700'),
-        B('Stay','Park Hotel Tokyo — Artist Room','7 nights · skyline view','Check-in 15:00','GHS 21,000'),
-      ],hasSuggestion:false},
-      {dow:'SUN',day:'02',mon:'Nov',title:'Tokyo',blocks:[
-        B('Activity','teamLab Planets','Timed entry booked','10:00 · 2h','GHS 480'),
-        B('Dining','Tsukiji outer-market sushi','Chef\'s counter','12:30','GHS 900'),
-        B('Activity','Shibuya & Shimokitazawa walk','Self-guided route','15:00','GHS 600'),
-      ],hasSuggestion:false},
-    ],
-    costs: [
-      {label:'Flights',value:'GHS 19,600'},
-      {label:'Stays',value:'GHS 21,000'},
-      {label:'Activities',value:'GHS 7,300'},
-      {label:'Transfers',value:'GHS 1,600'},
-      {label:'Meridian service fee',value:'GHS 2,800'},
-    ],
-  };
-  D[5] = {
-    gradient: g.green,
-    origin: '✉️ Originated from a Gmail enquiry · 30 May',
-    options: [
-      {letter:'A',name:'Lagos group weekend',sub:'Nigeria · 2 nts',cover:g.green,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
-    ],
-    depart: '28 Jun',
-    bookingRefs: [{label:'Flight PNR',value:'TT-9F2K'},{label:'Hotel conf.',value:'EK-44871'}],
-    days: [
-      {dow:'SAT',day:'28',mon:'Jun',title:'Accra → Lagos',blocks:[
-        B('Flight','Accra (ACC) → Lagos (LOS)','Africa World Airlines · direct','09:20 · 1h 05m','GHS 4,200'),
-        B('Transfer','Airport pickup for 6','Two vehicles','30 min','GHS 600'),
-        B('Stay','Eko Hotel & Suites — 3 rooms','2 nights · lagoon view','Check-in 14:00','GHS 14,800'),
-        B('Dining','Group dinner at Nok by Alara','Table for 6 reserved','20:00','GHS 2,000'),
-      ],hasSuggestion:false},
-    ],
-    costs: [
-      {label:'Flights',value:'GHS 4,200'},
-      {label:'Stays',value:'GHS 14,800'},
-      {label:'Dining',value:'GHS 2,000'},
-      {label:'Transfers',value:'GHS 600'},
-      {label:'Meridian service fee',value:'GHS 800'},
-    ],
-  };
-  D[6] = {
-    gradient: g.slate,
-    origin: '🎙️ Discovery call summarised · 14 Jun',
-    brief: 'Multi-city festive tour of Paris, Rome and Barcelona over 12 nights. A mix of culture, great food and a little luxury, travelling city-to-city by rail and short flights. Budget ≈ GHS 95k.',
-    briefChips: ['🧑 1 traveler','📅 18 – 30 Dec 2026','💰 Budget ≈ GHS 96,700','🚆 Prefers rail between cities'],
-    options: [],
-    days: [],
-    costs: [],
-  };
+//   D[0] = {
+//     gradient: 'linear-gradient(120deg,#1B5BBE,#2B63F6 55%,#5AA0FF)',
+//     origin: '💬 Originated from a WhatsApp enquiry · 12 Jun',
+//     options: [
+//       {letter:'A',name:'Santorini + Amalfi',sub:'Greece & Italy · 10 nts',cover:g.blue,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
+//       {letter:'B',name:'Maldives',sub:'Overwater · 9 nts',cover:g.teal,rec:false,recDisplay:'none',border:'#ECEDF2',bg:'#fff',titleColor:'#15161B',onClick:()=>{}},
+//       {letter:'C',name:'Zanzibar & Safari',sub:'Tanzania · 11 nts',cover:g.orange,rec:false,recDisplay:'none',border:'#ECEDF2',bg:'#fff',titleColor:'#15161B',onClick:()=>{}},
+//     ],
+//     days,
+//     costs: [
+//       {label:'Flights',value:'GHS 28,400'},
+//       {label:'Stays',value:'GHS 41,200'},
+//       {label:'Activities',value:'GHS 9,800'},
+//       {label:'Transfers',value:'GHS 2,300'},
+//       {label:'Meridian service fee',value:'GHS 2,800'},
+//     ],
+//   };
+//   D[1] = {
+//     gradient: g.gold,
+//     origin: '✉️ Originated from a Gmail enquiry · 9 Jun',
+//     brief: 'Family of four to Dubai in mid-July — kid-friendly, a desert safari and a couple of standout dinners. Budget ≈ GHS 41k.',
+//     briefChips: ['👪 2 adults · 2 children','📅 12 – 19 Jul 2026','💰 Budget ≈ GHS 41,200','🏜️ Wants a desert safari'],
+//     options: [
+//       {letter:'A',name:'Dubai family week',sub:'UAE · 7 nts',cover:g.gold,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
+//     ],
+//     days: [],
+//     costs: [],
+//   };
+//   D[2] = {
+//     gradient: g.teal,
+//     origin: '💬 Originated from a WhatsApp enquiry · 28 May',
+//     options: [
+//       {letter:'A',name:'Cape Town retreat',sub:'South Africa · 4 nts',cover:g.teal,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
+//     ],
+//     sentInfo: 'Sent to Owusu Group 2 days ago via WhatsApp',
+//     days: [
+//       {dow:'FRI',day:'02',mon:'Aug',title:'Accra → Cape Town',blocks:[
+//         B('Flight','Accra (ACC) → Cape Town (CPT)','RwandAir · via Kigali · 1 stop','06:30 · 12h 10m','GHS 18,400'),
+//         B('Transfer','Group coach to V&A Waterfront','Meet & greet for 12','25 min','GHS 1,200'),
+//         B('Stay','One&Only Cape Town — 6 rooms','4 nights · marina view, breakfast','Check-in 14:00','GHS 52,000'),
+//         B('Dining','Welcome dinner at The Test Kitchen','Private room reserved','19:30','GHS 3,200'),
+//       ],hasSuggestion:false},
+//       {dow:'SAT',day:'03',mon:'Aug',title:'Cape Town · team day',blocks:[
+//         B('Venue','Private boardroom & breakout space','Half-day with AV + catering','09:00 · 4h','GHS 12,000'),
+//         B('Activity','Table Mountain cableway & guided walk','Group of 12','14:00 · 3h','GHS 1,400'),
+//         B('Dining','Stellenbosch wine-estate dinner','Coach there & back included','19:00','GHS 4,800'),
+//       ],hasSuggestion:false},
+//     ],
+//     costs: [
+//       {label:'Flights',value:'GHS 36,800'},
+//       {label:'Stays',value:'GHS 52,000'},
+//       {label:'Venue & AV',value:'GHS 12,000'},
+//       {label:'Activities & dining',value:'GHS 18,400'},
+//       {label:'Meridian service fee',value:'GHS 8,800'},
+//     ],
+//   };
+//   D[3] = {
+//     gradient: g.orange,
+//     origin: '📸 Originated from an Instagram DM · 1 Jun',
+//     options: [
+//       {letter:'A',name:'Beachfront escape',sub:'Zanzibar · 6 nts',cover:g.orange,rec:false,recDisplay:'none',border:'#ECEDF2',bg:'#fff',titleColor:'#15161B',onClick:()=>{}},
+//       {letter:'B',name:'Quiet north coast',sub:'Zanzibar · 6 nts',cover:g.teal,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
+//     ],
+//     requestNote: '"Loved option B but can we move the resort somewhere quieter, away from the main strip?"',
+//     days: [
+//       {dow:'TUE',day:'09',mon:'Sep',title:'Accra → Zanzibar',blocks:[
+//         B('Flight','Accra (ACC) → Zanzibar (ZNZ)','Ethiopian · via Addis · 1 stop','08:10 · 11h 40m','GHS 9,800'),
+//         B('Stay','Riu Palace Zanzibar — Nungwi','3 nights · busy main strip — flagged to change','Check-in 15:00','GHS 14,200'),
+//         B('Dining','Beachfront BBQ dinner','By the pool','19:30','GHS 900'),
+//       ],hasSuggestion:false},
+//       {dow:'WED',day:'10',mon:'Sep',title:'Zanzibar',blocks:[
+//         B('Activity','Spice farm guided tour','Tastings included','10:00 · 3h','GHS 700'),
+//         B('Activity','Sunset dhow cruise','Private boat for two','17:00 · 2h','GHS 1,100'),
+//       ],hasSuggestion:false},
+//     ],
+//     costs: [
+//       {label:'Flights',value:'GHS 19,600'},
+//       {label:'Stays',value:'GHS 14,200'},
+//       {label:'Activities',value:'GHS 1,800'},
+//       {label:'Transfers',value:'GHS 900'},
+//       {label:'Meridian service fee',value:'GHS 2,400'},
+//     ],
+//   };
+//   D[4] = {
+//     gradient: g.purple,
+//     origin: '💬 Originated from a WhatsApp enquiry · 20 May',
+//     options: [
+//       {letter:'A',name:'Tokyo solo explorer',sub:'Japan · 8 nts',cover:g.purple,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
+//     ],
+//     depositInfo: 'GHS 26,150 · 50%',
+//     days: [
+//       {dow:'SAT',day:'01',mon:'Nov',title:'Accra → Tokyo',blocks:[
+//         B('Flight','Accra (ACC) → Tokyo (HND)','Turkish · via Istanbul · 1 stop','22:00 · 21h 30m','GHS 19,600'),
+//         B('Transfer','Airport express to Shiodome','IC card loaded','40 min','GHS 700'),
+//         B('Stay','Park Hotel Tokyo — Artist Room','7 nights · skyline view','Check-in 15:00','GHS 21,000'),
+//       ],hasSuggestion:false},
+//       {dow:'SUN',day:'02',mon:'Nov',title:'Tokyo',blocks:[
+//         B('Activity','teamLab Planets','Timed entry booked','10:00 · 2h','GHS 480'),
+//         B('Dining','Tsukiji outer-market sushi','Chef\'s counter','12:30','GHS 900'),
+//         B('Activity','Shibuya & Shimokitazawa walk','Self-guided route','15:00','GHS 600'),
+//       ],hasSuggestion:false},
+//     ],
+//     costs: [
+//       {label:'Flights',value:'GHS 19,600'},
+//       {label:'Stays',value:'GHS 21,000'},
+//       {label:'Activities',value:'GHS 7,300'},
+//       {label:'Transfers',value:'GHS 1,600'},
+//       {label:'Meridian service fee',value:'GHS 2,800'},
+//     ],
+//   };
+//   D[5] = {
+//     gradient: g.green,
+//     origin: '✉️ Originated from a Gmail enquiry · 30 May',
+//     options: [
+//       {letter:'A',name:'Lagos group weekend',sub:'Nigeria · 2 nts',cover:g.green,rec:true,recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF',titleColor:'#2B63F6',onClick:()=>{}},
+//     ],
+//     depart: '28 Jun',
+//     bookingRefs: [{label:'Flight PNR',value:'TT-9F2K'},{label:'Hotel conf.',value:'EK-44871'}],
+//     days: [
+//       {dow:'SAT',day:'28',mon:'Jun',title:'Accra → Lagos',blocks:[
+//         B('Flight','Accra (ACC) → Lagos (LOS)','Africa World Airlines · direct','09:20 · 1h 05m','GHS 4,200'),
+//         B('Transfer','Airport pickup for 6','Two vehicles','30 min','GHS 600'),
+//         B('Stay','Eko Hotel & Suites — 3 rooms','2 nights · lagoon view','Check-in 14:00','GHS 14,800'),
+//         B('Dining','Group dinner at Nok by Alara','Table for 6 reserved','20:00','GHS 2,000'),
+//       ],hasSuggestion:false},
+//     ],
+//     costs: [
+//       {label:'Flights',value:'GHS 4,200'},
+//       {label:'Stays',value:'GHS 14,800'},
+//       {label:'Dining',value:'GHS 2,000'},
+//       {label:'Transfers',value:'GHS 600'},
+//       {label:'Meridian service fee',value:'GHS 800'},
+//     ],
+//   };
+//   D[6] = {
+//     gradient: g.slate,
+//     origin: '🎙️ Discovery call summarised · 14 Jun',
+//     brief: 'Multi-city festive tour of Paris, Rome and Barcelona over 12 nights. A mix of culture, great food and a little luxury, travelling city-to-city by rail and short flights. Budget ≈ GHS 95k.',
+//     briefChips: ['🧑 1 traveler','📅 18 – 30 Dec 2026','💰 Budget ≈ GHS 96,700','🚆 Prefers rail between cities'],
+//     options: [],
+//     days: [],
+//     costs: [],
+//   };
 
-  const trips = tripsData();
-  const t = trips[i] || trips[0];
-  const d = D[i] || D[0];
-  const statusKey = t.status;
-  const sm = statusMeta(t.status);
+//   const trips = tripsData();
+//   const t = trips[i] || trips[0];
+//   const d = D[i] || D[0];
+//   const statusKey = t.status;
+//   const sm = statusMeta(t.status);
 
-  const headerActions: HeaderAction[] = [];
-  if (statusKey === 'Draft') {
-    headerActions.push({label:'✦ Generate options',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
-    headerActions.push({label:'Message Ama',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
-  } else if (statusKey === 'Awaiting review') {
-    headerActions.push({label:'Preview',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
-    headerActions.push({label:'Share with Ama',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
-  } else if (statusKey === 'Shared') {
-    headerActions.push({label:'Resend link',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
-    headerActions.push({label:'Nudge Ama',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
-  } else if (statusKey === 'Changes requested') {
-    headerActions.push({label:'Make changes',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
-    headerActions.push({label:'Message Yaa',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
-  } else if (statusKey === 'Confirmed') {
-    headerActions.push({label:'Send deposit link',onClick:()=>{},bg:'#13B981',fg:'#fff',border:'#13B981'});
-    headerActions.push({label:'Message Kojo',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
-  } else if (statusKey === 'Booked') {
-    headerActions.push({label:'View trip pack',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
-    headerActions.push({label:'Message Tetteh',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
-  } else {
-    headerActions.push({label:'Preview',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
-    headerActions.push({label:'Share',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
-  }
+//   const headerActions: HeaderAction[] = [];
+//   if (statusKey === 'Draft') {
+//     headerActions.push({label:'✦ Generate options',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
+//     headerActions.push({label:'Message Ama',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
+//   } else if (statusKey === 'Awaiting review') {
+//     headerActions.push({label:'Preview',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
+//     headerActions.push({label:'Share with Ama',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
+//   } else if (statusKey === 'Shared') {
+//     headerActions.push({label:'Resend link',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
+//     headerActions.push({label:'Nudge Ama',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
+//   } else if (statusKey === 'Changes requested') {
+//     headerActions.push({label:'Make changes',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
+//     headerActions.push({label:'Message Yaa',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
+//   } else if (statusKey === 'Confirmed') {
+//     headerActions.push({label:'Send deposit link',onClick:()=>{},bg:'#13B981',fg:'#fff',border:'#13B981'});
+//     headerActions.push({label:'Message Kojo',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
+//   } else if (statusKey === 'Booked') {
+//     headerActions.push({label:'View trip pack',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
+//     headerActions.push({label:'Message Tetteh',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
+//   } else {
+//     headerActions.push({label:'Preview',onClick:()=>{},bg:'#fff',fg:'#5B6172',border:'#DDE0E8'});
+//     headerActions.push({label:'Share',onClick:()=>{},bg:'#2B63F6',fg:'#fff',border:'#2B63F6'});
+//   }
 
-  return {
-    name: t.name, traveler: t.traveler, dates: t.dates + ' 2026', where: t.where, value: t.value,
-    status: statusKey, statusBg: sm[0], statusFg: sm[1],
-    gradient: d.gradient, origin: d.origin,
-    total: t.value,
-    days: d.days,
-    costs: d.costs,
-    options: d.options,
-    optionsLabel: d.options && d.options.length > 1
-      ? d.options.length + ' itinerary options for this request:'
-      : 'Itinerary option:',
-    brief: d.brief,
-    briefChips: d.briefChips,
-    sentInfo: d.sentInfo,
-    requestNote: d.requestNote,
-    depositInfo: d.depositInfo,
-    depart: d.depart,
-    bookingRefs: d.bookingRefs,
-    headerActions,
-  };
-}
+//   return {
+//     name: t.name, traveler: t.traveler, dates: t.dates + ' 2026', where: t.where, value: t.value,
+//     status: statusKey, statusBg: sm[0], statusFg: sm[1],
+//     gradient: d.gradient, origin: d.origin,
+//     total: t.value,
+//     days: d.days,
+//     costs: d.costs,
+//     options: d.options,
+//     optionsLabel: d.options && d.options.length > 1
+//       ? d.options.length + ' itinerary options for this request:'
+//       : 'Itinerary option:',
+//     brief: d.brief,
+//     briefChips: d.briefChips,
+//     sentInfo: d.sentInfo,
+//     requestNote: d.requestNote,
+//     depositInfo: d.depositInfo,
+//     depart: d.depart,
+//     bookingRefs: d.bookingRefs,
+//     headerActions,
+//   };
+// }
 
 // Mock "Meridian activity" feed shown on the Dashboard and TripDetail sidebar.
 export function agentFeed(): AgentFeedItem[] {
@@ -401,36 +399,36 @@ export function agentFeed(): AgentFeedItem[] {
 
 // Mock flight options for the "Flights" builder tab (mock/non-API trips only — real trips
 // show their actual ItineraryFlight rows instead, converted by itineraryFlightsToFlights()).
-export function flightsData(): Flight[] {
-  return [
-    {code:'TK',airline:'Turkish Airlines',route:'ACC 07:40 → JTR 21:00 · via IST',duration:'13h 05m',stops:'1 stop',price:'GHS 14,200',cta:'Selected',logoBg:'#C2102E',recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF'},
-    {code:'MS',airline:'EgyptAir',route:'ACC 23:10 → JTR 14:50 · via CAI',duration:'15h 40m',stops:'1 stop',price:'GHS 12,900',cta:'Select',logoBg:'#16143A',recDisplay:'none',border:'#ECEDF2',bg:'#fff'},
-    {code:'LH',airline:'Lufthansa',route:'ACC 06:00 → JTR 18:10 · via FRA',duration:'14h 10m',stops:'1 stop',price:'GHS 16,050',cta:'Select',logoBg:'#05164D',recDisplay:'none',border:'#ECEDF2',bg:'#fff'},
-  ];
-}
+// export function flightsData(): Flight[] {
+//   return [
+//     {code:'TK',airline:'Turkish Airlines',route:'ACC 07:40 → JTR 21:00 · via IST',duration:'13h 05m',stops:'1 stop',price:'GHS 14,200',cta:'Selected',logoBg:'#C2102E',recDisplay:'inline-block',border:'#2B63F6',bg:'#F4F7FF'},
+//     {code:'MS',airline:'EgyptAir',route:'ACC 23:10 → JTR 14:50 · via CAI',duration:'15h 40m',stops:'1 stop',price:'GHS 12,900',cta:'Select',logoBg:'#16143A',recDisplay:'none',border:'#ECEDF2',bg:'#fff'},
+//     {code:'LH',airline:'Lufthansa',route:'ACC 06:00 → JTR 18:10 · via FRA',duration:'14h 10m',stops:'1 stop',price:'GHS 16,050',cta:'Select',logoBg:'#05164D',recDisplay:'none',border:'#ECEDF2',bg:'#fff'},
+//   ];
+// }
 
 // Mock accommodation options for the "Stays" builder tab (mock/non-API trips only).
-export function staysData(): Stay[] {
-  return [
-    {name:'Canaves Oia Suites',loc:'Oia, Santorini',rating:'4.9',price:'GHS 6,400',cover:'linear-gradient(135deg,#1B5BBE,#5AA0FF)',recDisplay:'block',border:'#2B63F6',bg:'#F4F7FF',tags:['Private pool','Sea view','Breakfast']},
-    {name:'Mystique, Luxury Collection',loc:'Oia, Santorini',rating:'4.8',price:'GHS 7,100',cover:'linear-gradient(135deg,#0E7C8F,#36C5C0)',recDisplay:'none',border:'#ECEDF2',bg:'#fff',tags:['Spa','Cave pool','Wine cellar']},
-    {name:'Grace Hotel Auberge',loc:'Imerovigli',rating:'4.7',price:'GHS 5,200',cover:'linear-gradient(135deg,#7C3AED,#B58CF5)',recDisplay:'none',border:'#ECEDF2',bg:'#fff',tags:['Infinity pool','Champagne lounge']},
-  ];
-}
+// export function staysData(): Stay[] {
+//   return [
+//     {name:'Canaves Oia Suites',loc:'Oia, Santorini',rating:'4.9',price:'GHS 6,400',cover:'linear-gradient(135deg,#1B5BBE,#5AA0FF)',recDisplay:'block',border:'#2B63F6',bg:'#F4F7FF',tags:['Private pool','Sea view','Breakfast']},
+//     {name:'Mystique, Luxury Collection',loc:'Oia, Santorini',rating:'4.8',price:'GHS 7,100',cover:'linear-gradient(135deg,#0E7C8F,#36C5C0)',recDisplay:'none',border:'#ECEDF2',bg:'#fff',tags:['Spa','Cave pool','Wine cellar']},
+//     {name:'Grace Hotel Auberge',loc:'Imerovigli',rating:'4.7',price:'GHS 5,200',cover:'linear-gradient(135deg,#7C3AED,#B58CF5)',recDisplay:'none',border:'#ECEDF2',bg:'#fff',tags:['Infinity pool','Champagne lounge']},
+//   ];
+// }
 
 // Mock add-on activities for the "Activities" builder tab (mock/non-API trips only).
 // Each `add()` callback appends the activity to the last day via AppContext.addActivity().
-export function activitiesData(): Activity[] {
-  const raw = [
-    {name:'Couples sunset spa',meta:'Santorini · 2h',price:'GHS 1,800',cover:'linear-gradient(135deg,#7C3AED,#B58CF5)'},
-    {name:'Santo Wines tasting',meta:'Santorini · 2h',price:'GHS 760',cover:'linear-gradient(135deg,#C2410C,#F59E5B)'},
-    {name:'Helicopter to Amalfi',meta:'Naples → Positano',price:'GHS 9,200',cover:'linear-gradient(135deg,#1B5BBE,#5AA0FF)'},
-    {name:'Private chef dinner',meta:'In-villa · Positano',price:'GHS 3,100',cover:'linear-gradient(135deg,#0E7C8F,#36C5C0)'},
-    {name:'Pompeii guided tour',meta:'Naples · half day',price:'GHS 1,450',cover:'linear-gradient(135deg,#334155,#7889A6)'},
-    {name:'Limoncello & ceramics',meta:'Amalfi · 3h',price:'GHS 640',cover:'linear-gradient(135deg,#B7791F,#F5C06B)'},
-  ];
-  return raw.map(a => ({...a, add: () => {}}));
-}
+// export function activitiesData(): Activity[] {
+//   const raw = [
+//     {name:'Couples sunset spa',meta:'Santorini · 2h',price:'GHS 1,800',cover:'linear-gradient(135deg,#7C3AED,#B58CF5)'},
+//     {name:'Santo Wines tasting',meta:'Santorini · 2h',price:'GHS 760',cover:'linear-gradient(135deg,#C2410C,#F59E5B)'},
+//     {name:'Helicopter to Amalfi',meta:'Naples → Positano',price:'GHS 9,200',cover:'linear-gradient(135deg,#1B5BBE,#5AA0FF)'},
+//     {name:'Private chef dinner',meta:'In-villa · Positano',price:'GHS 3,100',cover:'linear-gradient(135deg,#0E7C8F,#36C5C0)'},
+//     {name:'Pompeii guided tour',meta:'Naples · half day',price:'GHS 1,450',cover:'linear-gradient(135deg,#334155,#7889A6)'},
+//     {name:'Limoncello & ceramics',meta:'Amalfi · 3h',price:'GHS 640',cover:'linear-gradient(135deg,#B7791F,#F5C06B)'},
+//   ];
+//   return raw.map(a => ({...a, add: () => {}}));
+// }
 
 // Mock call history + AI-generated call summaries for the "Calls" builder tab.
 export function callLogs(): { logs: CallLog[], details: CallDetail[] } {
@@ -455,128 +453,88 @@ export function callLogs(): { logs: CallLog[], details: CallDetail[] } {
 // getFinancialData()/getDashboardStats(), but Financials.tsx and Dashboard.tsx were both
 // rewired to compute their stats from real API data instead — neither page calls this
 // anymore, so it's effectively orphaned (kept in case something still references it).
-export function finStats(): FinStat[] {
-  return [
-    {label:'Revenue · June',value:'GHS 64,300',delta:'↑ 18% vs May',deltaColor:'#0E9F6E'},
-    {label:'Outstanding',value:'GHS 22,800',delta:'3 invoices',deltaColor:'#B7791F'},
-    {label:'Paid out',value:'GHS 41,500',delta:'Next payout 24 Jun',deltaColor:'#8A90A2'},
-    {label:'Refunds',value:'GHS 1,200',delta:'1 this month',deltaColor:'#8A90A2'},
-  ];
-}
+// export function finStats(): FinStat[] {
+//   return [
+//     {label:'Revenue · June',value:'GHS 64,300',delta:'↑ 18% vs May',deltaColor:'#0E9F6E'},
+//     {label:'Outstanding',value:'GHS 22,800',delta:'3 invoices',deltaColor:'#B7791F'},
+//     {label:'Paid out',value:'GHS 41,500',delta:'Next payout 24 Jun',deltaColor:'#8A90A2'},
+//     {label:'Refunds',value:'GHS 1,200',delta:'1 this month',deltaColor:'#8A90A2'},
+//   ];
+// }
 
 // Mock monthly revenue bar-chart data. Only reachable via AppContext.getFinancialData(),
 // which Financials.tsx no longer calls (it renders its own chart from real transactions) —
 // effectively orphaned.
-export function chartData(): ChartBar[] {
-  const raw: [string,number][] = [['Jan',38],['Feb',42],['Mar',51],['Apr',47],['May',58],['Jun',64]];
-  return raw.map((m,i) => ({
-    label: m[0],
-    h: (m[1] / 64 * 150) + 'px',
-    value: 'GHS ' + m[1] + 'k',
-    barBg: i === 5 ? '#2B63F6' : '#DCE6FF',
-    barLabelColor: i === 5 ? '#2B63F6' : '#AEB3C2',
-  }));
-}
-
-function fmt(n: number): string {
-  return 'GHS ' + n.toLocaleString('en-US');
-}
-
-const invMeta: Record<string, [string,string]> = {
-  'Paid': ['#E3F7EF','#0E9F6E'],
-  'Partial': ['#EAF0FF','#2B63F6'],
-  'Pending': ['#FFF3E0','#B7791F'],
-  'Overdue': ['#FDECEC','#D64545'],
-  'Refunded': ['#EEF0F4','#8A90A2'],
-};
-
-const invDefs: {
-  id: string; client: string; initials: string; avatarBg: string; trip: string; tripIdx: number;
-  agent: string; email: string; phone: string; issued: string; due: string; method: string;
-  status: string; total: number;
-  items: [string,number][];
-  payments: [string,string,number,string,string][];
-  schedule: [string,number,string][];
-}[] = [
-  {id:'INV-1042', client:'Owusu Group', initials:'OG', avatarBg:'#2B63F6', trip:'Cape Town Retreat', tripIdx:2, agent:'Kweku Ansah', email:'accounts@owusugroup.com', phone:'+233 24 555 0192', issued:'2 Jun 2026', due:'18 Jun 2026', method:'Paystack', status:'Paid', total:64000,
-   items:[['Flights · 8 pax · Accra ⇄ Cape Town',28800],['Stays · 9 nights · One&Only',27000],['Experiences · 5 included',6000],['Meridian service fee',2200]],
-   payments:[['2 Jun 2026','Deposit · 50%',32000,'Paystack','PSK-8841'],['18 Jun 2026','Balance · 50%',32000,'Paystack','PSK-9023']], schedule:[]},
-  {id:'INV-1041', client:'The Adjei Family', initials:'AF', avatarBg:'#7C5CFC', trip:'Dubai · Family', tripIdx:1, agent:'Adwoa Mensah', email:'kojo.adjei@gmail.com', phone:'+233 20 411 7788', issued:'8 Jun 2026', due:'30 Jun 2026', method:'Paystack', status:'Partial', total:20600,
-   items:[['Flights · 4 pax · Accra ⇄ Dubai',9200],['Stays · 6 nights · Atlantis The Palm',8600],['Desert & city experiences',1800],['Meridian service fee',1000]],
-   payments:[['8 Jun 2026','Deposit · 50%',10300,'Paystack','PSK-8990']], schedule:[['Balance · 50%',10300,'Due 30 Jun 2026']]},
-  {id:'INV-1039', client:'Kojo Mensah', initials:'KM', avatarBg:'#0E9F6E', trip:'Tokyo', tripIdx:3, agent:'Yaw Boateng', email:'kojo.m@outlook.com', phone:'+233 27 330 5510', issued:'1 Jun 2026', due:'14 Jun 2026', method:'Paystack', status:'Paid', total:26150,
-   items:[['Flights · 2 pax · Accra ⇄ Tokyo',16400],['Stays · 7 nights · Park Hyatt',7600],['Meridian service fee',2150]],
-   payments:[['14 Jun 2026','Paid in full',26150,'Paystack','PSK-8770']], schedule:[]},
-  {id:'INV-1037', client:'Tetteh & Co', initials:'TC', avatarBg:'#B7791F', trip:'Lagos', tripIdx:4, agent:'Adwoa Mensah', email:'finance@tetteh.co', phone:'+234 80 221 4400', issued:'4 Jun 2026', due:'11 Jun 2026', method:'Bank transfer', status:'Partial', total:22400,
-   items:[['Flights · 6 pax · Accra ⇄ Lagos',7800],['Stays · 4 nights · Eko Hotel',9200],['Conference logistics',4400],['Meridian service fee',1000]],
-   payments:[['4 Jun 2026','First instalment',8000,'Bank transfer','TRF-2218'],['9 Jun 2026','Second instalment',7000,'Bank transfer','TRF-2240']], schedule:[['Final instalment',7400,'Due 25 Jun 2026']]},
-  {id:'INV-1035', client:'Yaa Boateng', initials:'YB', avatarBg:'#C2410C', trip:'Zanzibar', tripIdx:5, agent:'Kweku Ansah', email:'yaa.boat@gmail.com', phone:'+233 24 770 9981', issued:'20 May 2026', due:'2 Jun 2026', method:'Paystack', status:'Overdue', total:19450,
-   items:[['Flights · 2 pax · Accra ⇄ Zanzibar',10200],['Stays · 6 nights · Park Hyatt',7250],['Meridian service fee',2000]],
-   payments:[], schedule:[['Full balance',19450,'Was due 2 Jun 2026']]},
-  {id:'INV-1031', client:'Nana Sarpong', initials:'NS', avatarBg:'#5B6172', trip:'Europe Tour', tripIdx:6, agent:'Yaw Boateng', email:'nana.sarpong@gmail.com', phone:'+233 20 556 1212', issued:'24 May 2026', due:'28 May 2026', method:'Paystack', status:'Refunded', total:1200,
-   items:[['Cancellation admin fee',1200]],
-   payments:[['25 May 2026','Deposit',1200,'Paystack','PSK-8401'],['28 May 2026','Refund issued',-1200,'Paystack','PSK-8402R']], schedule:[]},
-];
+// export function chartData(): ChartBar[] {
+//   const raw: [string,number][] = [['Jan',38],['Feb',42],['Mar',51],['Apr',47],['May',58],['Jun',64]];
+//   return raw.map((m,i) => ({
+//     label: m[0],
+//     h: (m[1] / 64 * 150) + 'px',
+//     value: 'GHS ' + m[1] + 'k',
+//     barBg: i === 5 ? '#2B63F6' : '#DCE6FF',
+//     barLabelColor: i === 5 ? '#2B63F6' : '#AEB3C2',
+//   }));
+// }
 
 // Six mock invoices. `detail()` is genuinely used (AppContext.getInvoiceDetail() →
 // InvoiceDetailModal.tsx), but the `list`/`tripDetail` parts are only wired through
 // getFinancialData(), which no page calls anymore — see chartData() above.
-export function invoicesData(): {
-  list: InvoiceItem[];
-  detail: (id: string) => InvoiceDetail | null;
-  tripDetail: (id: string) => { openTrip: () => void; tripIdx: number } | null;
-} {
-  const list: InvoiceItem[] = invDefs.map(v => {
-    const paid = v.payments.reduce((a,p) => a + (p[2] > 0 ? p[2] : 0), 0);
-    const balance = v.total - paid;
-    const m = invMeta[v.status];
-    let balanceHint = '';
-    if (v.status === 'Partial') balanceHint = fmt(balance) + ' left';
-    else if (v.status === 'Overdue') balanceHint = 'Unpaid';
-    return {
-      id: v.id, client: v.client, trip: v.trip, amount: fmt(v.total),
-      status: v.status, statusBg: m[0], statusFg: m[1],
-      method: v.method, date: v.issued, balanceHint,
-      open: () => {},
-    };
-  });
+// export function invoicesData(): {
+//   list: InvoiceItem[];
+//   detail: (id: string) => InvoiceDetail | null;
+//   tripDetail: (id: string) => { openTrip: () => void; tripIdx: number } | null;
+// } {
+//   const list: InvoiceItem[] = invDefs.map(v => {
+//     const paid = v.payments.reduce((a,p) => a + (p[2] > 0 ? p[2] : 0), 0);
+//     const balance = v.total - paid;
+//     const m = invMeta[v.status];
+//     let balanceHint = '';
+//     if (v.status === 'Partial') balanceHint = fmt(balance) + ' left';
+//     else if (v.status === 'Overdue') balanceHint = 'Unpaid';
+//     return {
+//       id: v.id, client: v.client, trip: v.trip, amount: fmt(v.total),
+//       status: v.status, statusBg: m[0], statusFg: m[1],
+//       method: v.method, date: v.issued, balanceHint,
+//       open: () => {},
+//     };
+//   });
 
-  const detail = (id: string): InvoiceDetail | null => {
-    const oi = invDefs.find(v => v.id === id);
-    if (!oi) return null;
-    const paid = oi.payments.reduce((a,p) => a + (p[2] > 0 ? p[2] : 0), 0);
-    const balance = oi.total - paid;
-    const m = invMeta[oi.status];
-    const pct = oi.total > 0 ? Math.round(paid / oi.total * 100) : 0;
-    return {
-      id: oi.id, status: oi.status, statusBg: m[0], statusFg: m[1],
-      issued: oi.issued, due: oi.due, method: oi.method, agent: oi.agent, trip: oi.trip,
-      client: oi.client, initials: oi.initials, avatarBg: oi.avatarBg, email: oi.email, phone: oi.phone,
-      total: fmt(oi.total), paid: fmt(paid), balance: fmt(balance), pct: pct + '%',
-      barColor: balance <= 0 ? '#13B981' : (oi.status === 'Overdue' ? '#D64545' : '#2B63F6'),
-      summaryLabel: balance <= 0 ? 'Fully paid' : fmt(balance) + ' outstanding',
-      summaryColor: balance <= 0 ? '#0E9F6E' : (oi.status === 'Overdue' ? '#D64545' : '#B7791F'),
-      hasBalance: balance > 0,
-      items: oi.items.map(it => ({label: it[0], amount: fmt(it[1])})),
-      payments: oi.payments.map(p => ({
-        date: p[0], label: p[1],
-        amount: p[2] < 0 ? '– ' + fmt(-p[2]) : fmt(p[2]),
-        method: p[3], ref: p[4], dot: p[2] < 0 ? '#D64545' : '#13B981',
-      })),
-      schedule: oi.schedule.map(s => ({label: s[0], amount: fmt(s[1]), due: s[2]})),
-      hasSchedule: oi.schedule.length > 0,
-      openTrip: () => {},
-    };
-  };
+//   const detail = (id: string): InvoiceDetail | null => {
+//     const oi = invDefs.find(v => v.id === id);
+//     if (!oi) return null;
+//     const paid = oi.payments.reduce((a,p) => a + (p[2] > 0 ? p[2] : 0), 0);
+//     const balance = oi.total - paid;
+//     const m = invMeta[oi.status];
+//     const pct = oi.total > 0 ? Math.round(paid / oi.total * 100) : 0;
+//     return {
+//       id: oi.id, status: oi.status, statusBg: m[0], statusFg: m[1],
+//       issued: oi.issued, due: oi.due, method: oi.method, agent: oi.agent, trip: oi.trip,
+//       client: oi.client, initials: oi.initials, avatarBg: oi.avatarBg, email: oi.email, phone: oi.phone,
+//       total: fmt(oi.total), paid: fmt(paid), balance: fmt(balance), pct: pct + '%',
+//       barColor: balance <= 0 ? '#13B981' : (oi.status === 'Overdue' ? '#D64545' : '#2B63F6'),
+//       summaryLabel: balance <= 0 ? 'Fully paid' : fmt(balance) + ' outstanding',
+//       summaryColor: balance <= 0 ? '#0E9F6E' : (oi.status === 'Overdue' ? '#D64545' : '#B7791F'),
+//       hasBalance: balance > 0,
+//       items: oi.items.map(it => ({label: it[0], amount: fmt(it[1])})),
+//       payments: oi.payments.map(p => ({
+//         date: p[0], label: p[1],
+//         amount: p[2] < 0 ? '– ' + fmt(-p[2]) : fmt(p[2]),
+//         method: p[3], ref: p[4], dot: p[2] < 0 ? '#D64545' : '#13B981',
+//       })),
+//       schedule: oi.schedule.map(s => ({label: s[0], amount: fmt(s[1]), due: s[2]})),
+//       hasSchedule: oi.schedule.length > 0,
+//       openTrip: () => {},
+//     };
+//   };
 
-  const tripDetail = (id: string): { openTrip: () => void; tripIdx: number } | null => {
-    const oi = invDefs.find(v => v.id === id);
-    if (!oi) return null;
-    return { openTrip: () => {}, tripIdx: oi.tripIdx };
-  };
+//   const tripDetail = (id: string): { openTrip: () => void; tripIdx: number } | null => {
+//     const oi = invDefs.find(v => v.id === id);
+//     if (!oi) return null;
+//     return { openTrip: () => {}, tripIdx: oi.tripIdx };
+//   };
 
-  return { list, detail, tripDetail };
-}
+//   return { list, detail, tripDetail };
+// }
 
 // Pricing plan cards for the Pricing page (ctx.getPlans() → Pricing.tsx). `annual` billing
 // is priced at 10x the monthly rate (i.e. ~17% off a 12x multiple) as a simple placeholder deal.
@@ -609,13 +567,13 @@ export function plansData(billing: BillingPeriod, currentPlan: string, toast: (m
 // Reshapes the mock tripsData() into TravelerItem rows (one "traveler" per demo trip).
 // Only reachable via AppContext.getTravelersData(), which the real Travelers.tsx page no
 // longer calls (it fetches real customers instead) — effectively orphaned.
-export function travelersData(): TravelerItem[] {
-  return tripsData().map((t) => ({
-    name: t.traveler, initials: t.initials, avatarBg: t.avatarBg,
-    trip: t.name, status: t.status, statusBg: t.statusBg, statusFg: t.statusFg,
-    value: t.value, where: t.where, open: () => {},
-  }));
-}
+// export function travelersData(): TravelerItem[] {
+//   return tripsData().map((t) => ({
+//     name: t.traveler, initials: t.initials, avatarBg: t.avatarBg,
+//     trip: t.name, status: t.status, statusBg: t.statusBg, statusFg: t.statusFg,
+//     value: t.value, where: t.where, open: () => {},
+//   }));
+// }
 
 // Mock team roster. Reachable via AppContext.getTeamData(), but Settings.tsx's Team & Seats
 // tab now fetches the real company's users from the API instead — effectively orphaned,

@@ -2,17 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
-import type { TripResponse, TripStatus, TripCostResponse } from '../types/app';
+import type { TripResponse, TripStatusLabel, TripCostResponse } from '../types/app';
+import { TripStatus } from '../types/app';
+import { apiStatusMeta } from '../constants/app';
 import '../styles/Trips.css';
-
-const statusMeta: Record<string, { display: TripStatus; bg: string; fg: string }> = {
-  planning:     { display: 'Draft',           bg: '#EEF0F4', fg: '#5B6172' },
-  inquiry:      { display: 'Inquiry',         bg: '#FFF3E0', fg: '#B7791F' },
-  booked:       { display: 'Booked',          bg: '#16143A', fg: '#FFFFFF' },
-  in_progress:  { display: 'In Progress',     bg: '#E3F7EF', fg: '#0E9F6E' },
-  completed:    { display: 'Completed',       bg: '#EAF0FF', fg: '#2B63F6' },
-  cancelled:    { display: 'Cancelled',       bg: '#FDECEC', fg: '#D64545' },
-};
 
 const avatarGradients = [
   'linear-gradient(135deg,#1B5BBE,#5AA0FF)',
@@ -53,13 +46,16 @@ function whereFrom(trip: TripResponse): string {
   return trip.description?.split('.')[0] ?? trip.trip_name;
 }
 
-const filterDefs: { label: string; match: (status: string) => boolean }[] = [
+const ACTIVE_STATUSES: TripStatus[] = [TripStatus.INQUIRY, TripStatus.IN_PROGRESS];
+const BOOKED_LIKE_STATUSES: TripStatus[] = [TripStatus.BOOKED, TripStatus.IN_PROGRESS, TripStatus.COMPLETED];
+
+const filterDefs: { label: string; match: (status: TripStatus) => boolean }[] = [
   { label: 'All',          match: () => true },
-  { label: 'Drafting',     match: (s) => s === 'planning' },
-  { label: 'Active',       match: (s) => ['inquiry', 'in_progress'].includes(s) },
-  { label: 'Booked',       match: (s) => s === 'booked' },
-  { label: 'Completed',    match: (s) => s === 'completed' },
-  { label: 'Cancelled',    match: (s) => s === 'cancelled' },
+  { label: 'Drafting',     match: (s) => s === TripStatus.PLANNING },
+  { label: 'Active',       match: (s) => ACTIVE_STATUSES.includes(s) },
+  { label: 'Booked',       match: (s) => s === TripStatus.BOOKED },
+  { label: 'Completed',    match: (s) => s === TripStatus.COMPLETED },
+  { label: 'Cancelled',    match: (s) => s === TripStatus.CANCELLED },
 ];
 
 type TravelerPopup = {
@@ -156,7 +152,7 @@ export default function Trips() {
     e.stopPropagation();
     setOverviewTrip(trip);
     setOverviewCosts(null);
-    if (['booked', 'in_progress', 'completed'].includes(trip.status ?? '')) {
+    if (BOOKED_LIKE_STATUSES.includes(trip.status)) {
       setLoadingCosts(true);
       try {
         const costs = await ApiService.getTripCosts(trip.trip_id);
@@ -170,7 +166,7 @@ export default function Trips() {
   const totalMembers = new Set(trips.flatMap(t => (t.customers ?? []).map(c => c.customer_id))).size;
   const totalGroups = trips.length;
 
-  const isBooked = (status: string) => ['booked', 'in_progress', 'completed'].includes(status);
+  const isBooked = (status: TripStatus) => BOOKED_LIKE_STATUSES.includes(status);
 
   return (
     <div className="trips-container">
@@ -209,7 +205,7 @@ export default function Trips() {
         {error && <div className="trips-empty">{error}</div>}
         {!loading && !error && filtered.length === 0 && <div className="trips-empty">No trips found.</div>}
         {filtered.map((t, i) => {
-          const sm = statusMeta[t.status] ?? { display: t.status as TripStatus, bg: '#EEF0F4', fg: '#5B6172' };
+          const sm = apiStatusMeta[t.status] ?? { display: t.status as TripStatusLabel, bg: '#EEF0F4', fg: '#5B6172' };
           const trav = travelerName(t);
           const grad = avatarGradients[i % avatarGradients.length];
           const col = avatarColors[i % avatarColors.length];
@@ -387,7 +383,7 @@ export default function Trips() {
               </div>
               <div className="tov-header-right">
                 {(() => {
-                  const sm = statusMeta[overviewTrip.status ?? ''] ?? { display: overviewTrip.status as TripStatus, bg: '#EEF0F4', fg: '#5B6172' };
+                  const sm = apiStatusMeta[overviewTrip.status] ?? { display: overviewTrip.status as TripStatusLabel, bg: '#EEF0F4', fg: '#5B6172' };
                   return <span className="trip-status" style={{ background: sm.bg, color: sm.fg }}>{sm.display}</span>;
                 })()}
                 <button className="tov-close" onClick={() => setOverviewTrip(null)}>✕</button>
@@ -438,7 +434,7 @@ export default function Trips() {
               </div>
 
               {/* Payment status — only for booked/completed */}
-              {isBooked(overviewTrip.status ?? '') && (
+              {isBooked(overviewTrip.status) && (
                 <div className="tov-section">
                   <div className="tov-section-title">Payment activity</div>
                   {loadingCosts ? (
@@ -472,7 +468,7 @@ export default function Trips() {
               )}
 
               {/* Reviews — only for completed trips */}
-              {overviewTrip.status === 'completed' && (
+              {overviewTrip.status === TripStatus.COMPLETED && (
                 <div className="tov-section">
                   <div className="tov-section-title">Reviews</div>
                   <div className="tov-reviews-empty">

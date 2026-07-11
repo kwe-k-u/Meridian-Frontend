@@ -3,7 +3,9 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
-import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse, SkippedProvider, FlightLeg, AgentFeedItem } from '../types/app';
+import type { TripOption, TripStatusLabel, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse, SkippedProvider, FlightLeg, AgentFeedItem, TripDetailData, StatusBanner } from '../types/app';
+import { TripStatus, ItineraryStatus, FlightStatus, TransactionStatus, CallActionItemStatus } from '../types/app';
+import { apiStatusMeta } from '../constants/app';
 import AddItemModal, { type EditingDayItem } from '../components/modals/AddItemModal';
 import AddFlightModal from '../components/modals/AddFlightModal';
 import AddStayModal from '../components/modals/AddStayModal';
@@ -29,6 +31,23 @@ import '../styles/TripDetail.css';
 // one of the hardcoded demo trips from constants/app.ts" behavior.
 
 // ── Helper functions / transformers ──
+
+// Mirrors App\Services\CurrencyService's rate table on the backend — the only currencies a
+// convert() call actually has a real rate for. Same list as Settings.tsx's SUPPORTED_CURRENCIES.
+const SUPPORTED_CURRENCIES = ['GHS', 'USD', 'EUR', 'GBP'];
+
+// "Nothing loaded yet" placeholder for tripTd/tripTb below — shown for mock trip ids (retired)
+// or while a real trip's ApiService.getTrip() fetch is still in flight.
+const emptyTd: TripDetailData = {
+  name: '', traveler: '', dates: '', where: '', value: '',
+  status: 'Draft', statusBg: '#EEF0F4', statusFg: '#5B6172', gradient: 'linear-gradient(135deg,#334155,#7889A6)',
+  origin: '', total: '', days: [], costs: [], options: [], optionsLabel: '', headerActions: [],
+};
+const emptyTb: StatusBanner = {
+  bg: '#EEF0F4', border: '#DDE0E8', fg: '#5B6172', iconBg: '#EEF0F4', icon: '•',
+  headline: 'Loading trip…', desc: '', descColor: '#8A90A2', chipBorder: '#DDE0E8',
+  showRefs: false, refs: [], showBuilder: false, showDraft: false, showDrafting: false, showOptions: false,
+};
 
 const blockKindMeta: Record<string, { icon: string; iconBg: string; kindColor: string }> = {
   Flight: { icon: '✈️', iconBg: '#EAF0FF', kindColor: '#2B63F6' },
@@ -151,7 +170,7 @@ function itineraryFlightsToFlights(flights: NonNullable<ItineraryResponse['itine
       : '',
     stops: 'Direct',
     price: f.cost ? format(f.cost, f.currency ?? 'GHS') : '',
-    cta: f.status === 'booked' ? 'Selected' : 'Select',
+    cta: f.status === FlightStatus.BOOKED ? 'Selected' : 'Select',
     logoBg: '#2B63F6',
     recDisplay: 'none',
     border: '#ECEDF2',
@@ -174,15 +193,6 @@ function itineraryStaysToStays(accommodation: NonNullable<ItineraryResponse['iti
     booking_url: a.booking_url ?? null,
   }));
 }
-
-const apiStatusMeta: Record<string, { display: string; bg: string; fg: string; gradient: string }> = {
-  planning:    { display: 'Draft',           bg: '#EEF0F4', fg: '#5B6172', gradient: 'linear-gradient(135deg,#334155,#7889A6)' },
-  inquiry:     { display: 'Inquiry',         bg: '#FFF3E0', fg: '#B7791F', gradient: 'linear-gradient(135deg,#E08A2B,#F5C06B)' },
-  booked:      { display: 'Booked',          bg: '#16143A', fg: '#FFFFFF', gradient: 'linear-gradient(135deg,#15803D,#5DBE7E)' },
-  in_progress: { display: 'In Progress',     bg: '#E3F7EF', fg: '#0E9F6E', gradient: 'linear-gradient(135deg,#0E7C8F,#36C5C0)' },
-  completed:   { display: 'Completed',       bg: '#EAF0FF', fg: '#2B63F6', gradient: 'linear-gradient(135deg,#1B5BBE,#5AA0FF)' },
-  cancelled:   { display: 'Cancelled',       bg: '#FDECEC', fg: '#D64545', gradient: 'linear-gradient(135deg,#C2410C,#F59E5B)' },
-};
 
 function fmtRelativeTime(dt: string | null | undefined): string {
   if (!dt) return '';
@@ -219,7 +229,7 @@ export default function TripDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const ctx = useApp();
-  const { format } = useCurrency();
+  const { format, convert } = useCurrency();
   // A real trip_id is a prefixed string like "TRP_..." (never all-digits), so "does the
   // param look like a plain number" is how we tell real trips apart from mock trip indices.
   const isRealId = tripId ? !/^\d+$/.test(tripId) : false;
@@ -289,6 +299,7 @@ export default function TripDetail() {
   const [savingActionItem, setSavingActionItem] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentCurrency, setPaymentCurrency] = useState('GHS');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
   const [payingWithMoolre, setPayingWithMoolre] = useState(false);
@@ -346,7 +357,7 @@ export default function TripDetail() {
   }, [tripId]);
 
 
-  const handleStatusTransition = async (status: string) => {
+  const handleStatusTransition = async (status: TripStatus) => {
     if (!tripId || !apiTrip) return;
     setUpdatingStatus(true);
     try {
@@ -356,6 +367,25 @@ export default function TripDetail() {
       setUpdatingStatus(false);
     }
   };
+
+  // Once any itinerary on the trip has been selected — the traveler accepted it on their
+  // TravelerView link, or the agent accepted it here — the trip is effectively booked, so
+  // keep the status dropdown in sync automatically instead of requiring a manual change.
+  // Only promotes forward (inquiry/planning → booked); never demotes a status the agent set
+  // deliberately (e.g. cancelled), and re-runs harmlessly since the status guard below makes
+  // it a no-op once apiTrip.status has already caught up.
+  useEffect(() => {
+    if (!apiTrip) return;
+    const hasSelectedItinerary = (apiTrip.itineraries ?? []).some(it =>
+      it.status === ItineraryStatus.CONFIRMED
+      || it.status === ItineraryStatus.IN_PROGRESS
+      || it.status === ItineraryStatus.COMPLETED
+    );
+    if (!hasSelectedItinerary) return;
+    if (apiTrip.status !== TripStatus.INQUIRY && apiTrip.status !== TripStatus.PLANNING) return;
+    handleStatusTransition(TripStatus.BOOKED);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiTrip]);
 
   const providerLabel = (id: string | undefined) => {
     const map: Record<string, string> = {
@@ -433,15 +463,13 @@ export default function TripDetail() {
     }
   }, [tripId, isRealId, ctx, refreshTrip, refreshCosts, setActiveOption, setBuilderTab]);
 
-  const { td: mockTd, tb: mockTb } = ctx.getTripDetail(tid, activeOption);
-
   // ── Derived data ──
-  // tripTd/tripTb overlay real apiTrip fields onto the mock td/tb (same pattern as
-  // AppContext's apiTripToTripDetail/apiTripToStatusBanner) so the render below doesn't need
-  // separate real/mock branches — it just always reads `td`/`tb`.
+  // tripTd/tripTb build the view-model banner/detail objects straight from apiTrip. There's no
+  // more mock-trip source to fall back to — emptyTd/emptyTb below are just the "nothing loaded
+  // yet" placeholder (mock trip ids, or a real trip still mid-fetch).
 
-  const tripTd = useMemo(() => {
-    if (!apiTrip) return mockTd;
+  const tripTd = useMemo((): TripDetailData => {
+    if (!apiTrip) return emptyTd;
     const sm = apiStatusMeta[apiTrip.status] ?? { display: apiTrip.status, bg: '#EEF0F4', fg: '#5B6172', gradient: 'linear-gradient(135deg,#334155,#7889A6)' };
     const trav = apiTrip.customers?.[0]
       ? `${apiTrip.customers[0].first_name} ${apiTrip.customers[0].last_name}`
@@ -449,22 +477,31 @@ export default function TripDetail() {
         ? apiTrip.created_by.display_name
         : 'Traveler');
     return {
-      ...mockTd,
       name: apiTrip.trip_name,
       traveler: trav,
       dates: fmtDateRange(apiTrip.start_date, apiTrip.end_date),
       where: apiTrip.description?.split('.')[0] ?? apiTrip.trip_name,
-      value: apiTrip.budget ? format(Number(apiTrip.budget), 'GHS') : mockTd.value,
-      status: sm.display as TripStatus,
+      value: apiTrip.budget ? format(Number(apiTrip.budget), 'GHS') : '',
+      status: sm.display as TripStatusLabel,
       statusBg: sm.bg,
       statusFg: sm.fg,
       gradient: sm.gradient,
       origin: apiTrip.customers?.[0]?.last_name ?? 'Traveler',
+      total: '',
+      days: [],
+      costs: [],
+      options: [],
+      optionsLabel: '',
+      headerActions: [],
+      // The trip's real description doubles as the "discovery call brief" card's content —
+      // previously this always showed demo-trip-0's hardcoded brief regardless of which real
+      // trip was open; this is the actual per-trip data it should have been reading all along.
+      brief: apiTrip.description ?? undefined,
     };
-  }, [apiTrip, mockTd, format]);
+  }, [apiTrip, format]);
 
   const tripTb = useMemo(() => {
-    if (!apiTrip) return mockTb;
+    if (!apiTrip) return emptyTb;
     const ic = apiTrip.itineraries ?? [];
     const hasItins = ic.length > 0;
     return {
@@ -483,12 +520,12 @@ export default function TripDetail() {
       chipBorder: '#C4D2FF',
       showDrafting: false,
       showBuilder: true,
-      showDraft: apiTrip.status === 'planning' || apiTrip.status === 'inquiry',
+      showDraft: apiTrip.status === TripStatus.PLANNING || apiTrip.status === TripStatus.INQUIRY,
       showOptions: hasItins,
       showRefs: false,
       refs: [],
     };
-  }, [apiTrip, mockTb]);
+  }, [apiTrip]);
 
   const td = tripTd;
   const tb = tripTb;
@@ -562,9 +599,9 @@ export default function TripDetail() {
     };
   }, [tripCosts, selectedItinerary]);
 
-  const costs = computedCosts?.rows ?? (apiTrip ? [] : td.costs ?? []);
-  const costTotal = computedCosts?.total ?? (apiTrip ? '' : td.total ?? '');
-  const costFee = computedCosts?.fee ?? (apiTrip ? '' : 'Service fee charged to traveller');
+  const costs = computedCosts?.rows ?? [];
+  const costTotal = computedCosts?.total ?? '';
+  const costFee = computedCosts?.fee ?? '';
   const payments = computedCosts?.payments ?? [];
   const costSummary = computedCosts?.summary ?? null;
   const costCurrency = computedCosts?.currency ?? 'GHS';
@@ -723,12 +760,19 @@ export default function TripDetail() {
     if (acceptedItineraryId === itineraryId) {
       setAcceptedItineraryId(null);
       setAcceptingItineraryId(itineraryId);
-      try { await ApiService.updateItinerary(itineraryId, { status: 'draft' }); } finally { setAcceptingItineraryId(null); }
+      try { await ApiService.updateItinerary(itineraryId, { status: ItineraryStatus.DRAFT }); } finally { setAcceptingItineraryId(null); }
       return;
     }
     setAcceptedItineraryId(itineraryId);
     setAcceptingItineraryId(itineraryId);
-    try { await ApiService.updateItinerary(itineraryId, { status: 'confirmed' }); } finally { setAcceptingItineraryId(null); }
+    try {
+      await ApiService.updateItinerary(itineraryId, { status: ItineraryStatus.CONFIRMED });
+      // Refreshes apiTrip so the auto-booked status effect above sees the newly confirmed
+      // itinerary right away, instead of waiting for some unrelated refresh to pick it up.
+      await refreshTrip();
+    } finally {
+      setAcceptingItineraryId(null);
+    }
   };
 
   // Logs a new call against this trip (Calls tab).
@@ -766,27 +810,31 @@ export default function TripDetail() {
   };
 
   // Toggles an action item between pending and checked (done).
-  const handleToggleActionItem = async (itemId: string, currentStatus: string) => {
-    const next = currentStatus === 'checked' ? 'pending' : 'checked';
+  const handleToggleActionItem = async (itemId: string, currentStatus: CallActionItemStatus) => {
+    const next = currentStatus === CallActionItemStatus.CHECKED ? CallActionItemStatus.PENDING : CallActionItemStatus.CHECKED;
     await ApiService.updateCallActionItem(itemId, { status: next });
     refreshCalls();
   };
 
   // Records a payment against this trip (cost summary sidebar). Marked completed
   // immediately — this app has no separate pending-payment-then-confirm flow yet.
+  // The agent can enter the amount in whichever currency they actually collected it in
+  // (paymentCurrency) — converted to GHS here so every recorded payment stays comparable
+  // regardless of what currency it was typed in, same as the Moolre flow below.
   const handleRecordPayment = async () => {
     if (!apiTrip) return;
     const amount = Number(paymentAmount);
     if (!paymentAmount.trim() || Number.isNaN(amount) || amount <= 0) return;
     setSavingPayment(true);
     try {
+      const amountGHS = convert(amount, paymentCurrency, 'GHS');
       // Backend validates amount as a whole integer (no decimals) — round rather than reject.
       await ApiService.recordTripPayment({
         trip_id: apiTrip.trip_id,
-        amount: Math.round(amount),
-        currency: costCurrency,
+        amount: Math.round(amountGHS),
+        currency: 'GHS',
         payment_method: paymentMethod.trim() || undefined,
-        status: 'completed',
+        status: TransactionStatus.COMPLETED,
       });
       setPaymentAmount('');
       setPaymentMethod('');
@@ -801,13 +849,15 @@ export default function TripDetail() {
   // pending transaction server-side and redirects the browser to Moolre's hosted checkout
   // page. On success the browser navigates away, so there's no "finally" to reset the loading
   // state — it only needs resetting if the request itself fails before any redirect happens.
+  // Moolre only settles in GHS, so the chosen-currency amount is converted before sending.
   const handlePayWithMoolre = async () => {
     if (!apiTrip) return;
     const amount = Number(paymentAmount);
     if (!paymentAmount.trim() || Number.isNaN(amount) || amount <= 0) return;
     setPayingWithMoolre(true);
     try {
-      const checkout = await ApiService.initiateMoolreTripPayment(apiTrip.trip_id, Math.round(amount));
+      const amountGHS = convert(amount, paymentCurrency, 'GHS');
+      const checkout = await ApiService.initiateMoolreTripPayment(apiTrip.trip_id, Math.round(amountGHS));
       window.location.href = checkout.authorization_url;
     } catch {
       ctx.toastAction('Could not start the Moolre payment.');
@@ -942,7 +992,7 @@ export default function TripDetail() {
     if (!apiTrip) return;
     setBookingAll(true);
     try {
-      await ApiService.updateTripStatus(apiTrip.trip_id, 'booked');
+      await ApiService.updateTripStatus(apiTrip.trip_id, TripStatus.BOOKED);
       refreshTrip();
     } finally {
       setBookingAll(false);
@@ -1063,7 +1113,7 @@ export default function TripDetail() {
     const tripCalls = (apiTrip.calls ?? apiCalls);
     tripCalls.forEach(call => {
       const total = call.action_items?.length ?? 0;
-      const pending = (call.action_items ?? []).filter(a => a.status !== 'checked').length;
+      const pending = (call.action_items ?? []).filter(a => a.status !== CallActionItemStatus.CHECKED).length;
       items.push({
         iconEl: '🎙️',
         iconBg: '#F0EBFF',
@@ -1078,7 +1128,7 @@ export default function TripDetail() {
     (apiTrip.trip_payments ?? []).forEach(tp => {
       if (!tp.transaction) return;
       const t = tp.transaction;
-      const paid = t.status === 'completed';
+      const paid = t.status === TransactionStatus.COMPLETED;
       items.push({
         iconEl: '💳',
         iconBg: paid ? '#E3F7EF' : '#FFF3E0',
@@ -1447,7 +1497,7 @@ Questions? Simply reply to this email or reach out directly.`
                   <select
                     className="td-status-select"
                     value={apiTrip.status}
-                    onChange={e => handleStatusTransition(e.target.value)}
+                    onChange={e => handleStatusTransition(e.target.value as TripStatus)}
                     disabled={updatingStatus}
                     aria-label="Change trip status"
                   >
@@ -1455,7 +1505,7 @@ Questions? Simply reply to this email or reach out directly.`
                       <option key={value} value={value}>{meta.display}</option>
                     ))}
                   </select>
-                  {apiTrip.status === 'planning' && (
+                  {apiTrip.status === TripStatus.PLANNING && (
                     <>
                       <button onClick={handleGenerateOptions} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }} disabled={updatingStatus || generatingItinerary}>
                         {generatingItinerary ? '✦ Generating…' : '✦ Generate options'}
@@ -1465,7 +1515,7 @@ Questions? Simply reply to this email or reach out directly.`
                       </button>
                     </>
                   )}
-                  {apiTrip.status === 'inquiry' && (
+                  {apiTrip.status === TripStatus.INQUIRY && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>Preview</button>
                       <button onClick={handleShareTravelerView} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}>
@@ -1473,7 +1523,7 @@ Questions? Simply reply to this email or reach out directly.`
                       </button>
                     </>
                   )}
-                  {apiTrip.status === 'booked' && (
+                  {apiTrip.status === TripStatus.BOOKED && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>View trip pack</button>
                       <button onClick={handleMessageTraveler} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}>
@@ -1481,26 +1531,26 @@ Questions? Simply reply to this email or reach out directly.`
                       </button>
                     </>
                   )}
-                  {apiTrip.status === 'in_progress' && (
+                  {apiTrip.status === TripStatus.IN_PROGRESS && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>Preview</button>
-                      <button onClick={() => handleStatusTransition('completed')} className="td-action-btn" style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }} disabled={updatingStatus}>
+                      <button onClick={() => handleStatusTransition(TripStatus.COMPLETED)} className="td-action-btn" style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }} disabled={updatingStatus}>
                         Complete trip
                       </button>
                     </>
                   )}
-                  {apiTrip.status === 'completed' && (
+                  {apiTrip.status === TripStatus.COMPLETED && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>View trip pack</button>
-                      <button onClick={() => handleStatusTransition('in_progress')} className="td-action-btn" style={{ background: '#EB8C2B', color: '#fff', borderColor: '#EB8C2B' }} disabled={updatingStatus}>
+                      <button onClick={() => handleStatusTransition(TripStatus.IN_PROGRESS)} className="td-action-btn" style={{ background: '#EB8C2B', color: '#fff', borderColor: '#EB8C2B' }} disabled={updatingStatus}>
                         Reopen
                       </button>
                     </>
                   )}
-                  {apiTrip.status === 'cancelled' && (
+                  {apiTrip.status === TripStatus.CANCELLED && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>Preview</button>
-                      <button onClick={() => handleStatusTransition('planning')} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }} disabled={updatingStatus}>
+                      <button onClick={() => handleStatusTransition(TripStatus.PLANNING)} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }} disabled={updatingStatus}>
                         Reactivate
                       </button>
                     </>
@@ -1610,6 +1660,7 @@ Questions? Simply reply to this email or reach out directly.`
               </div>
             )}
 
+            <div className="td-chat-cards-grid">
             {(apiTrip?.itineraries ?? []).map((itin, i) => {
               const opt = options[i];
               if (!opt) return null;
@@ -1744,6 +1795,7 @@ Questions? Simply reply to this email or reach out directly.`
                 </div>
               );
             })}
+            </div>
 
             {/* Service include toggles — always visible so the agent can flip before generating */}
             {apiTrip && (
@@ -1937,7 +1989,7 @@ Questions? Simply reply to this email or reach out directly.`
               const anyActive = customers.some(c => !travelerPackages[c.customer_id] || travelerPackages[c.customer_id] !== 'cancelled');
               return (
                 <div className="td-tr-actions">
-                  {allSamePkg && apiTrip.status !== 'booked' && (
+                  {allSamePkg && apiTrip.status !== TripStatus.BOOKED && (
                     <button
                       className="td-tr-confirm-btn"
                       onClick={handleConfirmBookingAll}
@@ -1949,10 +2001,10 @@ Questions? Simply reply to this email or reach out directly.`
                   {allAccepted && !allSamePkg && (
                     <span className="td-tr-mixed-note">Travelers have different packages — book separately or agree on one option.</span>
                   )}
-                  {anyActive && apiTrip.status !== 'cancelled' && (
+                  {anyActive && apiTrip.status !== TripStatus.CANCELLED && (
                     <button
                       className="td-tr-cancel-btn"
-                      onClick={() => handleStatusTransition('cancelled')}
+                      onClick={() => handleStatusTransition(TripStatus.CANCELLED)}
                       disabled={updatingStatus}
                     >
                       Cancel trip for all
@@ -2728,14 +2780,14 @@ Questions? Simply reply to this email or reach out directly.`
                                     <button
                                       onClick={() => handleToggleActionItem(a.action_item_id, a.status)}
                                       className="td-call-action-num td-call-action-toggle"
-                                      style={a.status === 'checked' ? { background: '#0E9F6E', color: '#fff' } : undefined}
+                                      style={a.status === CallActionItemStatus.CHECKED ? { background: '#0E9F6E', color: '#fff' } : undefined}
                                       title="Toggle done"
                                     >
-                                      {a.status === 'checked' ? '✓' : i + 1}
+                                      {a.status === CallActionItemStatus.CHECKED ? '✓' : i + 1}
                                     </button>
                                     <span
                                       className="td-call-action-text"
-                                      style={a.status === 'checked' ? { textDecoration: 'line-through', color: '#AEB3C2' } : undefined}
+                                      style={a.status === CallActionItemStatus.CHECKED ? { textDecoration: 'line-through', color: '#AEB3C2' } : undefined}
                                     >
                                       {a.description}
                                     </span>
@@ -2869,13 +2921,28 @@ Questions? Simply reply to this email or reach out directly.`
                       <div className="td-record-payment">
                         {showPaymentForm ? (
                           <div className="td-payment-form">
-                            <input
-                              value={paymentAmount}
-                              onChange={e => setPaymentAmount(e.target.value)}
-                              placeholder={`Amount (${costCurrency})`}
-                              type="number"
-                              className="td-call-input"
-                            />
+                            <div className="td-payment-amount-row">
+                              <input
+                                value={paymentAmount}
+                                onChange={e => setPaymentAmount(e.target.value)}
+                                placeholder={`Amount (${paymentCurrency})`}
+                                type="number"
+                                className="td-call-input"
+                              />
+                              <select
+                                value={paymentCurrency}
+                                onChange={e => setPaymentCurrency(e.target.value)}
+                                className="td-call-input td-payment-currency-select"
+                                aria-label="Payment currency"
+                              >
+                                {SUPPORTED_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            </div>
+                            {paymentCurrency !== 'GHS' && paymentAmount.trim() && !Number.isNaN(Number(paymentAmount)) && (
+                              <div className="td-payment-convert-hint">
+                                ≈ {format(convert(Number(paymentAmount), paymentCurrency, 'GHS'), 'GHS')} — payments are settled/recorded in GHS
+                              </div>
+                            )}
                             <input
                               value={paymentMethod}
                               onChange={e => setPaymentMethod(e.target.value)}
@@ -2884,7 +2951,7 @@ Questions? Simply reply to this email or reach out directly.`
                             />
                             <div className="td-payment-form-actions">
                               <button
-                                onClick={() => { setShowPaymentForm(false); setPaymentAmount(''); setPaymentMethod(''); }}
+                                onClick={() => { setShowPaymentForm(false); setPaymentAmount(''); setPaymentMethod(''); setPaymentCurrency(costCurrency); }}
                                 className="td-action-btn"
                                 style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}
                               >
@@ -2909,7 +2976,7 @@ Questions? Simply reply to this email or reach out directly.`
                             </div>
                           </div>
                         ) : (
-                          <button onClick={() => setShowPaymentForm(true)} className="td-dashed-btn">
+                          <button onClick={() => { setShowPaymentForm(true); setPaymentCurrency(costCurrency); }} className="td-dashed-btn">
                             + Record payment
                           </button>
                         )}

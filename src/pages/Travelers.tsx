@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { ApiService } from '../services/api-service';
 import { useApp } from '../contexts/AppContext';
 import type { CustomerResponse, TripResponse, TripCostResponse } from '../types/app';
+import { TripStatus } from '../types/app';
+import { apiStatusMeta } from '../constants/app';
 import '../styles/Travelers.css';
 
 type ViewMode = 'table' | 'card';
@@ -14,6 +16,8 @@ const statusColors: Record<string, { bg: string; fg: string }> = {
   inactive: { bg: '#EEF0F4', fg: '#8A90A2' },
   archived: { bg: '#FDECEC', fg: '#D64545' },
 };
+
+const BOOKED_LIKE_STATUSES: TripStatus[] = [TripStatus.BOOKED, TripStatus.IN_PROGRESS, TripStatus.COMPLETED];
 
 const avatarColors = ['#2B63F6', '#0E9F6E', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#0E7C8F', '#C13584'];
 
@@ -210,7 +214,7 @@ export default function Travelers() {
           </div>
         ) : viewMode === 'card' ? (
           <div className="trav-card-grid">
-            {filtered.map((c, i) => {
+            {filtered.map((c) => {
               const sc = statusColors[c.status] ?? { bg: '#EEF0F4', fg: '#5B6172' };
               const color = avatarColor(c.customer_id);
               const tripCount = c.trips?.length ?? 0;
@@ -256,7 +260,7 @@ export default function Travelers() {
               <span className="table-th">Status</span>
               <span className="table-th">Actions</span>
             </div>
-            {filtered.map((c, i) => {
+            {filtered.map((c) => {
               const sc = statusColors[c.status] ?? { bg: '#EEF0F4', fg: '#5B6172' };
               return (
                 <div key={c.customer_id} className="table-row travelers-table-row" style={{ cursor: 'pointer' }} onClick={() => openDetail(c)}>
@@ -319,7 +323,7 @@ export default function Travelers() {
             </div>
             <div className="trav-detail-stat">
               <div className="trav-detail-stat-num">
-                {travelerTrips.filter(t => t.status === 'Completed' || t.status === 'Confirmed').length || '—'}
+                {travelerTrips.filter(t => t.status === TripStatus.COMPLETED).length || '—'}
               </div>
               <div className="trav-detail-stat-label">Completed</div>
             </div>
@@ -388,14 +392,13 @@ export default function Travelers() {
                   ) : travelerTrips
                       .filter(t => !tripSearch || t.trip_name.toLowerCase().includes(tripSearch.toLowerCase()) || (t.description ?? '').toLowerCase().includes(tripSearch.toLowerCase()))
                       .map(t => {
-                        const statusBg = t.status === 'Confirmed' ? '#E3F7EF' : t.status === 'Draft' ? '#EEF0F4' : '#EAF0FF';
-                        const statusFg = t.status === 'Confirmed' ? '#0E9F6E' : t.status === 'Draft' ? '#5B6172' : '#2B63F6';
+                        const sm = apiStatusMeta[t.status];
                         const otherTravelers = (t.customers ?? []).filter(c => c.customer_id !== selected?.customer_id);
                         return (
                           <div key={t.trip_id} className="trav-trip-card" onClick={() => navigate(`/app/trips/${t.trip_id}`)}>
                             <div className="trav-trip-card-header">
                               <div className="trav-trip-card-name">{t.trip_name}</div>
-                              <span className="status-pill" style={{ background: statusBg, color: statusFg }}>{t.status ?? 'Draft'}</span>
+                              <span className="status-pill" style={{ background: sm.bg, color: sm.fg }}>{sm.display}</span>
                             </div>
                             {otherTravelers.length > 0 && (
                               <div className="trav-trip-multi-label">
@@ -429,7 +432,7 @@ export default function Travelers() {
                   </div>
                   <div className="trav-finance-card">
                     <div className="trav-finance-card-label">Trips booked</div>
-                    <div className="trav-finance-card-num">{travelerTrips.filter(t => ['booked','in_progress','completed'].includes(t.status ?? '')).length}</div>
+                    <div className="trav-finance-card-num">{travelerTrips.filter(t => BOOKED_LIKE_STATUSES.includes(t.status)).length}</div>
                   </div>
                   <div className="trav-finance-card">
                     <div className="trav-finance-card-label">Avg per trip</div>
@@ -447,9 +450,9 @@ export default function Travelers() {
                 ) : (
                   <div className="trav-fin-trip-list">
                     {travelerTrips.map(t => {
-                      const isBookedTrip = ['booked', 'in_progress', 'completed'].includes(t.status ?? '');
-                      const statusBg = t.status === 'completed' ? '#EAF0FF' : t.status === 'booked' ? '#16143A' : t.status === 'in_progress' ? '#E3F7EF' : '#EEF0F4';
-                      const statusFg = t.status === 'completed' ? '#2B63F6' : t.status === 'booked' ? '#fff' : t.status === 'in_progress' ? '#0E9F6E' : '#5B6172';
+                      const isBookedTrip = BOOKED_LIKE_STATUSES.includes(t.status);
+                      const statusBg = t.status === TripStatus.COMPLETED ? '#EAF0FF' : t.status === TripStatus.BOOKED ? '#16143A' : t.status === TripStatus.IN_PROGRESS ? '#E3F7EF' : '#EEF0F4';
+                      const statusFg = t.status === TripStatus.COMPLETED ? '#2B63F6' : t.status === TripStatus.BOOKED ? '#fff' : t.status === TripStatus.IN_PROGRESS ? '#0E9F6E' : '#5B6172';
                       const isExpanded = expandedFinTrip === t.trip_id;
                       const costs = tripCostsMap[t.trip_id];
 

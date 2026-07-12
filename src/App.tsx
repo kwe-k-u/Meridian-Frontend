@@ -1,6 +1,6 @@
 // ── App ──────────────────────────────────────────────────────
 // Root component defining the app's route structure:
-// - Public routes: /, /login, /signup, /forgot-password
+// - Public routes: / (marketing landing page), /login, /signup, /forgot-password
 // - Traveler view: /travel/:tripId (wrapped in AppProvider, no auth required — it's a
 //   shareable link sent to travelers who don't have Meridian accounts)
 // - Authenticated app: /app/* (wrapped in MainLayout with sidebar/topbar), gated by
@@ -10,6 +10,7 @@
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { CurrencyProvider } from './contexts/CurrencyContext'
+import Landing from './pages/Landing'
 import AuthPage from './pages/AuthPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import { AppProvider } from './contexts/AppContext'
@@ -34,7 +35,7 @@ function App() {
     <AuthProvider>
       <CurrencyProvider>
         <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<AuthPage />} />
           <Route path="/signup" element={<AuthPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />

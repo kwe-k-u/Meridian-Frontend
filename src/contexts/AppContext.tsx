@@ -27,12 +27,14 @@ import type {
   Plan, TeamMember, RoleDef, Channel, NotifSetting,
   OnboardingTask, GuideCard, GuideArticle, Flight, Stay, Activity,
   CallLog, CallDetail, AgentFeedItem, TripStatusLabel,
+  InvoiceItem, InvoiceDetail,
 } from '../types/app';
 import {
   convoData, agentFeed, callLogs, plansData,
   teamMembers, rolesData, channelsData,
   notifDefaults, notificationsData, onboardTasks,
   guidesData, connectChannelView, apiStatusMeta,
+  invoicesData,
 } from '../constants/app';
 
 // "4 Oct" for a single day, "4 Oct – 14 Oct 2026" for a range, "TBD" if there's no start date.
@@ -109,7 +111,10 @@ export interface AppContextType {
   pickChannel: (n: string) => void;
   connectGo: () => void;
   finishConnect: () => void;
+  openInvoiceDetail: (invId: string) => void;
   closeInvoice: () => void;
+  getInvoices: () => InvoiceItem[];
+  getInvoiceDetail: (invId: string) => InvoiceDetail | null;
   recordPayment: () => void;
   sendReminder: () => void;
   downloadInvoice: () => void;
@@ -333,7 +338,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toastAction('Channel connected');
   }, [toastAction]);
 
+  const openInvoiceDetail = useCallback((invId: string) => setOpenInvoice(invId), []);
   const closeInvoice = useCallback(() => setOpenInvoice(null), []);
+  const getInvoices = useCallback(() => invoicesData().list, []);
+  const getInvoiceDetail = useCallback((invId: string) => invoicesData().detail(invId), []);
   const recordPayment = useCallback(() => toastAction('Payment recorded'), [toastAction]);
   const sendReminder = useCallback(() => toastAction('Reminder sent'), [toastAction]);
   const downloadInvoice = useCallback(() => toastAction('Downloading invoice…'), [toastAction]);
@@ -486,7 +494,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     openGenItin, closeGenItin, openCreate, closeCreate, startSearch,
     openConnect, closeConnect, pickChannel, connectGo, finishConnect,
-    closeInvoice, recordPayment, sendReminder, downloadInvoice,
+    openInvoiceDetail, closeInvoice, getInvoices, getInvoiceDetail,
+    recordPayment, sendReminder, downloadInvoice,
     createTripFromConvo,
 
     setNewUser, setEstablished, setMonthly, setAnnual,
@@ -514,7 +523,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     getDaysFn, cloneDaysFn, resetTripState,
     openGenItin, closeGenItin, openCreate, closeCreate, startSearch,
     openConnect, closeConnect, pickChannel, connectGo, finishConnect,
-    closeInvoice, recordPayment, sendReminder, downloadInvoice,
+    openInvoiceDetail, closeInvoice, getInvoices, getInvoiceDetail,
+    recordPayment, sendReminder, downloadInvoice,
     createTripFromConvo,
     setNewUser, setEstablished, setMonthly, setAnnual,
     inviteTeammate, addSeats, saveSettings, toggleNotif, stop,

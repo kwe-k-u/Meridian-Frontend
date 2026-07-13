@@ -79,6 +79,10 @@ export default function Financials() {
     ];
   }, [transactions, convert, format]);
 
+  // Mock invoice list (ctx.getInvoices()) rendered as a separate card below the real
+  // transactions table — each row opens the InvoiceDetailModal via ctx.openInvoiceDetail.
+  const invoices = useMemo(() => ctx.getInvoices(), [ctx]);
+
   const chart: ChartBar[] = useMemo(() => {
     const byMonth: Record<string, number> = {};
     transactions
@@ -229,6 +233,34 @@ export default function Financials() {
             );
           })
         )}
+      </div>
+
+      <div className="table-card" style={{ marginTop: 24 }}>
+        <div className="th-row">
+          <span className="th-text">Invoice</span>
+          <span className="th-text">Client</span>
+          <span className="th-text">Trip</span>
+          <span className="th-text">Method</span>
+          <span className="th-text">Status</span>
+          <span className="th-text">Amount</span>
+        </div>
+        {invoices.map((inv) => (
+          <div key={inv.id} className="tr" onClick={() => ctx.openInvoiceDetail(inv.id)}>
+            <span className="td">{inv.id}</span>
+            <span className="td-gray">{inv.client}</span>
+            <span className="td-gray">{inv.trip}</span>
+            <span className="td-gray">{inv.method}</span>
+            <span>
+              <span className="status-pill" style={{ background: inv.statusBg, color: inv.statusFg }}>
+                {inv.status}
+              </span>
+            </span>
+            <span>
+              <span className="td">{inv.amount}</span>
+              {inv.balanceHint && <span className="hint">{inv.balanceHint}</span>}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );

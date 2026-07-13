@@ -7,7 +7,7 @@ import type {
   Conversation, CallLog, CallDetail,
   Plan, TeamMember, RoleDef, Channel, NotifSetting, OnboardingTask,
   GuideCard, GuideArticle, AgentFeedItem, ConnectPickItem, ConnectChannelView,
-  BillingPeriod, TripStatusLabel,
+  BillingPeriod, TripStatusLabel, InvoiceItem, InvoiceDetail,
 } from '../types/app';
 import { TripStatus } from '../types/app';
 
@@ -476,65 +476,105 @@ export function callLogs(): { logs: CallLog[], details: CallDetail[] } {
 //   }));
 // }
 
-// Six mock invoices. `detail()` is genuinely used (AppContext.getInvoiceDetail() →
-// InvoiceDetailModal.tsx), but the `list`/`tripDetail` parts are only wired through
-// getFinancialData(), which no page calls anymore — see chartData() above.
-// export function invoicesData(): {
-//   list: InvoiceItem[];
-//   detail: (id: string) => InvoiceDetail | null;
-//   tripDetail: (id: string) => { openTrip: () => void; tripIdx: number } | null;
-// } {
-//   const list: InvoiceItem[] = invDefs.map(v => {
-//     const paid = v.payments.reduce((a,p) => a + (p[2] > 0 ? p[2] : 0), 0);
-//     const balance = v.total - paid;
-//     const m = invMeta[v.status];
-//     let balanceHint = '';
-//     if (v.status === 'Partial') balanceHint = fmt(balance) + ' left';
-//     else if (v.status === 'Overdue') balanceHint = 'Unpaid';
-//     return {
-//       id: v.id, client: v.client, trip: v.trip, amount: fmt(v.total),
-//       status: v.status, statusBg: m[0], statusFg: m[1],
-//       method: v.method, date: v.issued, balanceHint,
-//       open: () => {},
-//     };
-//   });
+function fmt(n: number): string {
+  return 'GHS ' + n.toLocaleString('en-US');
+}
 
-//   const detail = (id: string): InvoiceDetail | null => {
-//     const oi = invDefs.find(v => v.id === id);
-//     if (!oi) return null;
-//     const paid = oi.payments.reduce((a,p) => a + (p[2] > 0 ? p[2] : 0), 0);
-//     const balance = oi.total - paid;
-//     const m = invMeta[oi.status];
-//     const pct = oi.total > 0 ? Math.round(paid / oi.total * 100) : 0;
-//     return {
-//       id: oi.id, status: oi.status, statusBg: m[0], statusFg: m[1],
-//       issued: oi.issued, due: oi.due, method: oi.method, agent: oi.agent, trip: oi.trip,
-//       client: oi.client, initials: oi.initials, avatarBg: oi.avatarBg, email: oi.email, phone: oi.phone,
-//       total: fmt(oi.total), paid: fmt(paid), balance: fmt(balance), pct: pct + '%',
-//       barColor: balance <= 0 ? '#13B981' : (oi.status === 'Overdue' ? '#D64545' : '#2B63F6'),
-//       summaryLabel: balance <= 0 ? 'Fully paid' : fmt(balance) + ' outstanding',
-//       summaryColor: balance <= 0 ? '#0E9F6E' : (oi.status === 'Overdue' ? '#D64545' : '#B7791F'),
-//       hasBalance: balance > 0,
-//       items: oi.items.map(it => ({label: it[0], amount: fmt(it[1])})),
-//       payments: oi.payments.map(p => ({
-//         date: p[0], label: p[1],
-//         amount: p[2] < 0 ? '– ' + fmt(-p[2]) : fmt(p[2]),
-//         method: p[3], ref: p[4], dot: p[2] < 0 ? '#D64545' : '#13B981',
-//       })),
-//       schedule: oi.schedule.map(s => ({label: s[0], amount: fmt(s[1]), due: s[2]})),
-//       hasSchedule: oi.schedule.length > 0,
-//       openTrip: () => {},
-//     };
-//   };
+const invMeta: Record<string, [string,string]> = {
+  'Paid': ['#E3F7EF','#0E9F6E'],
+  'Partial': ['#EAF0FF','#2B63F6'],
+  'Pending': ['#FFF3E0','#B7791F'],
+  'Overdue': ['#FDECEC','#D64545'],
+  'Refunded': ['#EEF0F4','#8A90A2'],
+};
 
-//   const tripDetail = (id: string): { openTrip: () => void; tripIdx: number } | null => {
-//     const oi = invDefs.find(v => v.id === id);
-//     if (!oi) return null;
-//     return { openTrip: () => {}, tripIdx: oi.tripIdx };
-//   };
+const invDefs: {
+  id: string; client: string; initials: string; avatarBg: string; trip: string; tripIdx: number;
+  agent: string; email: string; phone: string; issued: string; due: string; method: string;
+  status: string; total: number;
+  items: [string,number][];
+  payments: [string,string,number,string,string][];
+  schedule: [string,number,string][];
+}[] = [
+  {id:'INV-1042', client:'Owusu Group', initials:'OG', avatarBg:'#2B63F6', trip:'Cape Town Retreat', tripIdx:2, agent:'Kweku Ansah', email:'accounts@owusugroup.com', phone:'+233 24 555 0192', issued:'2 Jun 2026', due:'18 Jun 2026', method:'Paystack', status:'Paid', total:64000,
+   items:[['Flights · 8 pax · Accra ⇄ Cape Town',28800],['Stays · 9 nights · One&Only',27000],['Experiences · 5 included',6000],['Meridian service fee',2200]],
+   payments:[['2 Jun 2026','Deposit · 50%',32000,'Paystack','PSK-8841'],['18 Jun 2026','Balance · 50%',32000,'Paystack','PSK-9023']], schedule:[]},
+  {id:'INV-1041', client:'The Adjei Family', initials:'AF', avatarBg:'#7C5CFC', trip:'Dubai · Family', tripIdx:1, agent:'Adwoa Mensah', email:'kojo.adjei@gmail.com', phone:'+233 20 411 7788', issued:'8 Jun 2026', due:'30 Jun 2026', method:'Paystack', status:'Partial', total:20600,
+   items:[['Flights · 4 pax · Accra ⇄ Dubai',9200],['Stays · 6 nights · Atlantis The Palm',8600],['Desert & city experiences',1800],['Meridian service fee',1000]],
+   payments:[['8 Jun 2026','Deposit · 50%',10300,'Paystack','PSK-8990']], schedule:[['Balance · 50%',10300,'Due 30 Jun 2026']]},
+  {id:'INV-1039', client:'Kojo Mensah', initials:'KM', avatarBg:'#0E9F6E', trip:'Tokyo', tripIdx:3, agent:'Yaw Boateng', email:'kojo.m@outlook.com', phone:'+233 27 330 5510', issued:'1 Jun 2026', due:'14 Jun 2026', method:'Paystack', status:'Paid', total:26150,
+   items:[['Flights · 2 pax · Accra ⇄ Tokyo',16400],['Stays · 7 nights · Park Hyatt',7600],['Meridian service fee',2150]],
+   payments:[['14 Jun 2026','Paid in full',26150,'Paystack','PSK-8770']], schedule:[]},
+  {id:'INV-1037', client:'Tetteh & Co', initials:'TC', avatarBg:'#B7791F', trip:'Lagos', tripIdx:4, agent:'Adwoa Mensah', email:'finance@tetteh.co', phone:'+234 80 221 4400', issued:'4 Jun 2026', due:'11 Jun 2026', method:'Bank transfer', status:'Partial', total:22400,
+   items:[['Flights · 6 pax · Accra ⇄ Lagos',7800],['Stays · 4 nights · Eko Hotel',9200],['Conference logistics',4400],['Meridian service fee',1000]],
+   payments:[['4 Jun 2026','First instalment',8000,'Bank transfer','TRF-2218'],['9 Jun 2026','Second instalment',7000,'Bank transfer','TRF-2240']], schedule:[['Final instalment',7400,'Due 25 Jun 2026']]},
+  {id:'INV-1035', client:'Yaa Boateng', initials:'YB', avatarBg:'#C2410C', trip:'Zanzibar', tripIdx:5, agent:'Kweku Ansah', email:'yaa.boat@gmail.com', phone:'+233 24 770 9981', issued:'20 May 2026', due:'2 Jun 2026', method:'Paystack', status:'Overdue', total:19450,
+   items:[['Flights · 2 pax · Accra ⇄ Zanzibar',10200],['Stays · 6 nights · Park Hyatt',7250],['Meridian service fee',2000]],
+   payments:[], schedule:[['Full balance',19450,'Was due 2 Jun 2026']]},
+  {id:'INV-1031', client:'Nana Sarpong', initials:'NS', avatarBg:'#5B6172', trip:'Europe Tour', tripIdx:6, agent:'Yaw Boateng', email:'nana.sarpong@gmail.com', phone:'+233 20 556 1212', issued:'24 May 2026', due:'28 May 2026', method:'Paystack', status:'Refunded', total:1200,
+   items:[['Cancellation admin fee',1200]],
+   payments:[['25 May 2026','Deposit',1200,'Paystack','PSK-8401'],['28 May 2026','Refund issued',-1200,'Paystack','PSK-8402R']], schedule:[]},
+];
 
-//   return { list, detail, tripDetail };
-// }
+// Six mock invoices. `detail()` powers AppContext.getInvoiceDetail() → InvoiceDetailModal.tsx.
+// `list` is rendered as the Invoices card on Financials.tsx; each row opens the modal via
+// ctx.openInvoiceDetail(id). `tripDetail` maps an invoice back to its trip index.
+export function invoicesData(): {
+  list: InvoiceItem[];
+  detail: (id: string) => InvoiceDetail | null;
+  tripDetail: (id: string) => { openTrip: () => void; tripIdx: number } | null;
+} {
+  const list: InvoiceItem[] = invDefs.map(v => {
+    const paid = v.payments.reduce((a,p) => a + (p[2] > 0 ? p[2] : 0), 0);
+    const balance = v.total - paid;
+    const m = invMeta[v.status];
+    let balanceHint = '';
+    if (v.status === 'Partial') balanceHint = fmt(balance) + ' left';
+    else if (v.status === 'Overdue') balanceHint = 'Unpaid';
+    return {
+      id: v.id, client: v.client, trip: v.trip, amount: fmt(v.total),
+      status: v.status, statusBg: m[0], statusFg: m[1],
+      method: v.method, date: v.issued, balanceHint,
+      open: () => {},
+    };
+  });
+
+  const detail = (id: string): InvoiceDetail | null => {
+    const oi = invDefs.find(v => v.id === id);
+    if (!oi) return null;
+    const paid = oi.payments.reduce((a,p) => a + (p[2] > 0 ? p[2] : 0), 0);
+    const balance = oi.total - paid;
+    const m = invMeta[oi.status];
+    const pct = oi.total > 0 ? Math.round(paid / oi.total * 100) : 0;
+    return {
+      id: oi.id, status: oi.status, statusBg: m[0], statusFg: m[1],
+      issued: oi.issued, due: oi.due, method: oi.method, agent: oi.agent, trip: oi.trip,
+      client: oi.client, initials: oi.initials, avatarBg: oi.avatarBg, email: oi.email, phone: oi.phone,
+      total: fmt(oi.total), paid: fmt(paid), balance: fmt(balance), pct: pct + '%',
+      barColor: balance <= 0 ? '#13B981' : (oi.status === 'Overdue' ? '#D64545' : '#2B63F6'),
+      summaryLabel: balance <= 0 ? 'Fully paid' : fmt(balance) + ' outstanding',
+      summaryColor: balance <= 0 ? '#0E9F6E' : (oi.status === 'Overdue' ? '#D64545' : '#B7791F'),
+      hasBalance: balance > 0,
+      items: oi.items.map(it => ({label: it[0], amount: fmt(it[1])})),
+      payments: oi.payments.map(p => ({
+        date: p[0], label: p[1],
+        amount: p[2] < 0 ? '– ' + fmt(-p[2]) : fmt(p[2]),
+        method: p[3], ref: p[4], dot: p[2] < 0 ? '#D64545' : '#13B981',
+      })),
+      schedule: oi.schedule.map(s => ({label: s[0], amount: fmt(s[1]), due: s[2]})),
+      hasSchedule: oi.schedule.length > 0,
+      openTrip: () => {},
+    };
+  };
+
+  const tripDetail = (id: string): { openTrip: () => void; tripIdx: number } | null => {
+    const oi = invDefs.find(v => v.id === id);
+    if (!oi) return null;
+    return { openTrip: () => {}, tripIdx: oi.tripIdx };
+  };
+
+  return { list, detail, tripDetail };
+}
 
 // Pricing plan cards for the Pricing page (ctx.getPlans() → Pricing.tsx). `annual` billing
 // is priced at 10x the monthly rate (i.e. ~17% off a 12x multiple) as a simple placeholder deal.

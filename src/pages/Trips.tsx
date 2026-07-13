@@ -213,7 +213,11 @@ export default function Trips() {
           const hasMulti = customerCount > 1;
 
           return (
-            <div key={t.trip_id} onClick={() => navigate(`/app/trips/${t.trip_id}`)} className="trips-row trips-grid">
+            <div key={t.trip_id}>
+            <div
+              onClick={() => navigate(`/app/trips/${t.trip_id}`)}
+              className="trips-row trips-grid trips-table-view"
+            >
               <div className="trip-name-group">
                 <div className="trip-avatar-wrap">
                   <div className="trip-cover" style={{ background: grad }} />
@@ -271,6 +275,41 @@ export default function Trips() {
                 </button>
               </div>
             </div>
+
+            <div
+              onClick={() => navigate(`/app/trips/${t.trip_id}`)}
+              className="trip-card trips-card-view"
+            >
+              <div className="trip-card-row">
+                <div className="trip-avatar-wrap">
+                  <div className="trip-cover" style={{ background: grad }} />
+                  <div className="trip-badge">1</div>
+                </div>
+                <div className="trip-card-info">
+                  <div className="trip-card-name">{t.trip_name}</div>
+                  <div className="trip-card-dates">{formatDates(t.start_date, t.end_date)}</div>
+                </div>
+              </div>
+              <div className="trip-card-details">
+                <div className="trip-card-meta">
+                  <span className="trip-card-meta-item">
+                    <strong>Traveler:</strong> {trav}
+                  </span>
+                  <span className="trip-card-meta-item">
+                    <strong>Destination:</strong> {whereFrom(t)}
+                  </span>
+                </div>
+                <div className="trip-card-value-status">
+                  <div className="trip-status" style={{ background: sm.bg, color: sm.fg }}>
+                    {sm.display}
+                  </div>
+                  <div className="trip-value">
+                    {t.budget ? `GHS ${Number(t.budget).toLocaleString()}` : '—'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           );
         })}
       </div>

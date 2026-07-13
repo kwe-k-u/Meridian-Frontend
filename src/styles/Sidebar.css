@@ -191,3 +191,21 @@
 .profile-menu-item:hover {
   background: #FEF2F2;
 }
+
+/* ── Mobile slide-out drawer ── */
+
+@media (max-width: 1024px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    height: 100vh;
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+}

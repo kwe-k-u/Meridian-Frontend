@@ -221,3 +221,112 @@
   flex-shrink: 0;
   margin-top: 6px;
 }
+
+/* ── Mobile generate button ── */
+.topbar-gen-mobile {
+  display: none;
+  background: #10B981;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  color: #fff;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.topbar-gen-mobile:hover {
+  background: #059669;
+}
+
+/* ── Mobile consolidated create menu (Dashboard) ── */
+.topbar-mobile-actions {
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-create-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.topbar-create-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 220px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.14);
+  z-index: 200;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: notif-pop 0.18s ease both;
+}
+
+.topbar-create-menu .btn-primary {
+  width: 100%;
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
+/* ── Hamburger (mobile) ── */
+.topbar-hamburger {
+  display: none;
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.topbar-hamburger:hover {
+  color: var(--text-heading);
+}
+
+@media (max-width: 1024px) {
+  .topbar-hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .topbar-title {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .topbar-search {
+    display: none;
+  }
+
+  .topbar-hide-mobile {
+    display: none !important;
+  }
+
+  .topbar-gen-mobile {
+    display: inline-flex;
+  }
+
+  .topbar-mobile-actions {
+    display: inline-flex;
+  }
+
+  .topbar-btn-label {
+    display: none;
+  }
+}
+
+@media (min-width: 1025px) {
+  .topbar-btn-label {
+    display: inline;
+  }
+}

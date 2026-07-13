@@ -1,0 +1,433 @@
+/* ── InvoiceDetailModal ── Styles for the Invoice Detail modal (header, amount card, breakdown, payments, schedule) */
+
+/* ── Backdrop ── */
+.inv-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(16,18,36,.5);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Card Container ── */
+.inv-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-card);
+  border-radius: 20px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.12);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+/* ── Header ── */
+.inv-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.inv-header-left {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.inv-id {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.inv-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.inv-dates {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.inv-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: #F4F6FA;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.inv-scroll {
+  overflow-y: auto;
+  flex: 1;
+  padding: 24px;
+}
+
+/* ── Amount Card & Progress ── */
+.inv-amount-card {
+  background: #F4F7FF;
+  border-radius: 14px;
+  padding: 20px 24px;
+  border: 1px solid #C4D2FF;
+  margin-bottom: 20px;
+}
+
+.inv-amount-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.inv-total-label {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.inv-total-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.inv-paid-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.inv-paid-label {
+  color: var(--secondary);
+}
+
+.inv-paid-value {
+  color: var(--text-heading);
+  font-weight: 600;
+}
+
+.inv-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding-top: 8px;
+  border-top: 1px solid #C4D2FF;
+  margin-bottom: 12px;
+}
+
+.inv-summary-label {
+  font-weight: 600;
+}
+
+.inv-progress-wrap {
+  width: 100%;
+  height: 6px;
+  background: var(--border-light);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.inv-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+}
+
+/* ── Info Grid (Billed To, Trip) ── */
+.inv-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.inv-grid-card {
+  background: #FAFBFC;
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+
+.inv-grid-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.inv-billed-to {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.inv-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.inv-billed-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.inv-billed-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.inv-billed-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.inv-trip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inv-trip-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.inv-trip-agent {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inv-trip-link {
+  font-size: 13px;
+  color: var(--primary);
+  font-weight: 600;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+.inv-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 12px;
+}
+
+/* ── Line Items Breakdown ── */
+.inv-breakdown {
+  margin-bottom: 24px;
+}
+
+.inv-line-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.inv-line-label {
+  color: var(--text);
+}
+
+.inv-line-amount {
+  color: var(--text-heading);
+  font-weight: 600;
+}
+
+/* ── Total ── */
+.inv-total-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+/* ── Payments ── */
+.inv-payments {
+  margin-bottom: 24px;
+}
+
+.inv-pay-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.inv-pay-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.inv-pay-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.inv-pay-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.inv-pay-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inv-pay-amount {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-heading);
+  flex-shrink: 0;
+}
+
+/* ── Payment Schedule ── */
+.inv-schedule-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--border-light);
+}
+
+.inv-schedule-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--brand-orange);
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.inv-schedule-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.inv-schedule-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.inv-schedule-due {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.inv-schedule-amount {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  flex-shrink: 0;
+}
+
+/* ── Footer Buttons ── */
+.inv-footer {
+  display: flex;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.inv-btn-outline {
+  padding: 9px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inv-btn-primary {
+  padding: 9px 18px;
+  border-radius: 10px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── InvoiceDetailModal Responsive ── */
+@media (max-width: 768px) {
+  .inv-card {
+    max-width: 100%;
+    margin: 12px;
+    max-height: 90vh;
+  }
+
+  .inv-header {
+    padding: 16px 20px;
+  }
+
+  .inv-scroll {
+    padding: 16px 20px;
+  }
+
+  .inv-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inv-amount-card {
+    padding: 16px;
+  }
+
+  .inv-total-value {
+    font-size: 20px;
+  }
+
+  .inv-footer {
+    padding: 12px 20px;
+    flex-wrap: wrap;
+  }
+
+  .inv-footer button {
+    flex: 1;
+  }
+}

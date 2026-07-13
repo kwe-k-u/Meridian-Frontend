@@ -5,6 +5,7 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
 import type { DashboardResponse, GuideCard } from '../types/app';
 import { apiStatusMeta } from '../constants/app';
+import DemoBanner from '../components/DemoBanner';
 import '../styles/Dashboard.css';
 
 // ── Dashboard ─────────────────────────────────────────────────
@@ -227,6 +228,7 @@ function Dashboard() {
           </div>
 
           <div>
+            <DemoBanner label="Demo feature — guide cards shown are sample content" />
             <h2 className="dashboard-works-title">How Meridian works</h2>
             <p className="dashboard-works-sub">
               Get started with these guides to running your agency on Meridian.

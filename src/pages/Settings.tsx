@@ -4,6 +4,7 @@ import { useApp } from '../contexts/AppContext'
 import { useAuth } from '../contexts/AuthContext'
 import { ApiService } from '../services/api-service'
 import type { SettingsTab, CompanyResponse, CompanyUser } from '../types/app'
+import DemoBanner from '../components/DemoBanner'
 import '../styles/Settings.css'
 
 // ── Settings ───────────────────────────────────────────────────
@@ -372,6 +373,7 @@ function ChannelsSection() {
 
   return (
     <div className="settings-section">
+      <DemoBanner label="Demo feature — channel connections are not yet wired to a backend" />
       <div className="head-row">
         <p className="head-title">Connected channels</p>
         <button className="btn-connect" onClick={ctx.openConnect}>Connect channel</button>
@@ -421,6 +423,7 @@ function Notifications() {
 
   return (
     <div className="settings-section">
+      <DemoBanner label="Demo feature — preferences here aren't saved to your account yet" />
       <div className="notif-list">
         {notifItems.map((n) => {
           const isOn = settings[n.key];

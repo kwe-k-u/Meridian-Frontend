@@ -590,6 +590,21 @@
   text-align: left;
 }
 
+.faq-question-text {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.faq-status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 .faq-toggle {
   font-size: 20px;
   font-weight: 400;

@@ -7,7 +7,7 @@ import '../styles/Landing.css'
 // ── Landing ──────────────────────────────────────────────────
 // Purpose: Public marketing page shown at "/" for signed-out visitors.
 // Static content only — no API calls. Links out to /login and /signup.
-// The "screenshots" below are HTML/CSS recreations of the real app screens (Dashboard,
+// The "screenshots" below are HTML/CSS recreations of the real app screens (Itinerary,
 // Messages, Financials), not actual captured images — kept in sync by hand as those pages change.
 
 function BrowserFrame({ url, children }: { url: string; children: ReactNode }) {
@@ -21,44 +21,6 @@ function BrowserFrame({ url, children }: { url: string; children: ReactNode }) {
       </div>
       <div className="browser-frame-body">{children}</div>
     </div>
-  )
-}
-
-function DashboardShot() {
-  const trips = [
-    { name: 'Asante–Mensah Honeymoon', where: 'Santorini · Amalfi', status: 'Awaiting review', bg: '#FFF3E0', fg: '#B7791F', cover: 'linear-gradient(135deg,#1B5BBE,#5AA0FF)', value: 'GHS 84,500' },
-    { name: 'Adjei Family Dubai', where: 'Dubai', status: 'AI drafting', bg: '#EAF0FF', fg: '#2B63F6', cover: 'linear-gradient(135deg,#E08A2B,#F5C06B)', value: 'GHS 41,200' },
-    { name: 'Owusu Corporate Retreat', where: 'Cape Town', status: 'Shared', bg: '#F0EBFF', fg: '#6B46C1', cover: 'linear-gradient(135deg,#0E7C8F,#36C5C0)', value: 'GHS 128,000' },
-  ]
-  return (
-    <BrowserFrame url="app.meridian.com/dashboard">
-      <div className="shot-header">
-        <div>
-          <p className="shot-title">Good morning, Kweku</p>
-          <p className="shot-sub">Here's what's moving across your agency today</p>
-        </div>
-        <span className="shot-btn">+ New trip</span>
-      </div>
-      <div className="shot-stats">
-        <div className="shot-stat"><span>Revenue · June</span><strong>GHS 64,300</strong><em>↑ 18% vs May</em></div>
-        <div className="shot-stat"><span>Trips in motion</span><strong>12</strong><em>3 need attention</em></div>
-        <div className="shot-stat"><span>Unread messages</span><strong>7</strong><em>Across 3 channels</em></div>
-      </div>
-      <p className="shot-list-label">Trips in motion</p>
-      <div className="shot-list">
-        {trips.map((t) => (
-          <div key={t.name} className="shot-trip-row">
-            <div className="shot-trip-cover" style={{ background: t.cover }} />
-            <div className="shot-trip-info">
-              <strong>{t.name}</strong>
-              <span>{t.where}</span>
-            </div>
-            <span className="shot-pill" style={{ background: t.bg, color: t.fg }}>{t.status}</span>
-            <span className="shot-value">{t.value}</span>
-          </div>
-        ))}
-      </div>
-    </BrowserFrame>
   )
 }
 
@@ -159,25 +121,25 @@ function FinancialsShot() {
 
 const featureRows = [
   {
-    label: 'Unified inbox',
-    title: 'Every enquiry lands in one place',
-    body: 'WhatsApp Business, Gmail and Instagram messages are pulled into a single inbox, each conversation already linked to the right trip and traveler — so nothing gets missed between channels.',
-    bullets: ['One thread per traveler, across every channel', 'New enquiries automatically become draft trips', 'Full message history alongside the itinerary'],
-    shot: <InboxShot />,
+    label: 'AI trip generation',
+    title: 'A full itinerary, drafted and ready to edit',
+    body: 'Meridian reads the enquiry — chat, email or a call summary — and drafts flight, stay and activity options within budget and preferences. Swap a hotel, change dates, adjust the budget: every detail is yours to edit before it ever reaches your traveler.',
+    bullets: ['Multiple options generated per trip', 'Edit any flight, stay or activity in a couple of clicks', 'Full day-by-day itinerary with running costs'],
+    shot: <ItineraryShot />,
     reverse: false,
   },
   {
-    label: 'Itinerary drafting',
-    title: 'Itinerary options, drafted for you',
-    body: 'Meridian reads the enquiry — chat, email or a call summary — and puts together flight, stay and activity options within your budget and preferences, ready for you to review and send.',
-    bullets: ['Multiple options generated per trip', 'Full day-by-day itinerary with running costs', 'You stay in control — review before it goes out'],
-    shot: <ItineraryShot />,
+    label: 'Connected channels',
+    title: 'Enquiries from every channel become a trip',
+    body: 'WhatsApp Business, Gmail and Instagram messages are pulled into one inbox and automatically turned into a draft trip — so generation starts the moment an enquiry lands.',
+    bullets: ['One thread per traveler, across every channel', 'New enquiries automatically become draft trips', 'Full message history alongside the itinerary'],
+    shot: <InboxShot />,
     reverse: true,
   },
   {
     label: 'Payments & reporting',
     title: 'Get paid without the back-and-forth',
-    body: 'Send a secure payment link, collect deposits or full balances through Paystack or Moolre, and watch revenue, outstanding balances and payouts roll up automatically.',
+    body: 'Once the itinerary is edited and sent, collect deposits or full balances through Paystack or Moolre, and watch revenue, outstanding balances and payouts roll up automatically.',
     bullets: ['Deposit and balance payment links', 'Automatic invoice reconciliation', 'Monthly revenue and payout reporting'],
     shot: <FinancialsShot />,
     reverse: false,
@@ -185,8 +147,8 @@ const featureRows = [
 ]
 
 const steps = [
-  { n: '01', title: 'Connect your channels', body: 'Link WhatsApp Business, Gmail and Instagram in a few clicks — no technical setup required.' },
-  { n: '02', title: 'Let Meridian draft', body: 'Every new enquiry becomes a trip with itinerary options drafted and ready to review.' },
+  { n: '01', title: 'From enquiry to draft', body: 'Every new message, email or DM automatically becomes a trip with itinerary options drafted and ready to review.' },
+  { n: '02', title: 'Edit until it\'s right', body: 'Swap a hotel, change dates, adjust the budget — refine any option before it goes anywhere near your traveler.' },
   { n: '03', title: 'Share, book, get paid', body: 'Send the plan to your traveler, collect payment, and track the whole trip in one place.' },
 ]
 
@@ -199,20 +161,38 @@ const plans = [
     features: ['Everything in Growth', 'Unlimited team seats', 'SSO & advanced roles', 'Dedicated onboarding', 'SLA support', 'Custom integrations'] },
 ]
 
-const faqs = [
-  { q: 'Which channels can Meridian connect to?', a: 'Meridian currently connects to WhatsApp Business, Gmail and Instagram Direct Messages. Every message from any of these channels lands in one inbox, linked to the right trip.' },
-  { q: 'How does the itinerary drafting work?', a: 'When a new enquiry comes in — by chat, email or a summarised call — Meridian drafts flight, stay and activity options based on the budget, dates and preferences mentioned. You review, adjust and send.' },
-  { q: 'Can I collect payments through Meridian?', a: 'Yes. You can send deposit or balance payment links to travelers, which are processed through Paystack or Moolre. Payments are reconciled against the trip invoice automatically.' },
-  { q: 'Is there a free trial?', a: 'Yes — every plan starts with a free 14-day trial, no credit card required. You can invite your team and connect your channels right away.' },
-  { q: 'Can my whole team use one account?', a: 'Yes. The Growth and Enterprise plans include multiple team seats with role-based permissions (admin, agent, finance, read-only), so everyone sees only what they need to.' },
-  { q: 'What happens after my trial ends?', a: 'Choose a plan to keep going — none of your trips, travelers or conversations are affected. If you don\'t choose a plan, your workspace is paused, not deleted.' },
+type FaqStatus = 'live' | 'progress'
+
+const faqStatusMeta: Record<FaqStatus, { label: string; bg: string; fg: string }> = {
+  live: { label: 'Live now', bg: '#E3F7EF', fg: '#0E9F6E' },
+  progress: { label: 'In progress', bg: '#FFF3E0', fg: '#B7791F' },
+}
+
+interface FaqEntry {
+  q: string
+  a: string
+  status?: FaqStatus | null
+}
+
+const faqs: FaqEntry[] = [
+  { q: 'How does the itinerary drafting work?', status: 'live', a: 'Create a trip and tell Meridian the budget, travel style, dates and any notes — typed in or described in your own words — and it drafts flight, stay and activity options for you to review. This is live today. Automatically turning an inbound WhatsApp, Gmail or Instagram message straight into a draft trip is what we\'re building next (see the channels question below).' },
+  { q: 'Can I edit the itinerary Meridian drafts?', status: 'live', a: 'Yes — every option is fully editable. Swap a hotel, change dates, adjust the budget, or add and remove activities, before you send anything to a traveler.' },
+  { q: 'Which channels can Meridian connect to?', status: 'progress', a: 'We\'re building WhatsApp Business, Gmail and Instagram DM connections so every enquiry lands in one inbox automatically, already linked to a trip. That\'s not live yet — for now, you create trips directly inside Meridian and draft the itinerary from there. Once channel connections ship, an inbound message will land in the inbox and turn into a draft trip on its own.' },
+  { q: 'Can I collect payments through Meridian?', status: 'live', a: 'Yes — send a deposit or balance payment link and your traveler pays through Moolre, reconciled against the trip automatically. Paystack support is on the roadmap and not connected yet; once it ships you\'ll be able to choose either provider.' },
+  { q: 'Is there a free trial?', status: null, a: 'New workspaces get full access with no credit card and nothing locked while you get set up. We\'re still building the 14-day trial timer and the automatic switch to a paid plan afterwards — for now, nothing is time-limited or paused automatically.' },
+  { q: 'Can my whole team use one account?', status: 'live', a: 'Yes. The Growth and Enterprise plans include multiple team seats with role-based permissions (admin, agent, finance, read-only), so everyone sees only what they need to.' },
+  { q: 'What happens after my trial ends?', status: null, a: 'This is part of the trial timer we\'re building (see above) — once it ships, choosing a plan will carry everything over as-is, and a workspace that doesn\'t upgrade will be paused rather than deleted.' },
 ]
 
-function FaqItem({ q, a, open, onToggle }: { q: string; a: string; open: boolean; onToggle: () => void }) {
+function FaqItem({ q, a, status, open, onToggle }: { q: string; a: string; status?: FaqStatus | null; open: boolean; onToggle: () => void }) {
+  const meta = status ? faqStatusMeta[status] : null
   return (
     <div className={`faq-item${open ? ' faq-item--open' : ''}`}>
       <button type="button" className="faq-question" onClick={onToggle} aria-expanded={open}>
-        {q}
+        <span className="faq-question-text">
+          {q}
+          {meta && <span className="faq-status-pill" style={{ background: meta.bg, color: meta.fg }}>{meta.label}</span>}
+        </span>
         <span className="faq-toggle">{open ? '−' : '+'}</span>
       </button>
       {open && <p className="faq-answer">{a}</p>}
@@ -242,10 +222,11 @@ function Landing() {
       <main>
         <section className="landing-hero">
           <div className="landing-hero-copy">
-            <h1>One workspace for every trip, message and payment</h1>
+            <h1>AI drafts the itinerary. You make it perfect.</h1>
             <p>
-              Meridian brings your WhatsApp, Gmail and Instagram enquiries, itineraries,
-              travelers and payments into a single, organized workspace built for travel agencies.
+              Every enquiry becomes a full trip plan — flights, stays and activities drafted
+              in minutes, with every detail editable before it goes to your traveler.
+              Messaging, payments and trip tracking come along for free.
             </p>
             <div className="landing-hero-actions">
               <Link to="/signup" className="btn-primary landing-cta">Start free trial</Link>
@@ -255,14 +236,14 @@ function Landing() {
           </div>
 
           <div className="landing-hero-visual">
-            <DashboardShot />
+            <ItineraryShot />
           </div>
         </section>
 
         <section className="landing-stats">
-          <div><strong>3</strong><span>Channels in one inbox</span></div>
-          <div><strong>Minutes</strong><span>To draft an itinerary</span></div>
-          <div><strong>2</strong><span>Payment providers built in</span></div>
+          <div><strong>Minutes</strong><span>From enquiry to a full draft itinerary</span></div>
+          <div><strong>100%</strong><span>Editable before anything is sent</span></div>
+          <div><strong>3</strong><span>Channels feed straight into a draft</span></div>
         </section>
 
         <section id="features" className="landing-feature-rows">
@@ -329,6 +310,7 @@ function Landing() {
                 key={f.q}
                 q={f.q}
                 a={f.a}
+                status={f.status}
                 open={openFaq === i}
                 onToggle={() => setOpenFaq(openFaq === i ? null : i)}
               />

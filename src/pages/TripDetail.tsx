@@ -11,6 +11,7 @@ import AddFlightModal from '../components/modals/AddFlightModal';
 import AddStayModal from '../components/modals/AddStayModal';
 import AssignTravelerModal from '../components/modals/AssignTravelerModal';
 import EditTripModal from '../components/modals/EditTripModal';
+import DemoBanner from '../components/DemoBanner';
 import '../styles/TripDetail.css';
 
 // ── TripDetail ─────────────────────────────────────────────────
@@ -2503,6 +2504,7 @@ Questions? Simply reply to this email or reach out directly.`
                         ? "Activities added across this itinerary's days."
                         : "Add activities to this itinerary. They'll appear on the last day."}
                     </p>
+                    {!apiTrip && <DemoBanner label="Demo feature — activity catalog is sample data" />}
                     {apiTrip ? (
                       <>
                         {realActivities && realActivities.length > 0 ? (
@@ -2660,6 +2662,8 @@ Questions? Simply reply to this email or reach out directly.`
                 )}
 
                 {tabCalls && (
+                  <div>
+                    {!apiTrip && <DemoBanner label="Demo feature — call log is sample data" />}
                   <div className="td-calls-grid">
                     <div>
                       {apiTrip ? (
@@ -2867,6 +2871,7 @@ Questions? Simply reply to this email or reach out directly.`
                         </div>
                       )}
                     </div>
+                  </div>
                   </div>
                 )}
               </div>

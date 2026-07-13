@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext'
+import DemoBanner from '../components/DemoBanner'
 import '../styles/Messages.css';
 
 // ── Messages ───────────────────────────────────────────────────
@@ -32,7 +33,8 @@ export default function Messages() {
   }));
 
   return (
-    <div className="msgs-layout" data-mobile-panel={mobilePanel}>
+    <div className="msgs-layout msgs-page" data-mobile-panel={mobilePanel}>
+      <DemoBanner label="Demo feature — conversations shown are sample data" />
       <LeftPanel convos={convos} activeConvo={activeIdx} onSelectConvo={() => setMobilePanel('chat')} />
       <CenterPanel convo={activeConvo} onBack={() => setMobilePanel('inbox')} onShowDetails={() => setMobilePanel('details')} />
       <RightPanel convo={activeConvo} onBack={() => setMobilePanel('chat')} />

@@ -59,12 +59,21 @@ function AuthPage() {
     return '/app/dashboard'
   }
 
-  // Detect Google onboarding (pre-filled step 2 from query params)
+  // Detect Google onboarding (pre-filled step 2 from query params). Runs on every
+  // searchParams change, not just mount — handleGoogleSignIn navigates to `/signup?step=2...`
+  // which, when already on /signup, doesn't remount this component (same route, only the
+  // query string changes), so the step/email/name state below can't rely on useState's
+  // lazy initializer alone.
   useEffect(() => {
-    if (searchParams.get('step') === '2' && searchParams.get('email') && step === 2) {
+    const emailParam = searchParams.get('email')
+    if (searchParams.get('step') === '2' && emailParam) {
       setIsGoogleOnboarding(true)
+      setMode('signup')
+      setStep(2)
+      setCompanyEmail(emailParam)
+      setFullName(searchParams.get('name') || '')
     }
-  }, [searchParams, step])
+  }, [searchParams])
 
   // ── Event handlers ──
 

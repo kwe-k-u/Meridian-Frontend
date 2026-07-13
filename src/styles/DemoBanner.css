@@ -1,0 +1,21 @@
+/* ── DemoBanner ── Small red tag flagging sample/demo data (see components/DemoBanner.tsx) */
+.demo-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 4px 10px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.demo-banner svg {
+  flex-shrink: 0;
+}

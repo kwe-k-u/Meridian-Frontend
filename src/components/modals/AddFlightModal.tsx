@@ -266,7 +266,7 @@ export default function AddFlightModal({ open, itineraryId, startCity, onClose, 
                   />
                 </div>
               </div>
-              <div className="aim-cost-row">
+              <div className="aim-row-2">
                 <div className="aim-cost-field">
                   <label className="aim-label">Depart</label>
                   <input
@@ -350,26 +350,29 @@ export default function AddFlightModal({ open, itineraryId, startCity, onClose, 
 
               <div className="aim-cost-row">
                 <div className="aim-cost-field">
-                  <label className="aim-label">Departure airport</label>
-                  <input
-                    className="aim-input"
-                    value={departureAirport}
-                    onChange={e => setDepartureAirport(e.target.value)}
-                    placeholder="e.g. ACC"
+                  {/* Same city/country search as the "Search flights" From field, but bound
+                      directly to the code text — free typing still works exactly as before,
+                      picking a suggestion just fills in its IATA code. */}
+                  <AirportField
+                    label="Departure airport"
+                    query={departureAirport}
+                    onQueryChange={setDepartureAirport}
+                    onSelect={a => setDepartureAirport(a.iata_code)}
+                    placeholder="e.g. ACC, or Accra"
                   />
                 </div>
                 <div className="aim-curr-field">
-                  <label className="aim-label">Arrival airport</label>
-                  <input
-                    className="aim-input"
-                    value={arrivalAirport}
-                    onChange={e => setArrivalAirport(e.target.value)}
-                    placeholder="e.g. JNB"
+                  <AirportField
+                    label="Arrival airport"
+                    query={arrivalAirport}
+                    onQueryChange={setArrivalAirport}
+                    onSelect={a => setArrivalAirport(a.iata_code)}
+                    placeholder="e.g. JNB, or Johannesburg"
                   />
                 </div>
               </div>
 
-              <div className="aim-cost-row">
+              <div className="aim-row-2">
                 <div className="aim-cost-field">
                   <label className="aim-label">Departure</label>
                   <input

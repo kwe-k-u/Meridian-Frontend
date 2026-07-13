@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
 import type { DashboardResponse, GuideCard } from '../types/app';
+import { apiStatusMeta } from '../constants/app';
 import '../styles/Dashboard.css';
 
 // ── Dashboard ─────────────────────────────────────────────────
@@ -16,8 +18,6 @@ import '../styles/Dashboard.css';
 // created any trips, so a real account with real trips could still flip back to the
 // onboarding checklist view.
 
-const fmtCurrency = (n: number) => 'GHS ' + n.toLocaleString('en-US');
-
 const fmtDate = (d: string | null) => {
   if (!d) return 'TBD';
   const dt = new Date(d + 'T00:00:00');
@@ -28,15 +28,6 @@ const getInitials = (name: string) =>
   name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
 const avatarColors = ['#2B63F6', '#0E9F6E', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
-
-const defaultStatusCfg: Record<string, { label: string; bg: string; fg: string }> = {
-  in_progress: { label: 'In progress', bg: '#E3F7EF', fg: '#0E9F6E' },
-  planning: { label: 'Planning', bg: '#F4F7FF', fg: '#2B63F6' },
-  booked: { label: 'Booked', bg: '#F0EBFF', fg: '#6B46C1' },
-  inquiry: { label: 'Inquiry', bg: '#FEF3C7', fg: '#D97706' },
-  completed: { label: 'Completed', bg: '#E3F7EF', fg: '#0E9F6E' },
-  cancelled: { label: 'Cancelled', bg: '#FDECEC', fg: '#D64545' },
-};
 
 const guideCover: Record<string, string> = {
   connect: 'linear-gradient(135deg,#1B5BBE,#5AA0FF)',
@@ -68,9 +59,10 @@ interface OnboardingTask {
 function Dashboard() {
   const navigate = useNavigate();
   const ctx = useApp();
+  const { format: fmtCurrency } = useCurrency();
   const {
     onboarded, obNewBg, obNewFg, obEstBg, obEstFg,
-    setNewUser, setEstablished, openGenItin,
+    setNewUser, setEstablished, openGenItin, openCreate,
   } = ctx;
 
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
@@ -103,7 +95,7 @@ function Dashboard() {
       desc: 'Set up your first travel experience to share with travelers.',
       done: hasTrips,
       cta: 'Create trip',
-      action: () => navigate('/app/trips'),
+      action: openCreate,
       ph: 'Drop a travel photo',
     },
     {
@@ -129,17 +121,17 @@ function Dashboard() {
 
   const tripsInMotion = dashboardData
     ? dashboardData.latest_trips.map((t, i) => {
-        const sc = defaultStatusCfg[t.status] ?? { label: t.status, bg: '#EEF0F4', fg: '#5B6172' };
+        const sc = apiStatusMeta[t.status];
         return {
           id: t.trip_id,
           name: t.trip_name,
           initials: getInitials(t.trip_name),
           cover: avatarColors[i % avatarColors.length],
-          status: sc.label,
+          status: sc.display,
           statusBg: sc.bg,
           statusFg: sc.fg,
           dates: `${fmtDate(t.start_date)} - ${fmtDate(t.end_date)}`,
-          next: sc.label,
+          next: sc.display,
         };
       })
     : [];
@@ -147,6 +139,17 @@ function Dashboard() {
   const doneCount = onboardTasks.filter(t => t.done).length;
   const totalCount = onboardTasks.length;
   const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
+  // Default straight to the Established view once the dashboard has loaded, if the onboarding
+  // checklist is already fully done (e.g. an account that already has trips) — otherwise a
+  // fully set-up account would still land on the onboarding screen on every visit. Gated on
+  // `loading` so it only fires once per successful load, not on every render, which means the
+  // manual "New user view" toggle above still works afterwards without being fought over.
+  useEffect(() => {
+    if (!loading && doneCount === totalCount) {
+      setEstablished();
+    }
+  }, [loading, doneCount, totalCount, setEstablished]);
 
   const userName = dashboardData?.user?.display_name?.split(' ')[0] ?? 'Travel Agent';
 

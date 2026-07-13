@@ -291,4 +291,452 @@
   .ctm-btn-row {
     flex-direction: column;
   }
+/* ── Wide card (customer/mode/chat) ── */
+.ctm-card--wide {
+  max-width: 580px;
+}
+
+/* .ctm-card normally clips to its rounded corners (overflow: hidden), which also clips the
+   floating traveler dropdown once it grows taller than the space left in the card (e.g. the
+   create-traveler form). Let it draw outside the card while that dropdown is open instead of
+   cutting it off. */
+.ctm-card--dropdown-open {
+  overflow: visible;
+}
+
+/* ── Customer list — floats as a dropdown under the search field rather than
+   permanently occupying space, so it overlays the guest row/footer below it. ── */
+.ctm-search-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.ctm-search {
+  margin-bottom: 0;
+}
+
+.ctm-customer-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.ctm-customer-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 12px 0;
+  text-align: center;
+}
+
+.ctm-customer-row, .ctm-guest-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: var(--bg-card);
+}
+
+.ctm-customer-row:hover, .ctm-guest-row:hover {
+  border-color: #2B63F6;
+  background: #F4F7FF;
+}
+
+.ctm-customer-row.selected, .ctm-guest-row.selected {
+  border-color: #2B63F6;
+  background: #F4F7FF;
+}
+
+.ctm-customer-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2B63F6, #7CA8FF);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ctm-guest-avatar {
+  background: #EEF0F4;
+  color: #5B6172;
+}
+
+.ctm-customer-info { flex: 1; min-width: 0; }
+
+.ctm-customer-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  line-height: 20px;
+}
+
+.ctm-customer-email {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctm-customer-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #2B63F6;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ── Inline "create new traveler" form — quick-create pattern reused from
+   AssignTravelerModal, restyled with this modal's own ctm-* classes. ── */
+.ctm-create-traveler-form {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ctm-create-traveler-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ctm-create-traveler-actions .ctm-btn-secondary,
+.ctm-create-traveler-actions .ctm-btn-primary {
+  padding: 7px 14px;
+  font-size: 13px;
+}
+.ctm-create-traveler-error {
+  font-size: 12.5px;
+  color: #D64545;
+  margin: 0;
+}
+
+.ctm-or-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.ctm-or-divider::before, .ctm-or-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── Mode selection grid ── */
+.ctm-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.ctm-mode-card {
+  padding: 20px 16px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ctm-mode-card:hover {
+  border-color: #2B63F6;
+  background: #F4F7FF;
+}
+
+.ctm-mode-card--primary {
+  border-color: #2B63F6;
+  background: #F4F7FF;
+}
+
+.ctm-mode-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.ctm-mode-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.ctm-mode-sub {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ── Multi-city destination chips ── */
+.ctm-dest-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  min-height: 42px;
+}
+
+.ctm-dest-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 14px;
+  background: #EAF0FF;
+  color: #2B63F6;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ctm-dest-chip button {
+  background: none;
+  border: none;
+  color: #2B63F6;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 1px;
+  opacity: 0.7;
+}
+
+.ctm-dest-chip button:hover { opacity: 1; }
+
+.ctm-dest-add {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.ctm-dest-add:hover { border-color: #2B63F6; color: #2B63F6; }
+
+.ctm-dest-input {
+  border: none;
+  outline: none;
+  font-size: 13px;
+  background: transparent;
+  min-width: 120px;
+  color: var(--text-heading);
+}
+
+/* ── Chat mode ── */
+.ctm-chat-body {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+  max-height: 400px;
+}
+
+.ctm-chat-header {
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.ctm-chat-thread {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+  padding-bottom: 4px;
+}
+
+.ctm-chat-msg {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  animation: ctm-fade-in 0.2s ease both;
+}
+
+.ctm-chat-msg--ai { flex-direction: row; }
+.ctm-chat-msg--agent { flex-direction: row-reverse; }
+
+.ctm-chat-ai-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #EAF0FF;
+  color: #2B63F6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ctm-chat-bubble {
+  padding: 9px 13px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  max-width: 80%;
+}
+
+.ctm-chat-msg--ai .ctm-chat-bubble {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px 12px 12px 12px;
+}
+
+.ctm-chat-msg--agent .ctm-chat-bubble {
+  background: #2B63F6;
+  color: #fff;
+  border-radius: 12px 4px 12px 12px;
+}
+
+.ctm-chat-parsed-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 8px;
+  margin-left: 36px;
+}
+
+.ctm-chat-parsed-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ctm-chat-input-area {
+  padding: 12px 24px 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ctm-chat-textarea {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  background: var(--bg-card);
+  color: var(--text);
+  font-family: inherit;
+}
+
+.ctm-chat-textarea:focus { border-color: #2B63F6; }
+
+.ctm-chat-input-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ctm-voice-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ctm-voice-btn:hover { border-color: #2B63F6; color: #2B63F6; }
+
+.ctm-voice-btn--active {
+  background: #E53935;
+  border-color: #E53935;
+  color: #fff;
+  animation: ctm-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ctm-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+.ctm-footer--borderless {
+  border-top: none;
+  padding-top: 4px;
+}
+
+/* ── Confirm action panel (replaces textarea in confirm phase) ── */
+.ctm-confirm-actions {
+  padding: 16px 24px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ctm-confirm-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.ctm-confirm-hint strong {
+  color: var(--text-heading);
+}
+
+.ctm-confirm-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
 }

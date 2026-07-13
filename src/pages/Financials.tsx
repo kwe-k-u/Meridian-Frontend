@@ -1,22 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
 import type { TransactionResponse, FinStat, ChartBar } from '../types/app';
+import { TransactionStatus } from '../types/app';
 import '../styles/Financials.css';
 
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const statusMeta: Record<string, { bg: string; fg: string }> = {
-  pending: { bg: '#FFF3E0', fg: '#B7791F' },
-  completed: { bg: '#E3F7EF', fg: '#0E9F6E' },
-  failed: { bg: '#FDECEC', fg: '#D64545' },
-  refunded: { bg: '#F0EBFF', fg: '#6B46C1' },
-};
-
-const fmtCurrency = (n: number, currency = 'GHS') => {
-  const v = Number(n);
-  return currency === 'GHS' ? 'GHS ' + v.toLocaleString() : '$' + v.toLocaleString();
+const statusMeta: Record<TransactionStatus, { bg: string; fg: string }> = {
+  [TransactionStatus.PENDING]: { bg: '#FFF3E0', fg: '#B7791F' },
+  [TransactionStatus.COMPLETED]: { bg: '#E3F7EF', fg: '#0E9F6E' },
+  [TransactionStatus.FAILED]: { bg: '#FDECEC', fg: '#D64545' },
+  [TransactionStatus.REFUNDED]: { bg: '#F0EBFF', fg: '#6B46C1' },
 };
 
 const fmtDate = (d: string | null) => {
@@ -31,12 +28,12 @@ const fmtDate = (d: string | null) => {
 // API: ApiService.getTransactions.
 //
 // Every stat/chart on this page is computed client-side (via useMemo below) from the real
-// `transactions` list — this page does NOT use AppContext's getFinancialData()/finStats()/
-// chartData() mock generators, even though those still exist in constants/app.ts.
+// `transactions` list — there's no mock-data getter backing this page at all.
 
 export default function Financials() {
   const navigate = useNavigate();
   const ctx = useApp();
+  const { convert, format } = useCurrency();
 
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,34 +53,44 @@ export default function Financials() {
   useEffect(() => { fetch(); }, [fetch]);
 
   const stats: FinStat[] = useMemo(() => {
-    const completed = transactions.filter(t => t.status === 'completed');
-    const pending = transactions.filter(t => t.status === 'pending');
-    const refunded = transactions.filter(t => t.status === 'refunded');
+    const completed = transactions.filter(t => t.status === TransactionStatus.COMPLETED);
+    const pending = transactions.filter(t => t.status === TransactionStatus.PENDING);
+    const refunded = transactions.filter(t => t.status === TransactionStatus.REFUNDED);
+
+    // Transactions can each carry their own currency (a trip payment might genuinely be
+    // recorded in USD) — normalize every amount to GHS before summing, otherwise a mixed-
+    // currency batch would just add raw numbers together regardless of what they're in.
+    const sumGHS = (list: TransactionResponse[]) =>
+      list.reduce((s, t) => s + convert(t.amount, t.currency, 'GHS'), 0);
 
     // Note: `revenue` and `paidOut` are computed identically (sum of all completed
     // transactions) — there's currently no distinction between "revenue recognized" and
     // "cash actually paid out to the agency" (e.g. minus a platform fee or payout delay).
-    const revenue = completed.reduce((s, t) => s + t.amount, 0);
-    const outstanding = pending.reduce((s, t) => s + t.amount, 0);
-    const paidOut = completed.reduce((s, t) => s + t.amount, 0);
-    const refunds = refunded.reduce((s, t) => s + t.amount, 0);
+    const revenue = sumGHS(completed);
+    const outstanding = sumGHS(pending);
+    const paidOut = sumGHS(completed);
+    const refunds = sumGHS(refunded);
 
     return [
-      { label: 'Revenue', value: fmtCurrency(revenue), delta: `From ${completed.length} transactions`, deltaColor: '#1DB954' },
-      { label: 'Outstanding', value: fmtCurrency(outstanding), delta: `${pending.length} pending payments`, deltaColor: '#F59E0B' },
-      { label: 'Paid out', value: fmtCurrency(paidOut), delta: `${completed.length} completed`, deltaColor: '#2B63F6' },
-      { label: 'Refunds', value: fmtCurrency(refunds), delta: `${refunded.length} this period`, deltaColor: '#EF4444' },
+      { label: 'Revenue', value: format(revenue, 'GHS'), delta: `From ${completed.length} transactions`, deltaColor: '#1DB954' },
+      { label: 'Outstanding', value: format(outstanding, 'GHS'), delta: `${pending.length} pending payments`, deltaColor: '#F59E0B' },
+      { label: 'Paid out', value: format(paidOut, 'GHS'), delta: `${completed.length} completed`, deltaColor: '#2B63F6' },
+      { label: 'Refunds', value: format(refunds, 'GHS'), delta: `${refunded.length} this period`, deltaColor: '#EF4444' },
     ];
-  }, [transactions]);
+  }, [transactions, convert, format]);
+
+  // Mock invoice list (ctx.getInvoices()) rendered as a separate card below the real
+  // transactions table — each row opens the InvoiceDetailModal via ctx.openInvoiceDetail.
+  const invoices = useMemo(() => ctx.getInvoices(), [ctx]);
 
   const chart: ChartBar[] = useMemo(() => {
     const byMonth: Record<string, number> = {};
     transactions
-      .filter(t => t.status === 'completed' && t.paid_at)
+      .filter(t => t.status === TransactionStatus.COMPLETED && t.paid_at)
       .forEach(t => {
         const d = new Date(t.paid_at!);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        byMonth[key] = (byMonth[key] || 0) + t.amount;
+        byMonth[key] = (byMonth[key] || 0) + convert(t.amount, t.currency, 'GHS');
       });
 
     const keys = Object.keys(byMonth).sort();
@@ -100,12 +107,12 @@ export default function Financials() {
       return {
         label: monthNames[monthIdx] || key,
         h: `${pct}px`,
-        value: fmtCurrency(val).replace('GHS ', ''),
+        value: format(val, 'GHS').replace(/^\S+\s/, ''),
         barBg: '#2B63F6',
         barLabelColor: '#15161B',
       };
     });
-  }, [transactions]);
+  }, [transactions, convert, format]);
 
   // Clicking a trip-payment row opens the linked trip; subscription payments have no trip
   // to open, so those just show a quick summary toast instead.
@@ -115,7 +122,7 @@ export default function Financials() {
       navigate(`/app/trips/${tripId}`);
       return;
     }
-    ctx.toastAction?.(`Transaction: ${tx.transaction_id} — ${fmtCurrency(tx.amount)}`);
+    ctx.toastAction?.(`Transaction: ${tx.transaction_id} — ${format(tx.amount, tx.currency)}`);
   };
 
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
@@ -126,7 +133,7 @@ export default function Financials() {
     e.stopPropagation();
     setMarkingPaidId(tx.transaction_id);
     try {
-      await ApiService.updateTransactionStatus(tx.transaction_id, 'completed');
+      await ApiService.updateTransactionStatus(tx.transaction_id, TransactionStatus.COMPLETED);
       await fetch();
       ctx.toastAction?.('Marked as paid');
     } catch {
@@ -165,8 +172,9 @@ export default function Financials() {
           <div>
             <p className="payout-label">Next payout</p>
             <p className="payout-amount">
-              {fmtCurrency(
-                transactions.filter(t => t.status === 'completed').reduce((s, t) => s + t.amount, 0)
+              {format(
+                transactions.filter(t => t.status === TransactionStatus.COMPLETED).reduce((s, t) => s + convert(t.amount, t.currency, 'GHS'), 0),
+                'GHS'
               )}
             </p>
             <p className="payout-date">Estimated processing soon</p>
@@ -207,7 +215,7 @@ export default function Financials() {
                   <span className="status-pill" style={{ background: sm.bg, color: sm.fg }}>
                     {tx.status}
                   </span>
-                  {tx.status === 'pending' && (
+                  {tx.status === TransactionStatus.PENDING && (
                     <button
                       onClick={(e) => handleMarkPaid(e, tx)}
                       disabled={markingPaidId === tx.transaction_id}
@@ -218,13 +226,41 @@ export default function Financials() {
                   )}
                 </span>
                 <span>
-                  <span className="td">{fmtCurrency(tx.amount, tx.currency)}</span>
+                  <span className="td">{format(tx.amount, tx.currency)}</span>
                   {tx.paid_at && <span className="hint">{fmtDate(tx.paid_at)}</span>}
                 </span>
               </div>
             );
           })
         )}
+      </div>
+
+      <div className="table-card" style={{ marginTop: 24 }}>
+        <div className="th-row">
+          <span className="th-text">Invoice</span>
+          <span className="th-text">Client</span>
+          <span className="th-text">Trip</span>
+          <span className="th-text">Method</span>
+          <span className="th-text">Status</span>
+          <span className="th-text">Amount</span>
+        </div>
+        {invoices.map((inv) => (
+          <div key={inv.id} className="tr" onClick={() => ctx.openInvoiceDetail(inv.id)}>
+            <span className="td">{inv.id}</span>
+            <span className="td-gray">{inv.client}</span>
+            <span className="td-gray">{inv.trip}</span>
+            <span className="td-gray">{inv.method}</span>
+            <span>
+              <span className="status-pill" style={{ background: inv.statusBg, color: inv.statusFg }}>
+                {inv.status}
+              </span>
+            </span>
+            <span>
+              <span className="td">{inv.amount}</span>
+              {inv.balanceHint && <span className="hint">{inv.balanceHint}</span>}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );

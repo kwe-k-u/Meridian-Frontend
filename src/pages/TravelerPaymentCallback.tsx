@@ -1,26 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { ApiService } from '../services/api-service'
 import type { TransactionResponse } from '../types/app'
 import { TransactionStatus } from '../types/app'
 import '../styles/PaymentCallback.css'
 
-// ── PaymentCallback ────────────────────────────────────────────
-// Purpose: Landing page the customer is redirected to after paying (or cancelling) on
-//          Moolre's hosted checkout page — see MoolrePaymentController::requestCheckoutLink's
-//          `redirect` URL, which points here as `/app/payments/callback?ref=<transaction_id>`.
+// ── TravelerPaymentCallback ────────────────────────────────────
+// Purpose: Public equivalent of PaymentCallback.tsx — the page a traveler (no Meridian
+// account) lands on after paying (or cancelling) on Moolre's hosted checkout, reached from
+// TravelerView.tsx's Pay flow. See MoolrePaymentController::initiatePublicTripPayment's
+// `redirect` URL, which points here as `/travel/<tripId>/payment-callback?ref=<transaction_id>`.
 // State: transaction, pollCount ref, status ('checking' | 'completed' | 'failed' | 'pending').
-// API: ApiService.checkMoolrePaymentStatus.
+// API: ApiService.checkPublicMoolrePaymentStatus.
 //
-// The Moolre webhook is best-effort (it can't reach a plain localhost backend during
-// development, and Moolre's docs don't document any way to verify it wasn't spoofed anyway),
-// so this page is the actual confirmation mechanism: it polls our own backend, which in turn
-// asks Moolre directly with our API keys — see MoolrePaymentController::status.
+// Deliberately kept as its own page (not reusing PaymentCallback.tsx) since it's outside the
+// authenticated /app/* route tree and links back to the public /travel/:tripId view instead
+// of /app/trips/:id — see the App.tsx route comment for why traveler-facing pages stay public.
 
 const MAX_POLLS = 10
 const POLL_INTERVAL_MS = 3000
 
-export default function PaymentCallback() {
+export default function TravelerPaymentCallback() {
+  const { tripId } = useParams<{ tripId: string }>()
   const [searchParams] = useSearchParams()
   const ref = searchParams.get('ref')
   const [transaction, setTransaction] = useState<TransactionResponse | null>(null)
@@ -34,7 +35,7 @@ export default function PaymentCallback() {
 
     const poll = async () => {
       try {
-        const tx = await ApiService.checkMoolrePaymentStatus(ref)
+        const tx = await ApiService.checkPublicMoolrePaymentStatus(ref)
         if (cancelled) return
         setTransaction(tx)
         pollCount.current += 1
@@ -50,9 +51,7 @@ export default function PaymentCallback() {
     return () => { cancelled = true; clearTimeout(timeoutId) }
   }, [ref])
 
-  const backLink = transaction?.trip_payment?.trip_id
-    ? { to: `/app/trips/${transaction.trip_payment.trip_id}`, label: 'Back to trip' }
-    : { to: '/app/pricing', label: 'Back to Pricing' }
+  const backLink = { to: `/travel/${tripId}`, label: 'Back to your trip' }
 
   let heading = 'Confirming your payment…'
   let body = "We're checking with Moolre — this only takes a few seconds."
@@ -60,7 +59,7 @@ export default function PaymentCallback() {
 
   if (error) {
     heading = 'Something went wrong'
-    body = "We couldn't reach the server to confirm this payment. If money left your account, it will still be picked up shortly — check Financials in a few minutes."
+    body = "We couldn't reach the server to confirm this payment. If money left your account, it will still be picked up shortly."
     icon = '⚠️'
   } else if (transaction?.status === TransactionStatus.COMPLETED) {
     heading = 'Payment received'
@@ -72,7 +71,7 @@ export default function PaymentCallback() {
     icon = '❌'
   } else if (transaction && pollCount.current >= MAX_POLLS) {
     heading = 'Still processing'
-    body = "This is taking longer than usual. We'll keep confirming it in the background — check Financials shortly."
+    body = "This is taking longer than usual. We'll keep confirming it in the background — check back shortly."
     icon = '⏳'
   }
 

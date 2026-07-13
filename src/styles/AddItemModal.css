@@ -189,6 +189,14 @@
   grid-template-columns: 1fr 100px;
   gap: 12px;
 }
+/* Equal-width two-field row — for pairs like start/end date or check-in/check-out, where
+   aim-cost-row's 1fr/100px split (built for a cost input + short currency dropdown) squeezes
+   the second field too narrow. */
+.aim-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
 .aim-cost-field, .aim-curr-field {
   display: flex;
   flex-direction: column;

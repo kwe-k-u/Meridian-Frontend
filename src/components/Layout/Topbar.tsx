@@ -45,6 +45,12 @@ function fmtTime(dateStr: string | null): string {
 export default function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const [pageTitle, pageSub] = usePageInfo();
   const { openCreate, openGenItin } = useApp();
+  const isDashboard = useLocation().pathname.startsWith('/app/dashboard');
+
+  // Mobile-only "create" menu (Dashboard): consolidates the two action buttons
+  // into a single trigger that opens an anchored dropdown.
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const createMenuRef = useRef<HTMLDivElement>(null);
 
   const [showNotifs, setShowNotifs] = useState(false);
   const [transactions, setTransactions] = useState<TransactionResponse[]>([]);
@@ -78,6 +84,15 @@ export default function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => vo
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showNotifs]);
+
+  useEffect(() => {
+    if (!showCreateMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(e.target as Node)) setShowCreateMenu(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showCreateMenu]);
 
   const markAllRead = () => {
     const ids = new Set(transactions.map(t => t.transaction_id));
@@ -123,6 +138,7 @@ export default function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => vo
       </div>
 
       <div className="topbar-actions">
+        {/* Desktop (all pages): full Generate itinerary + New trip buttons */}
         <button
           onClick={openGenItin}
           className="btn-primary topbar-hide-mobile"
@@ -133,22 +149,74 @@ export default function Topbar({ onToggleSidebar }: { onToggleSidebar?: () => vo
           </svg>
           <span className="topbar-btn-label">Generate itinerary</span>
         </button>
-        <button
-          onClick={openGenItin}
-          className="topbar-gen-mobile"
-          aria-label="Generate itinerary"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-          </svg>
-        </button>
-        <button onClick={openCreate} className="btn-primary">
+        <button onClick={openCreate} className="btn-primary topbar-hide-mobile">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/>
             <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
           <span className="topbar-btn-label">New trip</span>
         </button>
+
+        {/* Mobile: on the Dashboard a single trigger opens a dropdown with both
+            actions; elsewhere the original two icon buttons are kept. */}
+        <div className="topbar-mobile-actions">
+          {isDashboard ? (
+            <div className="topbar-create-wrap" ref={createMenuRef}>
+              <button
+                onClick={() => setShowCreateMenu((v) => !v)}
+                className="btn-primary topbar-create-trigger"
+                aria-label="Create"
+                aria-haspopup="menu"
+                aria-expanded={showCreateMenu}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </button>
+              {showCreateMenu && (
+                <div className="topbar-create-menu" role="menu">
+                  <button
+                    role="menuitem"
+                    onClick={() => { openGenItin(); setShowCreateMenu(false); }}
+                    className="btn-primary"
+                    style={{ background: '#10B981', borderColor: '#10B981' }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                    </svg>
+                    <span>Generate itinerary</span>
+                  </button>
+                  <button
+                    role="menuitem"
+                    onClick={() => { openCreate(); setShowCreateMenu(false); }}
+                    className="btn-primary"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"/>
+                      <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    <span>New trip</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <button onClick={openGenItin} className="topbar-gen-mobile" aria-label="Generate itinerary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </button>
+              <button onClick={openCreate} className="btn-primary" aria-label="New trip">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </button>
+            </>
+          )}
+        </div>
 
         <div className="topbar-notif-wrap" ref={panelRef}>
           <div className="topbar-notif" onClick={() => setShowNotifs(v => !v)}>

@@ -87,6 +87,26 @@
   border: 2px solid #fff;
 }
 
+/* ── Mobile generate button ── */
+.topbar-gen-mobile {
+  display: none;
+  background: #10B981;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  color: #fff;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.topbar-gen-mobile:hover {
+  background: #059669;
+}
+
 /* ── Hamburger (mobile) ── */
 .topbar-hamburger {
   display: none;
@@ -120,6 +140,10 @@
 
   .topbar-hide-mobile {
     display: none !important;
+  }
+
+  .topbar-gen-mobile {
+    display: inline-flex;
   }
 
   .topbar-btn-label {

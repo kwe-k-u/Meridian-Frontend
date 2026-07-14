@@ -436,6 +436,8 @@
   .modal-footer {
     padding: 0 20px 16px;
   }
+}
+
 /* ── Card grid ── */
 .trav-card-grid {
   display: grid;

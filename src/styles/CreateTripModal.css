@@ -291,6 +291,8 @@
   .ctm-btn-row {
     flex-direction: column;
   }
+}
+
 /* ── Wide card (customer/mode/chat) ── */
 .ctm-card--wide {
   max-width: 580px;

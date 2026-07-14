@@ -547,6 +547,8 @@
     align-items: flex-start;
     gap: 12px;
   }
+}
+
 /* ── AI & Models tab ── */
 .field-hint {
   font-size: 13px;

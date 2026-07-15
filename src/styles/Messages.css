@@ -1,8 +1,22 @@
 /* ── Messages ── Styles for the Messages page (3-panel layout: inbox, chat, trip details) */
+
+/* Full-height page wrapper: keeps the demo banner in its own row above the
+   3-pane grid instead of letting it become a grid column. */
+.msgs-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.msgs-page > .demo-banner {
+  margin: 10px 0 6px 16px;
+}
+
 .msgs-layout {
   display: grid;
   grid-template-columns: 300px 1fr 300px;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -11,7 +25,7 @@
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background: var(--bg-card);
 }
 
@@ -152,7 +166,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  height: 100%;
   color: var(--text-muted);
   font-size: 14px;
   background: var(--bg);
@@ -161,7 +175,7 @@
 .msgs-center-panel {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background: var(--bg);
 }
 
@@ -305,13 +319,13 @@
 /* Right Panel */
 .msgs-right-empty {
   border-left: 1px solid var(--border);
-  height: 100vh;
+  height: 100%;
   background: var(--bg-card);
 }
 
 .msgs-right-panel {
   border-left: 1px solid var(--border);
-  height: 100vh;
+  height: 100%;
   overflow-y: auto;
   background: var(--bg-card);
   padding: 20px;
@@ -546,7 +560,7 @@
 @media (max-width: 768px) {
   .msgs-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: 100vh;
+    grid-template-rows: 1fr;
     overflow: hidden;
   }
 

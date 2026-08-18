@@ -1,0 +1,46 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [production]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Load deploy SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Trust the server's host key
+        run: ssh-keyscan -p "${{ secrets.DEPLOY_PORT || 22 }}" "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      # Uploads into a sibling staging dir first so the live app/ directory is never left
+      # half-written; the swap below is the only step that touches it.
+      - name: Upload new build to staging path
+        run: |
+          rsync -az --delete -e "ssh -p ${{ secrets.DEPLOY_PORT || 22 }}" \
+            dist/ "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/var/www/html/meridian/app.new/"
+
+      # Swaps the new build in. The previous live build becomes app.previous (overwriting
+      # whatever was there before) so exactly one prior release is kept for rollback.
+      - name: Swap in new build, keep previous for rollback
+        run: |
+          ssh -p "${{ secrets.DEPLOY_PORT || 22 }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" '
+            set -e
+            BASE=/var/www/html/meridian
+            rm -rf "$BASE/app.previous"
+            if [ -d "$BASE/app" ]; then mv "$BASE/app" "$BASE/app.previous"; fi
+            mv "$BASE/app.new" "$BASE/app"
+          '

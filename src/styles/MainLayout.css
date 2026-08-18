@@ -18,3 +18,22 @@
   overflow: auto;
   background: var(--bg);
 }
+
+/* ── Mobile sidebar overlay ── */
+.sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .main-layout__body {
+    padding: 16px;
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.4);
+  }
+}

@@ -147,3 +147,21 @@
   color: #8A90A2;
   margin-top: 2px;
 }
+
+/* ── AddFlightModal Responsive ── */
+@media (max-width: 768px) {
+  .afm-modal {
+    width: 100%;
+    max-width: 100%;
+    margin: 12px;
+  }
+
+  .afm-airport-row {
+    grid-template-columns: 1fr;
+  }
+
+  .afm-result-card,
+  .afm-stay-card {
+    flex-wrap: wrap;
+  }
+}

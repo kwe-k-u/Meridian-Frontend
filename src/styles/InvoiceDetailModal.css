@@ -393,3 +393,41 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ── InvoiceDetailModal Responsive ── */
+@media (max-width: 768px) {
+  .inv-card {
+    max-width: 100%;
+    margin: 12px;
+    max-height: 90vh;
+  }
+
+  .inv-header {
+    padding: 16px 20px;
+  }
+
+  .inv-scroll {
+    padding: 16px 20px;
+  }
+
+  .inv-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inv-amount-card {
+    padding: 16px;
+  }
+
+  .inv-total-value {
+    font-size: 20px;
+  }
+
+  .inv-footer {
+    padding: 12px 20px;
+    flex-wrap: wrap;
+  }
+
+  .inv-footer button {
+    flex: 1;
+  }
+}

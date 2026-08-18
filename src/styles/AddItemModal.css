@@ -235,3 +235,29 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ── AddItemModal Responsive ── */
+@media (max-width: 768px) {
+  .aim-modal {
+    max-width: 100%;
+    width: 100%;
+    margin: 12px;
+    max-height: 90vh;
+  }
+
+  .aim-header {
+    padding: 16px 20px 0;
+  }
+
+  .aim-body {
+    padding: 16px 20px;
+  }
+
+  .aim-cost-row {
+    grid-template-columns: 1fr;
+  }
+
+  .aim-footer {
+    padding: 8px 20px 16px;
+  }
+}

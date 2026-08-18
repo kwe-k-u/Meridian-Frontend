@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext'
 import '../styles/Messages.css';
@@ -5,7 +6,8 @@ import '../styles/Messages.css';
 // ── Messages ───────────────────────────────────────────────────
 // Purpose: Three-panel messaging inbox — conversation list (left),
 //          chat view (center), linked trip / action points (right).
-// State: convoId from URL params; active conversation derived.
+//          On mobile, single-panel with navigation (inbox/chat/details).
+// State: convoId from URL params; active conversation derived; mobilePanel state.
 // API: None (data from AppContext).
 
 const filterPills = ['All', '\uD83D\uDCAC WhatsApp', '\u2709\uFE0F']
@@ -17,22 +19,28 @@ export default function Messages() {
   const conversations = ctx.getConversations();
   const activeIdx = convoId ? parseInt(convoId, 10) : 0;
   const activeConvo = conversations[activeIdx] ?? null;
+  const [mobilePanel, setMobilePanel] = useState<'inbox' | 'chat' | 'details'>(
+    activeConvo ? 'chat' : 'inbox'
+  );
 
   const convos = conversations.map((c, i) => ({
     ...c,
-    onClick: () => navigate(`/app/messages/${i}`),
+    onClick: () => {
+      navigate(`/app/messages/${i}`);
+      setMobilePanel('chat');
+    },
   }));
 
   return (
-    <div className="msgs-layout">
-      <LeftPanel convos={convos} activeConvo={activeIdx} />
-      <CenterPanel convo={activeConvo} />
-      <RightPanel convo={activeConvo} />
+    <div className="msgs-layout" data-mobile-panel={mobilePanel}>
+      <LeftPanel convos={convos} activeConvo={activeIdx} onSelectConvo={() => setMobilePanel('chat')} />
+      <CenterPanel convo={activeConvo} onBack={() => setMobilePanel('inbox')} onShowDetails={() => setMobilePanel('details')} />
+      <RightPanel convo={activeConvo} onBack={() => setMobilePanel('chat')} />
     </div>
   )
 }
 
-function LeftPanel({ convos, activeConvo }: { convos: any[]; activeConvo: number }) {
+function LeftPanel({ convos, activeConvo, onSelectConvo }: { convos: any[]; activeConvo: number; onSelectConvo: () => void }) {
   return (
     <div className="msgs-left-panel">
       <div className="msgs-left-header">
@@ -47,7 +55,7 @@ function LeftPanel({ convos, activeConvo }: { convos: any[]; activeConvo: number
         {convos.map((c: any, i: number) => {
           const active = i === activeConvo
           return (
-            <div key={i} onClick={c.onClick}
+            <div key={i} onClick={() => { c.onClick(); onSelectConvo(); }}
               className={`msgs-convo-row${active ? ' msgs-convo-row-active' : ''}`}
               style={{ background: !active ? (c.rowBg || 'transparent') : undefined }}
             >
@@ -76,7 +84,7 @@ function LeftPanel({ convos, activeConvo }: { convos: any[]; activeConvo: number
   )
 }
 
-function CenterPanel({ convo }: { convo: any }) {
+function CenterPanel({ convo, onBack, onShowDetails }: { convo: any; onBack: () => void; onShowDetails: () => void }) {
   const navigate = useNavigate();
   if (!convo) {
     return (
@@ -90,6 +98,7 @@ function CenterPanel({ convo }: { convo: any }) {
     <div className="msgs-center-panel">
       <div className="msgs-chat-header">
         <div className="msgs-chat-header-left">
+          <button onClick={onBack} className="msgs-back-btn" aria-label="Back to inbox">&larr;</button>
           <div className="msgs-avatar-wrapper">
             <div className="msgs-avatar" style={{ background: convo.avBg }}>{convo.av}</div>
             <div className="msgs-ch-icon">{convo.chIcon}</div>
@@ -101,13 +110,14 @@ function CenterPanel({ convo }: { convo: any }) {
             </div>
           </div>
         </div>
-        {convo.hasTrip && convo.linkName ? (
-          // Always navigates to mock trip index 0 regardless of which conversation/trip is
-          // actually linked \u2014 convoData() doesn't carry a real trip id/index to open instead.
-          <button onClick={() => navigate('/app/trips/0')} className="msgs-open-trip-btn">
-            Open trip &nbsp;\u2197
-          </button>
-        ) : null}
+        <div className="msgs-chat-header-right">
+          {convo.hasTrip && convo.linkName ? (
+            <button onClick={() => navigate('/app/trips/0')} className="msgs-open-trip-btn">
+              Open trip &nbsp;↗
+            </button>
+          ) : null}
+          <button onClick={onShowDetails} className="msgs-details-btn" aria-label="Show details">⋮</button>
+        </div>
       </div>
 
       <div className="msgs-msgs-area">
@@ -150,7 +160,7 @@ function CenterPanel({ convo }: { convo: any }) {
   )
 }
 
-function RightPanel({ convo }: { convo: any }) {
+function RightPanel({ convo, onBack }: { convo: any; onBack: () => void }) {
   const ctx = useApp();
   if (!convo) {
     return <div className="msgs-right-empty" />
@@ -159,6 +169,7 @@ function RightPanel({ convo }: { convo: any }) {
   if (convo.hasTrip) {
     return (
       <div className="msgs-right-panel">
+        <button onClick={onBack} className="msgs-back-btn msgs-back-btn-details" aria-label="Back to chat">&larr; Back</button>
         <div className="msgs-trip-card" style={{
           background: convo.tripGradient || 'linear-gradient(135deg,#1B5BBE,#5AA0FF)',
         }}>

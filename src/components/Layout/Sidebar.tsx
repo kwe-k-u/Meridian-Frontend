@@ -20,8 +20,13 @@ const bottomItems = [
 
 // ── Sidebar ──────────────────────────────────────────────────
 // Purpose: Main navigation sidebar with nav links, bottom items, and user profile section with logout.
-// Props: none (reads auth context for user info)
-export default function Sidebar() {
+// Props: isOpen — controls mobile slide-out visibility; onClose — closes drawer
+interface Props {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export default function Sidebar({ isOpen, onClose }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
@@ -61,8 +66,13 @@ export default function Sidebar() {
     logout();
   };
 
+  const handleNav = (path: string) => {
+    navigate(path);
+    onClose?.();
+  };
+
   return (
-    <div className="sidebar">
+    <div className={`sidebar${isOpen ? ' sidebar-open' : ''}`}>
       <div className="sidebar-top">
         <div className="sidebar-logo-row">
           <img src={logoM} alt="Meridian" className="sidebar-logo-img" />
@@ -75,7 +85,7 @@ export default function Sidebar() {
             return (
               <div
                 key={item.label}
-                onClick={() => navigate(item.path)}
+                onClick={() => handleNav(item.path)}
                 className={`nav-item${active ? ' active' : ''}`}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -99,7 +109,7 @@ export default function Sidebar() {
         {bottomItems.map(item => (
           <div
             key={item.label}
-            onClick={() => navigate(item.path)}
+            onClick={() => handleNav(item.path)}
             className="bottom-item"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

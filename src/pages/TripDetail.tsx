@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
-import type { TripOption, TripStatus, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse } from '../types/app';
+import type { TripOption, TripStatusLabel, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse, SkippedProvider, FlightLeg, AgentFeedItem, TripDetailData, StatusBanner } from '../types/app';
+import { TripStatus, ItineraryStatus, FlightStatus, TransactionStatus, CallActionItemStatus } from '../types/app';
+import { apiStatusMeta } from '../constants/app';
 import AddItemModal, { type EditingDayItem } from '../components/modals/AddItemModal';
 import AddFlightModal from '../components/modals/AddFlightModal';
 import AddStayModal from '../components/modals/AddStayModal';
@@ -29,6 +31,23 @@ import '../styles/TripDetail.css';
 // one of the hardcoded demo trips from constants/app.ts" behavior.
 
 // ── Helper functions / transformers ──
+
+// Mirrors App\Services\CurrencyService's rate table on the backend — the only currencies a
+// convert() call actually has a real rate for. Same list as Settings.tsx's SUPPORTED_CURRENCIES.
+const SUPPORTED_CURRENCIES = ['GHS', 'USD', 'EUR', 'GBP'];
+
+// "Nothing loaded yet" placeholder for tripTd/tripTb below — shown for mock trip ids (retired)
+// or while a real trip's ApiService.getTrip() fetch is still in flight.
+const emptyTd: TripDetailData = {
+  name: '', traveler: '', dates: '', where: '', value: '',
+  status: 'Draft', statusBg: '#EEF0F4', statusFg: '#5B6172', gradient: 'linear-gradient(135deg,#334155,#7889A6)',
+  origin: '', total: '', days: [], costs: [], options: [], optionsLabel: '', headerActions: [],
+};
+const emptyTb: StatusBanner = {
+  bg: '#EEF0F4', border: '#DDE0E8', fg: '#5B6172', iconBg: '#EEF0F4', icon: '•',
+  headline: 'Loading trip…', desc: '', descColor: '#8A90A2', chipBorder: '#DDE0E8',
+  showRefs: false, refs: [], showBuilder: false, showDraft: false, showDrafting: false, showOptions: false,
+};
 
 const blockKindMeta: Record<string, { icon: string; iconBg: string; kindColor: string }> = {
   Flight: { icon: '✈️', iconBg: '#EAF0FF', kindColor: '#2B63F6' },
@@ -64,6 +83,8 @@ function dayToBlocks(day: NonNullable<ItineraryResponse['itinerary_days']>[numbe
         title: d.destination?.name ?? d.activities ?? 'Activity',
         sub: d.activities ?? '',
         price: d.cost ? format(Number(d.cost), d.currency ?? 'GHS') : '',
+        entityType: 'destination',
+        entityId: d.destination_id,
       });
     });
   }
@@ -83,19 +104,56 @@ function dayToBlocks(day: NonNullable<ItineraryResponse['itinerary_days']>[numbe
   return blocks;
 }
 
-function itineraryDaysToDays(itineraryDays: NonNullable<ItineraryResponse['itinerary_days']>, format: (amount: number, from?: string) => string): Day[] {
+function itineraryDaysToDays(
+  itineraryDays: NonNullable<ItineraryResponse['itinerary_days']>,
+  flights: ItineraryFlightResponse[] | undefined,
+  accommodation: ItineraryAccommodationResponse[] | undefined,
+  format: (amount: number, from?: string) => string): Day[] {
   return itineraryDays.map((d, i) => {
     const dt = d.date ? new Date(d.date) : null;
     const dow = dt ? dt.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() : '';
     const dayNum = dt ? String(dt.getDate()).padStart(2, '0') : String(d.day_number);
     const mon = dt ? dt.toLocaleDateString('en-US', { month: 'short' }) : '';
+    const dateStr = d.date ? d.date.split('T')[0] : null;
+
+    const flightBlocks: DayBlock[] = (flights ?? [])
+      .filter(f => f.departure_datetime && f.departure_datetime.split('T')[0] === dateStr)
+      .map(f => ({
+        kind: 'Flight',
+        kindColor: blockKindMeta.Flight.kindColor,
+        icon: blockKindMeta.Flight.icon,
+        iconBg: blockKindMeta.Flight.iconBg,
+        meta: f.departure_airport && f.arrival_airport ? `${f.departure_airport} → ${f.arrival_airport}` : '',
+        title: f.airline ?? 'Flight',
+        sub: f.flight_number ?? '',
+        price: f.cost ? `${f.currency ?? ''} ${Number(f.cost).toLocaleString()}` : '',
+        entityType: 'flight' as const,
+        entityId: f.flight_id,
+      }));
+
+    const stayBlocks: DayBlock[] = (accommodation ?? [])
+      .filter(a => a.check_in_date && a.check_in_date.split('T')[0] === dateStr)
+      .map(a => ({
+        kind: 'Stay',
+        kindColor: blockKindMeta.Stay.kindColor,
+        icon: blockKindMeta.Stay.icon,
+        iconBg: blockKindMeta.Stay.iconBg,
+        meta: a.address ?? '',
+        title: a.accommodation_name,
+        sub: a.room_type ? `${a.room_type}${a.check_out_date ? ` · Check-out ${a.check_out_date.split('T')[0]}` : ''}` : (a.check_out_date ? `Check-out ${a.check_out_date.split('T')[0]}` : ''),
+        price: a.cost ? `${a.currency ?? ''} ${Number(a.cost).toLocaleString()}/night` : '',
+        entityType: 'stay' as const,
+        entityId: a.accommodation_id,
+      }));
+
     return {
       di: i,
       dow,
       day: dayNum,
       mon,
       title: d.title ?? `Day ${d.day_number}`,
-      blocks: dayToBlocks(d, format),
+      // blocks: dayToBlocks(d, format),
+      blocks: [...flightBlocks, ...stayBlocks, ...dayToBlocks(d, format)],
       hasSuggestion: false,
       addBlock: () => {},
     };
@@ -112,11 +170,12 @@ function itineraryFlightsToFlights(flights: NonNullable<ItineraryResponse['itine
       : '',
     stops: 'Direct',
     price: f.cost ? format(f.cost, f.currency ?? 'GHS') : '',
-    cta: f.status === 'booked' ? 'Selected' : 'Select',
+    cta: f.status === FlightStatus.BOOKED ? 'Selected' : 'Select',
     logoBg: '#2B63F6',
     recDisplay: 'none',
     border: '#ECEDF2',
     bg: '#fff',
+    booking_url: f.booking_url ?? null,
   }));
 }
 
@@ -131,16 +190,29 @@ function itineraryStaysToStays(accommodation: NonNullable<ItineraryResponse['iti
     border: '#ECEDF2',
     bg: '#fff',
     tags: a.room_type ? [a.room_type] : [],
+    booking_url: a.booking_url ?? null,
   }));
 }
 
-const apiStatusMeta: Record<string, { display: string; bg: string; fg: string; gradient: string }> = {
-  planning:    { display: 'Draft',           bg: '#EEF0F4', fg: '#5B6172', gradient: 'linear-gradient(135deg,#334155,#7889A6)' },
-  inquiry:     { display: 'Inquiry',         bg: '#FFF3E0', fg: '#B7791F', gradient: 'linear-gradient(135deg,#E08A2B,#F5C06B)' },
-  booked:      { display: 'Booked',          bg: '#16143A', fg: '#FFFFFF', gradient: 'linear-gradient(135deg,#15803D,#5DBE7E)' },
-  in_progress: { display: 'In Progress',     bg: '#E3F7EF', fg: '#0E9F6E', gradient: 'linear-gradient(135deg,#0E7C8F,#36C5C0)' },
-  completed:   { display: 'Completed',       bg: '#EAF0FF', fg: '#2B63F6', gradient: 'linear-gradient(135deg,#1B5BBE,#5AA0FF)' },
-  cancelled:   { display: 'Cancelled',       bg: '#FDECEC', fg: '#D64545', gradient: 'linear-gradient(135deg,#C2410C,#F59E5B)' },
+function fmtRelativeTime(dt: string | null | undefined): string {
+  if (!dt) return '';
+  const diff = Date.now() - new Date(dt).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return days === 1 ? 'yesterday' : `${days}d ago`;
+}
+
+type GenerationSnapshot = {
+  id: string;
+  timestamp: Date;
+  label: string;
+  model: string;
+  context: string;
+  itineraries: ItineraryResponse[];
 };
 
 function fmtDateRange(start: string | null, end: string | null): string {
@@ -157,7 +229,7 @@ export default function TripDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const ctx = useApp();
-  const { format } = useCurrency();
+  const { format, convert } = useCurrency();
   // A real trip_id is a prefixed string like "TRP_..." (never all-digits), so "does the
   // param look like a plain number" is how we tell real trips apart from mock trip indices.
   const isRealId = tripId ? !/^\d+$/.test(tripId) : false;
@@ -213,9 +285,13 @@ export default function TripDetail() {
   const [addingDay, setAddingDay] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(false);
   const [generatingItinerary, setGeneratingItinerary] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const builderRef = useRef<HTMLDivElement>(null);
   const [removingDayId, setRemovingDayId] = useState<string | null>(null);
   const [removingItinerary, setRemovingItinerary] = useState(false);
   const [addingOption, setAddingOption] = useState(false);
+  const [acceptedItineraryId, setAcceptedItineraryId] = useState<string | null>(null);
+  const [acceptingItineraryId, setAcceptingItineraryId] = useState<string | null>(null);
   const [apiCalls, setApiCalls] = useState<CallResponse[]>([]);
   const [newCallTitle, setNewCallTitle] = useState('');
   const [addingCall, setAddingCall] = useState(false);
@@ -223,6 +299,7 @@ export default function TripDetail() {
   const [savingActionItem, setSavingActionItem] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentCurrency, setPaymentCurrency] = useState('GHS');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
   const [payingWithMoolre, setPayingWithMoolre] = useState(false);
@@ -230,6 +307,38 @@ export default function TripDetail() {
   // cards (with Payments nested inside Cost summary), switched to a single tabbed card so the
   // user can flip between them instead of scrolling a long stacked sidebar.
   const [sidebarTab, setSidebarTab] = useState<'cost' | 'payments' | 'activity'>('cost');
+  const [expandedChatOption, setExpandedChatOption] = useState<string | null>(null);
+  const [shareMenuOption, setShareMenuOption] = useState<string | null>(null);
+  const [shareAllOpen, setShareAllOpen] = useState(false);
+  const [travelerPackages, setTravelerPackages] = useState<Record<string, string>>({});
+  const [bookingAll, setBookingAll] = useState(false);
+  const [refineOpen, setRefineOpen] = useState(false);
+  const [refineText, setRefineText] = useState('');
+  const [refineImageName, setRefineImageName] = useState<string | null>(null);
+  const [refineModel, setRefineModel] = useState('claude-sonnet-5');
+  const [refineFor, setRefineFor] = useState<'all' | string>('all');
+  const [refineTitle, setRefineTitle] = useState('');
+  const [includeFlights, setIncludeFlights] = useState(true);
+  const [includeStays, setIncludeStays] = useState(true);
+  const [includeEvents, setIncludeEvents] = useState(true);
+  const [draftStartCity, setDraftStartCity] = useState('');
+  const [flightLegs, setFlightLegs] = useState<FlightLeg[]>([
+    { label: 'Outbound', date: '', time: '' },
+    { label: 'Return',   date: '', time: '' },
+  ]);
+  const updateLeg = (i: number, field: keyof FlightLeg, val: string) =>
+    setFlightLegs(legs => legs.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  const addLeg = () => setFlightLegs(legs => [
+    ...legs.slice(0, -1),
+    { label: '', date: '', time: '' },
+    legs[legs.length - 1],
+  ]);
+  const removeLeg = (i: number) => setFlightLegs(legs => legs.filter((_, idx) => idx !== i));
+  const [isListening, setIsListening] = useState(false);
+  const [generationHistory, setGenerationHistory] = useState<GenerationSnapshot[]>([]);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [comparingSnap, setComparingSnap] = useState<GenerationSnapshot | null>(null);
+  const refineImageRef = useRef<HTMLInputElement>(null);
 
   // Real calls for this trip (Calls tab) — kept separate from the trip/itinerary fetch above
   // since calls aren't nested under TripResponse.
@@ -248,7 +357,7 @@ export default function TripDetail() {
   }, [tripId]);
 
 
-  const handleStatusTransition = async (status: string) => {
+  const handleStatusTransition = async (status: TripStatus) => {
     if (!tripId || !apiTrip) return;
     setUpdatingStatus(true);
     try {
@@ -259,33 +368,108 @@ export default function TripDetail() {
     }
   };
 
-  // Kicks off itinerary generation. For a real trip this calls the backend (which sleeps ~4s
-  // and returns a templated itinerary — see TripController::generateItinerary), showing the
-  // `generatingItinerary` loading state below for the duration; for a mock trip it falls back
-  // to the old client-only fake "drafting" animation (ctx.generateOptions()).
-  const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string; start_city?: string }) => {
+  // Once any itinerary on the trip has been selected — the traveler accepted it on their
+  // TravelerView link, or the agent accepted it here — the trip is effectively booked, so
+  // keep the status dropdown in sync automatically instead of requiring a manual change.
+  // Only promotes forward (inquiry/planning → booked); never demotes a status the agent set
+  // deliberately (e.g. cancelled), and re-runs harmlessly since the status guard below makes
+  // it a no-op once apiTrip.status has already caught up.
+  useEffect(() => {
+    if (!apiTrip) return;
+    const hasSelectedItinerary = (apiTrip.itineraries ?? []).some(it =>
+      it.status === ItineraryStatus.CONFIRMED
+      || it.status === ItineraryStatus.IN_PROGRESS
+      || it.status === ItineraryStatus.COMPLETED
+    );
+    if (!hasSelectedItinerary) return;
+    if (apiTrip.status !== TripStatus.INQUIRY && apiTrip.status !== TripStatus.PLANNING) return;
+    handleStatusTransition(TripStatus.BOOKED);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiTrip]);
+
+  const providerLabel = (id: string | undefined) => {
+    const map: Record<string, string> = {
+      gemini: 'Gemini', openai: 'ChatGPT', anthropic: 'Claude', ollama: 'Ollama',
+    };
+    return id ? (map[id] ?? id) : 'AI';
+  };
+
+  const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string; start_city?: string; model?: string; snapshotTitle?: string; include_events?: boolean; flight_departure_time?: string; return_flight_time?: string }) => {
     if (!tripId || !isRealId) {
       ctx.generateOptions();
       return;
     }
     setGeneratingItinerary(true);
+    setGenerateError(null);
     try {
-      await ApiService.generateItinerary(tripId, prefs);
-      await refreshTrip();
+      // Merge all persistent generation settings into every call — service toggles,
+      // flight legs — so Regenerate and the initial generate button honour them too.
+      // start_city from the current itinerary is always included as a fallback so
+      // flight search runs on Regenerate even when the caller doesn't pass it explicitly.
+      const activeLegs = flightLegs.filter(l => l.date || l.time);
+      const enrichedPrefs = {
+        ...(selectedItinerary?.start_city ? { start_city: selectedItinerary.start_city } : {}),
+        ...prefs,
+        include_flights: includeFlights,
+        include_stays: includeStays,
+        include_events: includeEvents,
+        ...(activeLegs.length ? { flight_legs: activeLegs } : {}),
+      };
+      const result = await ApiService.generateItinerary(tripId, enrichedPrefs);
+
+      // Notify if the requested model was unavailable and a fallback was used
+      if (result.skipped_providers?.length && result.provider_used) {
+        const rateLimited = (result.skipped_providers as SkippedProvider[]).filter(s => s.reason === 'rate_limited');
+        if (rateLimited.length) {
+          const skippedNames = rateLimited.map(s => providerLabel(s.name)).join(', ');
+          const usedLabel = providerLabel(result.provider_used);
+          const retryInfo = rateLimited[0].retry_after_seconds
+            ? ` (available again in ~${rateLimited[0].retry_after_seconds}s)`
+            : '';
+          ctx.toastAction(`${skippedNames} is rate-limited${retryInfo} — used ${usedLabel} instead.`);
+        }
+      }
+
+      if (result?.all_options?.length) {
+        // Save the newly generated result as a named snapshot in the history timeline
+        const userTitle = prefs?.snapshotTitle?.trim();
+        setGenerationHistory(prev => [...prev, {
+          id: Date.now().toString(),
+          timestamp: new Date(),
+          label: userTitle || (prev.length === 0 ? 'Original' : `Refinement ${prev.length}`),
+          model: prefs?.model ?? 'claude-sonnet-5',
+          context: prefs?.notes ?? '',
+          itineraries: result.all_options,
+        }]);
+        // Refresh trip metadata (status, dates, etc.) but replace itineraries with the
+        // exact set returned by generate — getTrip returns old confirmed options too,
+        // which would mix with the new draft options and confuse the option selector.
+        const freshTrip = await ApiService.getTrip(tripId).catch(() => null);
+        setApiTrip(prev => {
+          const base = freshTrip ?? prev;
+          return base ? { ...base, itineraries: result.all_options } : prev;
+        });
+        setActiveOption('A');
+        setBuilderTab('itinerary');
+        setTimeout(() => {
+          builderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }
+      refreshCosts();
+    } catch {
+      setGenerateError('Could not generate itinerary — check that meridian-ai is running, or try again.');
     } finally {
       setGeneratingItinerary(false);
     }
-  }, [tripId, isRealId, ctx, refreshTrip]);
-
-  const { td: mockTd, tb: mockTb } = ctx.getTripDetail(tid, activeOption);
+  }, [tripId, isRealId, ctx, refreshTrip, refreshCosts, setActiveOption, setBuilderTab]);
 
   // ── Derived data ──
-  // tripTd/tripTb overlay real apiTrip fields onto the mock td/tb (same pattern as
-  // AppContext's apiTripToTripDetail/apiTripToStatusBanner) so the render below doesn't need
-  // separate real/mock branches — it just always reads `td`/`tb`.
+  // tripTd/tripTb build the view-model banner/detail objects straight from apiTrip. There's no
+  // more mock-trip source to fall back to — emptyTd/emptyTb below are just the "nothing loaded
+  // yet" placeholder (mock trip ids, or a real trip still mid-fetch).
 
-  const tripTd = useMemo(() => {
-    if (!apiTrip) return mockTd;
+  const tripTd = useMemo((): TripDetailData => {
+    if (!apiTrip) return emptyTd;
     const sm = apiStatusMeta[apiTrip.status] ?? { display: apiTrip.status, bg: '#EEF0F4', fg: '#5B6172', gradient: 'linear-gradient(135deg,#334155,#7889A6)' };
     const trav = apiTrip.customers?.[0]
       ? `${apiTrip.customers[0].first_name} ${apiTrip.customers[0].last_name}`
@@ -293,22 +477,31 @@ export default function TripDetail() {
         ? apiTrip.created_by.display_name
         : 'Traveler');
     return {
-      ...mockTd,
       name: apiTrip.trip_name,
       traveler: trav,
       dates: fmtDateRange(apiTrip.start_date, apiTrip.end_date),
       where: apiTrip.description?.split('.')[0] ?? apiTrip.trip_name,
-      value: apiTrip.budget ? format(Number(apiTrip.budget), 'GHS') : mockTd.value,
-      status: sm.display as TripStatus,
+      value: apiTrip.budget ? format(Number(apiTrip.budget), 'GHS') : '',
+      status: sm.display as TripStatusLabel,
       statusBg: sm.bg,
       statusFg: sm.fg,
       gradient: sm.gradient,
       origin: apiTrip.customers?.[0]?.last_name ?? 'Traveler',
+      total: '',
+      days: [],
+      costs: [],
+      options: [],
+      optionsLabel: '',
+      headerActions: [],
+      // The trip's real description doubles as the "discovery call brief" card's content —
+      // previously this always showed demo-trip-0's hardcoded brief regardless of which real
+      // trip was open; this is the actual per-trip data it should have been reading all along.
+      brief: apiTrip.description ?? undefined,
     };
-  }, [apiTrip, mockTd, format]);
+  }, [apiTrip, format]);
 
   const tripTb = useMemo(() => {
-    if (!apiTrip) return mockTb;
+    if (!apiTrip) return emptyTb;
     const ic = apiTrip.itineraries ?? [];
     const hasItins = ic.length > 0;
     return {
@@ -327,12 +520,12 @@ export default function TripDetail() {
       chipBorder: '#C4D2FF',
       showDrafting: false,
       showBuilder: true,
-      showDraft: apiTrip.status === 'planning' || apiTrip.status === 'inquiry',
+      showDraft: apiTrip.status === TripStatus.PLANNING || apiTrip.status === TripStatus.INQUIRY,
       showOptions: hasItins,
       showRefs: false,
       refs: [],
     };
-  }, [apiTrip, mockTb]);
+  }, [apiTrip]);
 
   const td = tripTd;
   const tb = tripTb;
@@ -375,92 +568,64 @@ export default function TripDetail() {
   const hasApiData = selectedItinerary != null
     && (selectedItinerary.itinerary_days?.length ?? 0) > 0;
 
-  // Cost summary sidebar data, in priority order:
-  // 1) the real /trips/{id}/costs response for the currently-selected itinerary (preferred —
-  //    matches TripController::costs()'s server-side totals including payments/outstanding),
-  // 2) a client-side recomputation from the selected itinerary's raw flights/accommodation/
-  //    destinations (used if tripCosts hasn't loaded yet, e.g. right after generating),
-  // 3) null, falling back further to the mock td.costs in the `costs` variable below.
+  // Cost summary sidebar — always computed from the selected itinerary's live data so it
+  // matches the option card total exactly. Payment/summary fields come from the costs API.
   const computedCosts = useMemo(() => {
-    // The costs endpoint returns one cost breakdown per itinerary, in the same order
-    // as apiTrip.itineraries, so we match by index rather than itinerary_id.
-    const ic = tripCosts?.itineraries[selectedItineraryIndex] ?? tripCosts?.itineraries[0];
-    if (ic) {
-      const c = ic.currency;
-      // `currency` below stays the itinerary's native currency (what the record-payment form
-      // and Moolre both submit amounts in) — only these displayed row/fee/total strings get
-      // converted to the preferred currency, via `fmt`.
-      const fmt = (n: number) => format(n, c);
-      return {
-        rows: [
-          { label: 'Flights', value: fmt(ic.flights) },
-          { label: 'Accommodation', value: fmt(ic.accommodation) },
-          { label: 'Activities & transfers', value: fmt(ic.activities) },
-        ],
-        fee: `Service fee (5%) ${fmt(ic.service_fee)}`,
-        total: fmt(ic.total),
-        currency: c,
-        payments: tripCosts?.payments ?? [],
-        summary: tripCosts?.summary,
-      };
-    }
-    if (selectedItinerary) {
-      const flightsCost = (selectedItinerary.itinerary_flights ?? []).reduce((s, f) => s + (f.cost ?? 0), 0);
-      const staysCost = (selectedItinerary.itinerary_accommodation ?? []).reduce((s, a) => s + (a.cost ?? 0), 0);
-      const activitiesCost = (selectedItinerary.itinerary_days ?? []).reduce((sum, d) =>
-        sum + (d.destinations ?? []).reduce((s2, dst) => s2 + Number(dst.cost ?? 0), 0), 0);
-      const currency = selectedItinerary.itinerary_flights?.[0]?.currency ?? selectedItinerary.itinerary_accommodation?.[0]?.currency ?? 'GHS';
-      const fmt = (n: number) => format(n, currency);
-      const subTotal = flightsCost + staysCost + activitiesCost;
-      const fee = Math.round(subTotal * 0.05);
-      const total = subTotal + fee;
-      return {
-        rows: [
-          { label: 'Flights', value: fmt(flightsCost) },
-          { label: 'Accommodation', value: fmt(staysCost) },
-          { label: 'Activities & transfers', value: fmt(activitiesCost) },
-        ],
-        fee: `Service fee (5%) ${fmt(fee)}`,
-        total: fmt(total),
-        currency,
-        payments: [] as TripCostResponse['payments'],
-        summary: undefined as TripCostResponse['summary'] | undefined,
-      };
-    }
-    return null;
-  }, [tripCosts, selectedItinerary, selectedItineraryIndex, format]);
+    if (!selectedItinerary) return null;
+    const flightsCost = (selectedItinerary.itinerary_flights ?? []).reduce((s, f) => s + (f.cost ?? 0), 0);
+    const staysCost = (selectedItinerary.itinerary_accommodation ?? []).reduce((s, a) => s + (a.cost ?? 0), 0);
+    const activitiesCost = (selectedItinerary.itinerary_days ?? []).reduce((sum, d) =>
+      sum + (d.destinations ?? []).reduce((s2, dst) => s2 + Number(dst.cost ?? 0), 0), 0);
+    const firstDestCurrency = selectedItinerary.itinerary_days?.flatMap(d => d.destinations ?? []).find(dst => dst.currency)?.currency;
+    const currency = selectedItinerary.itinerary_flights?.[0]?.currency
+      ?? selectedItinerary.itinerary_accommodation?.[0]?.currency
+      ?? firstDestCurrency
+      ?? 'USD';
+    const fmt = (n: number) => `${currency} ${n.toLocaleString()}`;
+    const subTotal = flightsCost + staysCost + activitiesCost;
+    const fee = Math.round(subTotal * 0.05);
+    const total = subTotal + fee;
+    return {
+      rows: [
+        { label: 'Flights', value: fmt(flightsCost) },
+        { label: 'Accommodation', value: fmt(staysCost) },
+        { label: 'Activities & transfers', value: fmt(activitiesCost) },
+      ],
+      fee: `Service fee (5%) ${fmt(fee)}`,
+      total: fmt(total),
+      currency,
+      payments: tripCosts?.payments ?? [] as TripCostResponse['payments'],
+      summary: tripCosts?.summary,
+    };
+  }, [tripCosts, selectedItinerary]);
 
-  const costs = computedCosts?.rows ?? td.costs ?? [];
-  const costTotal = computedCosts?.total ?? td.total ?? '';
-  const costFee = computedCosts?.fee ?? 'Service fee charged to traveller';
+  const costs = computedCosts?.rows ?? [];
+  const costTotal = computedCosts?.total ?? '';
+  const costFee = computedCosts?.fee ?? '';
   const payments = computedCosts?.payments ?? [];
   const costSummary = computedCosts?.summary ?? null;
   const costCurrency = computedCosts?.currency ?? 'GHS';
 
   const rawDays = hasApiData && selectedItinerary?.itinerary_days
-    ? itineraryDaysToDays(selectedItinerary.itinerary_days, format)
+    ? itineraryDaysToDays(
+        selectedItinerary.itinerary_days,
+        selectedItinerary.itinerary_flights,
+        selectedItinerary.itinerary_accommodation,
+        format
+      )
     : apiTrip
     ? [{ di: 0, dow: '', day: '01', mon: '', title: 'Day 1', blocks: [], addBlock: () => {} }]
     : ctx.getDays(tid, activeOption);
 
   // ── Event handlers ──
 
-  // Removes a single destination/activity block from a day. For a real trip, this calls the
-  // scoped removeDestinationFromDay endpoint — it must NOT call removeItineraryDay, which
-  // would delete the whole day (and every other destination on it) instead of just this one.
-  const handleRemoveBlock = (di: number, bi: number) => {
-    if (selectedItinerary?.itinerary_days?.[di]?.destinations) {
-      const dst = selectedItinerary.itinerary_days[di].destinations!;
-      const destinationId = dst[bi]?.destination_id;
-      if (destinationId) {
-        const dayId = selectedItinerary.itinerary_days[di].itinerary_day_id;
-        if (dayId) {
-          ApiService.removeDestinationFromDay(dayId, destinationId).then(() => refreshTrip());
-          return;
-        }
-      }
+  // Removes a single destination block from a day by entity ID. Flight/stay blocks use their
+  // own inline handlers set up in the `days` mapping below.
+  const handleRemoveBlock = (di: number, entityId: string) => {
+    const day = selectedItinerary?.itinerary_days?.[di];
+    if (day?.itinerary_day_id) {
+      ApiService.removeDestinationFromDay(day.itinerary_day_id, entityId).then(() => refreshTrip());
     }
-    ctx.removeBlock(di, bi);
   };
 
   // Appends the next-numbered day to the selected itinerary. Falls back to the mock-only
@@ -550,20 +715,6 @@ export default function TripDetail() {
     }
   };
 
-  // Deletes an entire itinerary option (e.g. "Option B"). Resets the active option back to
-  // 'A' afterwards since the deleted option's letter/index may no longer exist.
-  const handleRemoveItinerary = async (itineraryId: string) => {
-    if (!window.confirm('Delete this itinerary option? This cannot be undone.')) return;
-    setRemovingItinerary(true);
-    try {
-      await ApiService.deleteItinerary(itineraryId);
-      setActiveOption('A');
-      await refreshTrip();
-    } finally {
-      setRemovingItinerary(false);
-    }
-  };
-
   // Adds a brand-new blank itinerary option (e.g. "Option C") alongside whatever already
   // exists, named by the next unused letter — same letter-assignment scheme as the options
   // list itself (options[i].letter = A + i) and TripController::generateItinerary's own
@@ -588,6 +739,39 @@ export default function TripDetail() {
       setActiveOption(letter);
     } finally {
       setAddingOption(false);
+    }
+  };
+
+  const handleDeclineItinerary = async (itineraryId: string) => {
+    setRemovingItinerary(true);
+    try {
+      await ApiService.deleteItinerary(itineraryId);
+      if (acceptedItineraryId === itineraryId) setAcceptedItineraryId(null);
+      const remaining = (apiTrip?.itineraries ?? []).filter(it => it.itinerary_id !== itineraryId);
+      setApiTrip(prev => prev ? { ...prev, itineraries: remaining } : prev);
+      if (remaining.length > 0) setActiveOption('A');
+    } finally {
+      setRemovingItinerary(false);
+    }
+  };
+
+  const handleAcceptItinerary = async (itineraryId: string) => {
+    // Toggle off if clicking the already-accepted option
+    if (acceptedItineraryId === itineraryId) {
+      setAcceptedItineraryId(null);
+      setAcceptingItineraryId(itineraryId);
+      try { await ApiService.updateItinerary(itineraryId, { status: ItineraryStatus.DRAFT }); } finally { setAcceptingItineraryId(null); }
+      return;
+    }
+    setAcceptedItineraryId(itineraryId);
+    setAcceptingItineraryId(itineraryId);
+    try {
+      await ApiService.updateItinerary(itineraryId, { status: ItineraryStatus.CONFIRMED });
+      // Refreshes apiTrip so the auto-booked status effect above sees the newly confirmed
+      // itinerary right away, instead of waiting for some unrelated refresh to pick it up.
+      await refreshTrip();
+    } finally {
+      setAcceptingItineraryId(null);
     }
   };
 
@@ -626,27 +810,31 @@ export default function TripDetail() {
   };
 
   // Toggles an action item between pending and checked (done).
-  const handleToggleActionItem = async (itemId: string, currentStatus: string) => {
-    const next = currentStatus === 'checked' ? 'pending' : 'checked';
+  const handleToggleActionItem = async (itemId: string, currentStatus: CallActionItemStatus) => {
+    const next = currentStatus === CallActionItemStatus.CHECKED ? CallActionItemStatus.PENDING : CallActionItemStatus.CHECKED;
     await ApiService.updateCallActionItem(itemId, { status: next });
     refreshCalls();
   };
 
   // Records a payment against this trip (cost summary sidebar). Marked completed
   // immediately — this app has no separate pending-payment-then-confirm flow yet.
+  // The agent can enter the amount in whichever currency they actually collected it in
+  // (paymentCurrency) — converted to GHS here so every recorded payment stays comparable
+  // regardless of what currency it was typed in, same as the Moolre flow below.
   const handleRecordPayment = async () => {
     if (!apiTrip) return;
     const amount = Number(paymentAmount);
     if (!paymentAmount.trim() || Number.isNaN(amount) || amount <= 0) return;
     setSavingPayment(true);
     try {
+      const amountGHS = convert(amount, paymentCurrency, 'GHS');
       // Backend validates amount as a whole integer (no decimals) — round rather than reject.
       await ApiService.recordTripPayment({
         trip_id: apiTrip.trip_id,
-        amount: Math.round(amount),
-        currency: costCurrency,
+        amount: Math.round(amountGHS),
+        currency: 'GHS',
         payment_method: paymentMethod.trim() || undefined,
-        status: 'completed',
+        status: TransactionStatus.COMPLETED,
       });
       setPaymentAmount('');
       setPaymentMethod('');
@@ -661,13 +849,15 @@ export default function TripDetail() {
   // pending transaction server-side and redirects the browser to Moolre's hosted checkout
   // page. On success the browser navigates away, so there's no "finally" to reset the loading
   // state — it only needs resetting if the request itself fails before any redirect happens.
+  // Moolre only settles in GHS, so the chosen-currency amount is converted before sending.
   const handlePayWithMoolre = async () => {
     if (!apiTrip) return;
     const amount = Number(paymentAmount);
     if (!paymentAmount.trim() || Number.isNaN(amount) || amount <= 0) return;
     setPayingWithMoolre(true);
     try {
-      const checkout = await ApiService.initiateMoolreTripPayment(apiTrip.trip_id, Math.round(amount));
+      const amountGHS = convert(amount, paymentCurrency, 'GHS');
+      const checkout = await ApiService.initiateMoolreTripPayment(apiTrip.trip_id, Math.round(amountGHS));
       window.location.href = checkout.authorization_url;
     } catch {
       ctx.toastAction('Could not start the Moolre payment.');
@@ -792,12 +982,76 @@ export default function TripDetail() {
     refreshTrip();
   };
 
+  const handleRemoveTraveler = async (customerId: string) => {
+    if (!tripId) return;
+    await ApiService.removeCustomerFromTrip(tripId, customerId).catch(() => {});
+    refreshTrip();
+  };
+
+  const handleConfirmBookingAll = async () => {
+    if (!apiTrip) return;
+    setBookingAll(true);
+    try {
+      await ApiService.updateTripStatus(apiTrip.trip_id, TripStatus.BOOKED);
+      refreshTrip();
+    } finally {
+      setBookingAll(false);
+    }
+  };
+
+  const handleRefineSubmit = () => {
+    setRefineOpen(false);
+    const travelerCtx = refineFor !== 'all'
+      ? (() => {
+          const c = (apiTrip?.customers ?? []).find(cu => cu.customer_id === refineFor);
+          return c ? `[Personalising for traveler: ${c.first_name} ${c.last_name}] ` : '';
+        })()
+      : '';
+    const context = [travelerCtx + refineText.trim(), refineImageName ? `[Attachment: ${refineImageName}]` : ''].filter(Boolean).join(' ');
+    handleGenerateItinerary({
+      notes: context || undefined,
+      model: refineModel,
+      snapshotTitle: refineTitle.trim() || undefined,
+    });
+    setRefineText('');
+    setRefineImageName(null);
+    setRefineTitle('');
+    setRefineFor('all');
+  };
+
+  const toggleVoice = () => {
+    const SR = (window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }).SpeechRecognition
+      || (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
+    if (!SR) { ctx.toastAction('Voice input is not supported in this browser.'); return; }
+    if (isListening) { setIsListening(false); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognition = new (SR as any)();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.onresult = (e: { results: { length: number; [key: number]: { [key: number]: { transcript: string } } }; resultIndex: number }) => {
+      const transcript = Array.from({ length: e.results.length - e.resultIndex }, (_, i) =>
+        e.results[e.resultIndex + i][0].transcript
+      ).join(' ');
+      setRefineText(prev => (prev ? prev + ' ' : '') + transcript);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognition.start();
+    setIsListening(true);
+  };
+
   const days = rawDays.map((d, di) => ({
     ...d,
     di: d.di ?? di,
     blocks: d.blocks.map((b, bi) => ({
       ...b,
-      remove: () => handleRemoveBlock(di, bi),
+      remove: b.entityType === 'flight' && b.entityId
+        ? () => { ApiService.removeFlight(b.entityId!).then(() => refreshTrip()); }
+        : b.entityType === 'stay' && b.entityId
+        ? () => { ApiService.removeAccommodation(b.entityId!).then(() => refreshTrip()); }
+        : b.entityType === 'destination' && b.entityId
+        ? () => handleRemoveBlock(di, b.entityId!)
+        : () => { ctx.removeBlock(di, bi); },
     })),
     addSuggestion: d.hasSuggestion ? () => ctx.addSuggestion(di) : undefined,
     addBlock: () => handleAddBlock(di),
@@ -834,7 +1088,85 @@ export default function TripDetail() {
     : null;
   const { calls: callLogsArr, callDetails } = ctx.getCallLogs();
   const call = callDetails[activeCall] ?? null;
-  const agentFeed = ctx.getAgentFeed();
+
+  const realAgentFeed = useMemo((): AgentFeedItem[] => {
+    if (!isRealId || !apiTrip) return [];
+    const items: AgentFeedItem[] = [];
+
+    (apiTrip.itineraries ?? []).forEach((itin, i) => {
+      const letter = String.fromCharCode(65 + i);
+      const days = itin.itinerary_days?.length ?? 0;
+      const flights = itin.itinerary_flights?.length ?? 0;
+      const stays = itin.itinerary_accommodation?.length ?? 0;
+      const detail = [days > 0 && `${days} day${days !== 1 ? 's' : ''}`, flights > 0 && `${flights} flight${flights !== 1 ? 's' : ''}`, stays > 0 && `${stays} stay${stays !== 1 ? 's' : ''}`].filter(Boolean).join(' · ');
+      items.push({
+        iconEl: '✦',
+        iconBg: '#EAF0FF',
+        title: itin.itinerary_name ?? `Option ${letter} generated`,
+        detail: detail || 'No items yet',
+        time: fmtRelativeTime(itin.created_at),
+        actionLabel: 'Review →',
+        action: () => { setActiveOption(letter); setBuilderTab('itinerary'); setTimeout(() => builderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); },
+      });
+    });
+
+    const tripCalls = (apiTrip.calls ?? apiCalls);
+    tripCalls.forEach(call => {
+      const total = call.action_items?.length ?? 0;
+      const pending = (call.action_items ?? []).filter(a => a.status !== CallActionItemStatus.CHECKED).length;
+      items.push({
+        iconEl: '🎙️',
+        iconBg: '#F0EBFF',
+        title: call.title ?? 'Call recorded',
+        detail: total > 0 ? `${pending} action item${pending !== 1 ? 's' : ''} pending` : 'No action items captured',
+        time: fmtRelativeTime(call.created_at),
+        actionLabel: 'View call',
+        action: () => setBuilderTab('calls'),
+      });
+    });
+
+    (apiTrip.trip_payments ?? []).forEach(tp => {
+      if (!tp.transaction) return;
+      const t = tp.transaction;
+      const paid = t.status === TransactionStatus.COMPLETED;
+      items.push({
+        iconEl: '💳',
+        iconBg: paid ? '#E3F7EF' : '#FFF3E0',
+        title: `${paid ? 'Payment received' : 'Payment pending'} · ${t.currency} ${Number(t.amount).toLocaleString()}`,
+        detail: [t.payment_method?.replace(/_/g, ' '), tp.notes].filter(Boolean).join(' · '),
+        time: fmtRelativeTime(t.paid_at ?? ''),
+        actionLabel: 'Details',
+        action: () => {},
+      });
+    });
+
+    return items;
+  }, [isRealId, apiTrip, apiCalls, setActiveOption, setBuilderTab]);
+
+  const agentFeed = (isRealId && realAgentFeed.length > 0) ? realAgentFeed : ctx.getAgentFeed();
+
+  const compareData = useMemo(() => {
+    if (!comparingSnap || !apiTrip?.itineraries) return null;
+    return comparingSnap.itineraries.map((oldItin, i) => {
+      const letter = String.fromCharCode(65 + i);
+      const newItin = apiTrip.itineraries![i];
+      const oldDays = (oldItin.itinerary_days ?? []).map(d => d.title ?? `Day ${d.day_number}`);
+      const newDays = (newItin?.itinerary_days ?? []).map(d => d.title ?? `Day ${d.day_number}`);
+      const addedDays = newDays.filter(t => !oldDays.includes(t));
+      const removedDays = oldDays.filter(t => !newDays.includes(t));
+      const oldFlights = (oldItin.itinerary_flights ?? []).reduce((s, f) => s + (f.cost ?? 0), 0);
+      const oldStays = (oldItin.itinerary_accommodation ?? []).reduce((s, a) => s + (a.cost ?? 0), 0);
+      const oldActs = (oldItin.itinerary_days ?? []).reduce((s, d) => s + (d.destinations ?? []).reduce((s2, dst) => s2 + Number(dst.cost ?? 0), 0), 0);
+      const oldSub = oldFlights + oldStays + oldActs;
+      const oldTotal = oldSub > 0 ? `${oldItin.itinerary_flights?.[0]?.currency ?? 'USD'} ${(oldSub + Math.round(oldSub * 0.05)).toLocaleString()}` : null;
+      const newFlights = (newItin?.itinerary_flights ?? []).reduce((s, f) => s + (f.cost ?? 0), 0);
+      const newStays = (newItin?.itinerary_accommodation ?? []).reduce((s, a) => s + (a.cost ?? 0), 0);
+      const newActs = (newItin?.itinerary_days ?? []).reduce((s, d) => s + (d.destinations ?? []).reduce((s2, dst) => s2 + Number(dst.cost ?? 0), 0), 0);
+      const newSub = newFlights + newStays + newActs;
+      const newTotal = newSub > 0 ? `${newItin?.itinerary_flights?.[0]?.currency ?? 'USD'} ${(newSub + Math.round(newSub * 0.05)).toLocaleString()}` : null;
+      return { letter, name: oldItin.itinerary_name ?? `Option ${letter}`, addedDays, removedDays, oldTotal, newTotal };
+    });
+  }, [comparingSnap, apiTrip]);
 
   useEffect(() => {
     const state = location.state as {
@@ -848,25 +1180,214 @@ export default function TripDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const tripAgent = ['Kweku Ansah', 'Adwoa Mensah', 'Yaw Boateng', 'Efua Osei'][tid % 4];
+  const computeOptionCost = (itin: ItineraryResponse | undefined) => {
+    if (!itin) return null;
+    const fc = (itin.itinerary_flights ?? []).reduce((s, f) => s + (f.cost ?? 0), 0);
+    const sc = (itin.itinerary_accommodation ?? []).reduce((s, a) => s + (a.cost ?? 0), 0);
+    const ac = (itin.itinerary_days ?? []).reduce((s, d) =>
+      s + (d.destinations ?? []).reduce((s2, dst) => s2 + Number(dst.cost ?? 0), 0), 0);
+    const cur = itin.itinerary_flights?.[0]?.currency
+      ?? itin.itinerary_accommodation?.[0]?.currency
+      ?? itin.itinerary_days?.flatMap(d => d.destinations ?? []).find(dst => dst.currency)?.currency
+      ?? 'USD';
+    const sub = fc + sc + ac;
+    const fee = Math.round(sub * 0.05);
+    const total = sub + fee;
+    const fmt = (n: number) => n > 0 ? `${cur} ${n.toLocaleString()}` : '—';
+    return { flights: fmt(fc), accommodation: fmt(sc), activities: fmt(ac), fee: fmt(fee), total: fmt(total), hasData: total > 0, currency: cur };
+  };
+
+  const buildItineraryText = (itin: ItineraryResponse, rich = false): string => {
+    const sep = rich ? '─'.repeat(40) : '---';
+    const nl = '\n';
+    const travelerNames = (apiTrip?.customers ?? []).map(c => `${c.first_name} ${c.last_name}`).join(', ');
+    const dateRange = fmtDateRange(apiTrip?.start_date ?? null, apiTrip?.end_date ?? null);
+    const cost = computeOptionCost(itin);
+
+    const dayLines = (itin.itinerary_days ?? []).map(d => {
+      const activities = (d.destinations ?? []).map(dst =>
+        `    • ${dst.destination?.name ?? dst.activities ?? 'Activity'}${dst.cost ? ` (${dst.currency ?? ''} ${dst.cost})` : ''}`
+      ).join(nl);
+      return `${rich ? '📅 ' : ''}Day ${d.day_number}${d.title ? ': ' + d.title : ''}${d.location ? ' — ' + d.location : ''}${activities ? nl + activities : ''}`;
+    }).join(nl + nl);
+
+    const flightLines = (itin.itinerary_flights ?? []).map(f =>
+      `${rich ? '✈️ ' : ''}${f.airline ?? 'Flight'}: ${f.departure_airport ?? '—'} → ${f.arrival_airport ?? '—'}${f.departure_datetime ? ' · ' + new Date(f.departure_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}${f.cost ? ' · ' + (f.currency ?? '') + ' ' + Number(f.cost).toLocaleString() : ''}`
+    ).join(nl);
+
+    const stayLines = (itin.itinerary_accommodation ?? []).map(a =>
+      `${rich ? '🏨 ' : ''}${a.accommodation_name}${a.address ? ' — ' + a.address : ''}${a.cost ? ' · ' + (a.currency ?? '') + ' ' + Number(a.cost).toLocaleString() + '/night' : ''}`
+    ).join(nl);
+
+    const costBlock = cost?.hasData
+      ? `${nl}${rich ? '💰 ' : ''}COST ESTIMATE${nl}${sep}${nl}Flights: ${cost.flights}${nl}Accommodation: ${cost.accommodation}${nl}Activities & transfers: ${cost.activities}${nl}Service fee (5%): ${cost.fee}${nl}Total: ${cost.total}`
+      : '';
+
+    return (
+`Dear ${travelerNames || 'Traveler'},
+
+I'm excited to share your personalised itinerary for ${td.name}! After considering your preferences and travel goals, we've put together what we believe will be an unforgettable journey.
+
+${rich ? '🌍 ' : ''}TRIP OVERVIEW
+${sep}
+Destination: ${td.where}
+Dates: ${dateRange}
+Travelers: ${travelerNames || '—'}${apiTrip?.budget ? '\nBudget: GHS ' + Number(apiTrip.budget).toLocaleString() : ''}
+
+${rich ? '✨ ' : ''}${(itin.itinerary_name ?? 'YOUR ITINERARY').toUpperCase()}
+${sep}
+${dayLines || 'No days planned yet.'}
+${flightLines ? `\n${rich ? '✈️ ' : ''}FLIGHTS\n${sep}\n${flightLines}` : ''}
+${stayLines ? `\n${rich ? '🏨 ' : ''}ACCOMMODATION\n${sep}\n${stayLines}` : ''}
+${costBlock}
+
+Every detail has been thoughtfully curated to balance exploration, comfort and value. Whether it's the hand-picked stays, the carefully timed activities, or the seamless transfers — this itinerary is designed to let you travel with zero stress.
+
+${rich ? '📌 ' : ''}NEXT STEPS
+${sep}
+1. Review the itinerary above and let me know your thoughts
+2. Share any adjustments — I'm happy to tailor anything to make this perfect
+3. Once you're satisfied, we'll lock in bookings and send your full travel pack
+
+I'm here to make this trip exceptional. Don't hesitate to reach out with any questions!
+
+Warm regards,
+${tripAgentName}
+Meridian Travel`
+    );
+  };
+
+  const handleShareEmail = (itin: ItineraryResponse) => {
+    setShareMenuOption(null);
+    const body = buildItineraryText(itin, true);
+    const subject = encodeURIComponent(`Your ${td.name} Itinerary — ${itin.itinerary_name ?? 'Option A'} ✈️`);
+    window.open(`mailto:?subject=${subject}&body=${encodeURIComponent(body)}`, '_blank');
+  };
+
+  const handleShareChat = (itin: ItineraryResponse) => {
+    setShareMenuOption(null);
+    // Build a concise but engaging message for the chat channel
+    const cost = computeOptionCost(itin);
+    const highlights = (itin.itinerary_days ?? []).slice(0, 5).map(d =>
+      `Day ${d.day_number}${d.title ? ': ' + d.title : ''}${d.location ? ' in ' + d.location : ''}`
+    ).join('\n');
+    const extra = (itin.itinerary_days?.length ?? 0) > 5
+      ? `\n...and ${(itin.itinerary_days?.length ?? 0) - 5} more days of adventure!`
+      : '';
+    const message = `✈️ Here's your personalised ${td.name} itinerary — ${itin.itinerary_name ?? 'Option A'}!\n\n${highlights}${extra}${cost?.hasData ? '\n\n💰 Estimated total: ' + cost.total : ''}\n\nI've handpicked every stay, activity and transfer to match what you're looking for. Let me know if you'd like any adjustments — I want this to be perfect for you! 🌍`;
+    navigator.clipboard.writeText(message)
+      .then(() => {
+        ctx.toastAction('Itinerary copied! Head to Messages and paste it for your traveler.');
+        navigate('/app/messages');
+      })
+      .catch(() => ctx.toastAction('Could not copy — please try again.'));
+  };
+
+  // Live shareable link for the traveler view — always reflects the latest itinerary
+  const tripLink = isRealId && tripId ? `${window.location.origin}/travel/${tripId}` : null;
+
+  const handleCopyTripLink = (option?: string) => {
+    if (!tripLink) return;
+    const link = option ? `${tripLink}?option=${option}` : tripLink;
+    navigator.clipboard.writeText(link)
+      .then(() => ctx.toastAction(option ? `Option ${option} link copied!` : 'Trip link copied to clipboard!'))
+      .catch(() => ctx.toastAction('Could not copy link.'));
+    setShareAllOpen(false);
+    setShareMenuOption(null);
+  };
+
+  const handleShareAllWhatsApp = () => {
+    if (!tripLink) return;
+    const count = options.length;
+    const travelerNames = (apiTrip?.customers ?? []).map(c => c.first_name).join(', ') || 'there';
+    const msg = `Hi ${travelerNames}! 👋\n\nI've prepared ${count} itinerary option${count !== 1 ? 's' : ''} for your *${td.name}* trip. Take a look and let me know which one speaks to you:\n\n🔗 ${tripLink}\n\n_This link is always live — whenever I update your options, the link reflects the changes automatically. No need to ask for a new one!_ ✈️`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    setShareAllOpen(false);
+  };
+
+  const handleShareOptionWhatsApp = (itin: ItineraryResponse, optLetter: string, optName: string) => {
+    const link = tripLink ? `${tripLink}?option=${optLetter}` : '';
+    const cost = computeOptionCost(itin);
+    const days = itin.itinerary_days?.length ?? 0;
+    const highlights = (itin.itinerary_days ?? []).slice(0, 4).map(d => `• Day ${d.day_number}: ${d.title || d.location || ''}`).join('\n');
+    const msg = `✈️ *${td.name}* — ${optName}\n\n${highlights}${days > 4 ? `\n• ...and ${days - 4} more days!` : ''}${cost?.hasData ? '\n\n💰 Est. total: ' + cost.total : ''}\n\nHere's Option ${optLetter} of your trip. What do you think?\n${link ? '\n🔗 ' + link : ''}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    setShareMenuOption(null);
+  };
+
+  const handleShareAllEmail = () => {
+    if (!tripLink) return;
+    const travelerNames = (apiTrip?.customers ?? []).map(c => `${c.first_name} ${c.last_name}`).join(', ') || 'Traveler';
+    const optionsSummary = options.map((opt, i) => {
+      const itin = apiTrip?.itineraries?.[i];
+      const cost = itin ? computeOptionCost(itin) : null;
+      const days = itin?.itinerary_days?.length ?? 0;
+      const flights = itin?.itinerary_flights?.length ?? 0;
+      const stays = itin?.itinerary_accommodation?.length ?? 0;
+      return `  Option ${opt.letter}: ${opt.name}${days > 0 ? ` · ${days} days` : ''}${flights > 0 ? ` · ${flights} flight${flights !== 1 ? 's' : ''}` : ''}${stays > 0 ? ` · ${stays} stay${stays !== 1 ? 's' : ''}` : ''}${cost?.hasData ? ' · Est. ' + cost.total : ''}`;
+    }).join('\n');
+    const subject = encodeURIComponent(`Your ${td.name} Itinerary Options — Choose Your Perfect Trip ✈️`);
+    const body = encodeURIComponent(
+`Dear ${travelerNames},
+
+I'm thrilled to present your personalised itinerary options for ${td.name}! I've curated ${options.length} distinct option${options.length !== 1 ? 's' : ''}, each with a different style and focus, so you can choose the experience that truly resonates with you.
+
+YOUR ${options.length} OPTIONS AT A GLANCE
+${'─'.repeat(50)}
+${optionsSummary}
+${'─'.repeat(50)}
+
+👉 REVIEW ALL OPTIONS HERE (always up to date):
+${tripLink}
+
+This link is live — whenever I refine or update your itinerary based on your feedback, you'll see the latest version at the same link. No need to request a new one!
+
+HOW IT WORKS
+${'─'.repeat(50)}
+1. Click the link above to see all options side by side
+2. Browse each option's full day-by-day plan, flights, and stays
+3. Click "Accept" on the option you love — or reply to this email with your thoughts
+4. I'll lock in the bookings and send your full travel pack once you've confirmed
+
+Every option has been personally crafted with your preferences in mind. Whether it's the pace of the days, the style of accommodation, or the balance of activities — these are built around you.
+
+I can't wait to hear which one excites you most!
+
+Warm regards,
+${tripAgentName}
+Meridian Travel
+
+─────────────────────────────────────
+Questions? Simply reply to this email or reach out directly.`
+    );
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+    setShareAllOpen(false);
+  };
+
+  const tripAgent = apiTrip?.created_by
+    ? (typeof apiTrip.created_by === 'object' ? apiTrip.created_by.display_name : null)
+    : null;
+  const tripAgentName = tripAgent ?? ['Kweku Ansah', 'Adwoa Mensah', 'Yaw Boateng', 'Efua Osei'][tid % 4];
 
   const builderTabs = [
     { key: 'itinerary' as const, label: 'Itinerary' },
     { key: 'flights' as const, label: 'Flights' },
     { key: 'stays' as const, label: 'Stays' },
     { key: 'activities' as const, label: 'Activities' },
-    { key: 'calls' as const, label: 'Calls' },
+    { key: 'events' as const, label: 'Events' },
+    // Calls is accessible via the "Client calls" button below the chat cards, not a builder tab
   ];
 
   const tabItin = builderTab === 'itinerary';
   const tabFlights = builderTab === 'flights';
   const tabStays = builderTab === 'stays';
   const tabActs = builderTab === 'activities';
+  const tabEvents = builderTab === 'events';
   const tabCalls = builderTab === 'calls';
 
   const handleGenerateOptions = () => {
     if (isRealId) {
-      handleGenerateItinerary();
+      handleGenerateItinerary(draftStartCity ? { start_city: draftStartCity } : undefined);
     } else {
       ctx.openGenItin();
     }
@@ -908,10 +1429,6 @@ export default function TripDetail() {
     }));
   }, [apiTrip, td.options, setActiveOption]);
 
-  const optLabel = options.length > 1
-    ? `${options.length} itinerary options ready for review`
-    : 'Itinerary option:';
-
   // ── Render ──
 
   return (
@@ -941,14 +1458,24 @@ export default function TripDetail() {
                 </span>
               </div>
               <div className="td-hero-meta">
-                <span>{td.traveler}</span>
-                {apiTrip && (
-                  <button
-                    onClick={() => setAssignTravelerOpen(true)}
-                    className="td-traveler-change-btn"
-                  >
-                    {apiTrip.customers?.[0] ? 'Change' : '+ Assign traveler'}
-                  </button>
+                {apiTrip ? (
+                  <>
+                    {(apiTrip.customers ?? []).map(c => (
+                      <span key={c.customer_id} className="td-traveler-chip">
+                        {c.first_name} {c.last_name}
+                        <button
+                          className="td-traveler-chip-remove"
+                          onClick={() => handleRemoveTraveler(c.customer_id)}
+                          title="Remove traveler"
+                        >×</button>
+                      </span>
+                    ))}
+                    <button onClick={() => setAssignTravelerOpen(true)} className="td-traveler-add-btn">
+                      + Add traveler
+                    </button>
+                  </>
+                ) : (
+                  <span>{td.traveler}</span>
                 )}
                 <span className="td-hero-dot" />
                 <span>{td.where}</span>
@@ -970,7 +1497,7 @@ export default function TripDetail() {
                   <select
                     className="td-status-select"
                     value={apiTrip.status}
-                    onChange={e => handleStatusTransition(e.target.value)}
+                    onChange={e => handleStatusTransition(e.target.value as TripStatus)}
                     disabled={updatingStatus}
                     aria-label="Change trip status"
                   >
@@ -978,7 +1505,7 @@ export default function TripDetail() {
                       <option key={value} value={value}>{meta.display}</option>
                     ))}
                   </select>
-                  {apiTrip.status === 'planning' && (
+                  {apiTrip.status === TripStatus.PLANNING && (
                     <>
                       <button onClick={handleGenerateOptions} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }} disabled={updatingStatus || generatingItinerary}>
                         {generatingItinerary ? '✦ Generating…' : '✦ Generate options'}
@@ -988,7 +1515,7 @@ export default function TripDetail() {
                       </button>
                     </>
                   )}
-                  {apiTrip.status === 'inquiry' && (
+                  {apiTrip.status === TripStatus.INQUIRY && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>Preview</button>
                       <button onClick={handleShareTravelerView} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}>
@@ -996,7 +1523,7 @@ export default function TripDetail() {
                       </button>
                     </>
                   )}
-                  {apiTrip.status === 'booked' && (
+                  {apiTrip.status === TripStatus.BOOKED && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>View trip pack</button>
                       <button onClick={handleMessageTraveler} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}>
@@ -1004,26 +1531,26 @@ export default function TripDetail() {
                       </button>
                     </>
                   )}
-                  {apiTrip.status === 'in_progress' && (
+                  {apiTrip.status === TripStatus.IN_PROGRESS && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>Preview</button>
-                      <button onClick={() => handleStatusTransition('completed')} className="td-action-btn" style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }} disabled={updatingStatus}>
+                      <button onClick={() => handleStatusTransition(TripStatus.COMPLETED)} className="td-action-btn" style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }} disabled={updatingStatus}>
                         Complete trip
                       </button>
                     </>
                   )}
-                  {apiTrip.status === 'completed' && (
+                  {apiTrip.status === TripStatus.COMPLETED && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>View trip pack</button>
-                      <button onClick={() => handleStatusTransition('in_progress')} className="td-action-btn" style={{ background: '#EB8C2B', color: '#fff', borderColor: '#EB8C2B' }} disabled={updatingStatus}>
+                      <button onClick={() => handleStatusTransition(TripStatus.IN_PROGRESS)} className="td-action-btn" style={{ background: '#EB8C2B', color: '#fff', borderColor: '#EB8C2B' }} disabled={updatingStatus}>
                         Reopen
                       </button>
                     </>
                   )}
-                  {apiTrip.status === 'cancelled' && (
+                  {apiTrip.status === TripStatus.CANCELLED && (
                     <>
                       <button onClick={handleOpenTravelerView} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>Preview</button>
-                      <button onClick={() => handleStatusTransition('planning')} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }} disabled={updatingStatus}>
+                      <button onClick={() => handleStatusTransition(TripStatus.PLANNING)} className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }} disabled={updatingStatus}>
                         Reactivate
                       </button>
                     </>
@@ -1075,88 +1602,373 @@ export default function TripDetail() {
           </div>
         )}
 
-        {tb.showOptions && options.length > 0 && (
-          <div className="mb-24">
-            {showReadyNotice && (
-              <div className="td-options-label">
-                {optLabel}
+        {tb.showOptions && (options.length > 0 || apiTrip) && (
+          <div className="td-chat-options-section mb-24">
+            {/* AI intro + share-all trigger */}
+            <div className="td-chat-ai-row">
+              <div className="td-chat-ai-avatar">✦</div>
+              <div className="td-chat-ai-bubble">
+                {options.length === 0
+                  ? 'All options were declined.'
+                  : <>Here {options.length === 1 ? 'is' : 'are'} <strong>{options.length} itinerary option{options.length !== 1 ? 's' : ''}</strong> for <strong>{td.name}</strong>. Review each one below and accept the best fit.</>
+                }
+              </div>
+              {isRealId && tripLink && options.length > 0 && (
+                <button
+                  className={`td-share-all-btn${shareAllOpen ? ' td-share-all-btn--open' : ''}`}
+                  onClick={() => setShareAllOpen(o => !o)}
+                >
+                  ↗ Share with traveler
+                </button>
+              )}
+            </div>
+
+            {/* Live share panel */}
+            {shareAllOpen && tripLink && (
+              <div className="td-share-all-panel">
+                <div className="td-share-all-top">
+                  <div>
+                    <div className="td-share-all-title">🔗 Live trip link</div>
+                    <div className="td-share-all-subtitle">Always shows the latest options — no need to resend if the itinerary changes</div>
+                  </div>
+                  <button onClick={() => setShareAllOpen(false)} className="td-share-all-close">✕</button>
+                </div>
+                <div className="td-share-all-link-row">
+                  <span className="td-share-all-link">{tripLink}</span>
+                  <button className="td-share-all-copy-btn" onClick={() => handleCopyTripLink()}>Copy link</button>
+                </div>
+                <div className="td-share-all-actions">
+                  <button className="td-share-all-action-btn" onClick={handleShareAllWhatsApp}>
+                    📱 WhatsApp all options
+                  </button>
+                  <button className="td-share-all-action-btn" onClick={handleShareAllEmail}>
+                    ✉ Email all options
+                  </button>
+                  <button className="td-share-all-action-btn td-share-all-preview-btn" onClick={() => { setShareAllOpen(false); navigate('/travel/' + tripId); }}>
+                    Preview traveler view →
+                  </button>
+                </div>
               </div>
             )}
-            <div className="td-options-row">
-              {options.map((opt) => {
-                const isActive = activeOption === opt.letter;
-                return (
-                  <div
-                    key={opt.letter}
-                    onClick={opt.onClick}
-                    className="td-pill-container"
-                    style={{
-                      borderColor: isActive ? '#2B63F6' : '#ECEDF2',
-                      background: isActive ? '#F4F7FF' : '#fff',
-                    }}
-                  >
-                    <div className="td-option-letter" style={{ background: opt.cover }}>
-                      {opt.letter}
+
+            {options.length === 0 && apiTrip && (
+              <div className="td-options-all-declined">
+                <span className="td-options-all-declined-msg">All options declined.</span>
+                <button className="td-options-regen-btn" onClick={() => handleGenerateItinerary()} disabled={generatingItinerary}>
+                  {generatingItinerary ? 'Generating…' : '↺ Generate new options'}
+                </button>
+              </div>
+            )}
+
+            <div className="td-chat-cards-grid">
+            {(apiTrip?.itineraries ?? []).map((itin, i) => {
+              const opt = options[i];
+              if (!opt) return null;
+              const isExpanded = expandedChatOption === opt.letter;
+              const isAccepted = acceptedItineraryId === itin.itinerary_id;
+              const isBusy = removingItinerary || acceptingItineraryId === itin.itinerary_id;
+              const cost = computeOptionCost(itin);
+
+              return (
+                <div key={opt.letter} className={`td-chat-card${isAccepted ? ' td-chat-card--accepted' : ''}`}>
+                  {/* Header */}
+                  <div className="td-chat-card-header" onClick={() => {
+                    setExpandedChatOption(isExpanded ? null : opt.letter);
+                    setActiveOption(opt.letter);
+                    setShareMenuOption(null);
+                  }}>
+                    <div className="td-chat-letter" style={{ background: isAccepted ? '#13B981' : opt.cover }}>
+                      {isAccepted ? '✓' : opt.letter}
                     </div>
-                    <div className="td-option-info">
-                      {opt.itineraryId && editingItinName === opt.itineraryId ? (
+                    <div className="td-chat-card-info">
+                      {editingItinName === itin.itinerary_id ? (
                         <input
                           className="td-option-name-input"
                           value={itinNameDraft}
                           onChange={e => setItinNameDraft(e.target.value)}
-                          onBlur={() => handleSaveItinName(opt.itineraryId!, opt.name)}
+                          onBlur={() => handleSaveItinName(itin.itinerary_id, opt.name)}
                           onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                           onClick={e => e.stopPropagation()}
                           autoFocus
                         />
                       ) : (
-                        <div className="td-option-name-row">
-                          <div
-                            className="td-option-name"
-                            style={{ color: isActive ? '#2B63F6' : '#15161B' }}
-                            onDoubleClick={(e) => {
-                              if (!opt.itineraryId) return;
-                              e.stopPropagation();
-                              setItinNameDraft(opt.name);
-                              setEditingItinName(opt.itineraryId);
-                            }}
-                            title={opt.itineraryId ? 'Double-click to rename' : undefined}
-                          >
-                            {opt.name}
-                          </div>
-                          {opt.itineraryId && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setItinNameDraft(opt.name);
-                                setEditingItinName(opt.itineraryId!);
-                              }}
-                              className="td-edit-icon-btn"
-                              title="Rename option"
-                            >
-                              ✎
+                        <div className="td-chat-card-name" onDoubleClick={e => {
+                          e.stopPropagation();
+                          setItinNameDraft(opt.name);
+                          setEditingItinName(itin.itinerary_id);
+                        }}>
+                          {opt.name}
+                          {!isAccepted && <button className="td-edit-icon-btn" onClick={e => { e.stopPropagation(); setItinNameDraft(opt.name); setEditingItinName(itin.itinerary_id); }} title="Rename">✎</button>}
+                        </div>
+                      )}
+                      <div className="td-chat-card-meta">
+                        {opt.rec && <span className="td-ai-pick" style={{ marginRight: 6 }}>✦ AI pick</span>}
+                        {(itin.itinerary_days?.length ?? 0) > 0 && `${itin.itinerary_days!.length} days`}
+                      </div>
+                    </div>
+                    <div className="td-chat-card-cost">
+                      {cost?.hasData ? (
+                        <>
+                          <div className="td-chat-card-cost-num">{cost.total}</div>
+                          <div className="td-chat-card-cost-label">est. total</div>
+                        </>
+                      ) : (
+                        <div className="td-chat-card-cost-label">review details</div>
+                      )}
+                    </div>
+                    <div className={`td-chat-card-chevron${isExpanded ? ' open' : ''}`}>›</div>
+                  </div>
+
+                  {/* Expanded body */}
+                  {isExpanded && (
+                    <div className="td-chat-card-body">
+                      {cost && (
+                        <div className="td-chat-cost-table">
+                          <div className="td-chat-cost-row"><span>Flights</span><span>{cost.flights}</span></div>
+                          <div className="td-chat-cost-row"><span>Accommodation</span><span>{cost.accommodation}</span></div>
+                          <div className="td-chat-cost-row"><span>Activities</span><span>{cost.activities}</span></div>
+                          <div className="td-chat-cost-row td-chat-cost-fee"><span>Service fee (5%)</span><span>{cost.fee}</span></div>
+                          <div className="td-chat-cost-row td-chat-cost-total"><span>Total</span><span>{cost.total}</span></div>
+                        </div>
+                      )}
+                      {(itin.itinerary_days?.length ?? 0) > 0 && (
+                        <div className="td-chat-day-list">
+                          <div className="td-chat-day-list-label">Highlights</div>
+                          {itin.itinerary_days!.slice(0, 5).map((day, di) => (
+                            <div key={di} className="td-chat-day-row">
+                              <span className="td-chat-day-num">Day {day.day_number}</span>
+                              <span className="td-chat-day-title">{day.title}</span>
+                              {day.destinations?.[0]?.destination?.name && (
+                                <span className="td-chat-day-place">{day.destinations[0].destination.name}</span>
+                              )}
+                            </div>
+                          ))}
+                          {itin.itinerary_days!.length > 5 && (
+                            <button className="td-chat-see-all" onClick={e => { e.stopPropagation(); setBuilderTab('itinerary'); }}>
+                              + {itin.itinerary_days!.length - 5} more days — full itinerary ↓
                             </button>
                           )}
                         </div>
                       )}
-                      <div className="td-option-sub">
-                        {opt.sub}
-                      </div>
                     </div>
-                    {opt.rec && (
-                      <span className="td-ai-pick">
-                        ✦ AI pick
-                      </span>
-                    )}
-                    {opt.itineraryId && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleRemoveItinerary(opt.itineraryId!); }}
-                        className="td-block-remove"
-                        disabled={removingItinerary}
-                        title="Delete this option"
-                      >
-                        ✕
+                  )}
+
+                  {/* Actions */}
+                  <div className="td-chat-card-actions" onClick={e => e.stopPropagation()}>
+                    {isAccepted ? (
+                      <button className="td-opt-undo-btn" onClick={() => handleAcceptItinerary(itin.itinerary_id)} disabled={isBusy}>
+                        ↩ Undo accept
                       </button>
+                    ) : (
+                      <>
+                        <button className="td-opt-accept-btn" onClick={() => handleAcceptItinerary(itin.itinerary_id)} disabled={isBusy}>✓ Accept</button>
+                        <button className="td-opt-decline-btn" onClick={() => handleDeclineItinerary(itin.itinerary_id)} disabled={isBusy}>✕ Decline</button>
+                      </>
+                    )}
+                    <div className="td-share-wrap">
+                      <button className="td-share-btn" onClick={() => setShareMenuOption(shareMenuOption === opt.letter ? null : opt.letter)}>
+                        ↗ Share
+                      </button>
+                      {shareMenuOption === opt.letter && (
+                        <div className="td-share-menu">
+                          {tripLink && (
+                            <button onClick={() => handleCopyTripLink(opt.letter)}>
+                              🔗 Copy option link
+                            </button>
+                          )}
+                          <button onClick={() => handleShareOptionWhatsApp(itin, opt.letter, opt.name)}>
+                            📱 WhatsApp option
+                          </button>
+                          <button onClick={() => handleShareChat(itin)}>
+                            💬 Copy for chat
+                          </button>
+                          <button onClick={() => handleShareEmail(itin)}>
+                            ✉ Send via email
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <button className="td-view-builder-btn" onClick={() => { setActiveOption(opt.letter); setBuilderTab('itinerary'); }}>
+                      View full →
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            </div>
+
+            {/* Service include toggles — always visible so the agent can flip before generating */}
+            {apiTrip && (
+              <div className="td-services-row">
+                <span className="td-services-label">Include:</span>
+                <button
+                  className={`td-service-pill${includeFlights ? ' td-service-pill--on' : ''}`}
+                  onClick={() => setIncludeFlights(f => !f)}
+                >✈ Flights</button>
+                <button
+                  className={`td-service-pill${includeStays ? ' td-service-pill--on' : ''}`}
+                  onClick={() => setIncludeStays(f => !f)}
+                >🏨 Hotels</button>
+                <button
+                  className={`td-service-pill${includeEvents ? ' td-service-pill--on' : ''}`}
+                  onClick={() => setIncludeEvents(f => !f)}
+                >🎟 Events</button>
+              </div>
+            )}
+
+            {/* Start city + regen row */}
+            {apiTrip && options.length > 0 && (
+              <div className="td-chat-bottom-row">
+                {selectedItinerary && (
+                  <div className="td-start-city-row" style={{ margin: 0 }}>
+                    <span className="td-start-city-label">Start city:</span>
+                    {editingStartCity ? (
+                      <input className="td-start-city-input" value={startCityDraft} onChange={e => setStartCityDraft(e.target.value)} onBlur={handleSaveStartCity} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} placeholder="e.g. Accra" autoFocus />
+                    ) : (
+                      <button className="td-start-city-value" onClick={() => { setStartCityDraft(selectedItinerary.start_city ?? ''); setEditingStartCity(true); }}>
+                        {selectedItinerary.start_city || '+ Set start city'}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* Flight legs — date + time per leg, multi-city supported */}
+                <div className="td-flight-legs">
+                  <div className="td-flight-legs-header">
+                    <span className="td-flight-legs-label">✈ Flight schedule</span>
+                    <button className="td-leg-add-btn" onClick={addLeg} title="Add a city stop">+ city</button>
+                  </div>
+                  {flightLegs.map((leg, i) => (
+                    <div key={i} className="td-leg-row">
+                      <input
+                        type="text"
+                        className="td-leg-label"
+                        value={leg.label}
+                        onChange={e => updateLeg(i, 'label', e.target.value)}
+                        placeholder={i === 0 ? 'Outbound' : i === flightLegs.length - 1 ? 'Return' : 'City stop'}
+                      />
+                      <input
+                        type="date"
+                        className="td-leg-date"
+                        value={leg.date}
+                        onChange={e => updateLeg(i, 'date', e.target.value)}
+                      />
+                      <input
+                        type="time"
+                        className="td-leg-time"
+                        value={leg.time}
+                        onChange={e => updateLeg(i, 'time', e.target.value)}
+                      />
+                      {flightLegs.length > 2 && i !== 0 && i !== flightLegs.length - 1 && (
+                        <button className="td-leg-remove-btn" onClick={() => removeLeg(i)}>×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button className="td-refine-btn" onClick={() => setRefineOpen(true)} disabled={generatingItinerary}>
+                  ✦ Refine results
+                </button>
+                <button className="td-chat-regen-btn" onClick={() => handleGenerateItinerary()} disabled={generatingItinerary}>
+                  ↺ {generatingItinerary ? 'Generating…' : 'Regenerate'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Generation history timeline */}
+        {isRealId && generationHistory.length > 0 && (
+          <div className="td-history-panel mb-24">
+            <button className="td-history-toggle" onClick={() => setHistoryExpanded(e => !e)}>
+              <span className="td-history-icon">⏱</span>
+              <span>Generation history · {generationHistory.length} snapshot{generationHistory.length !== 1 ? 's' : ''}</span>
+              <span className={`td-history-chevron${historyExpanded ? ' open' : ''}`}>›</span>
+            </button>
+            {historyExpanded && (
+              <div className="td-history-list">
+                {generationHistory.map((snap) => (
+                  <div
+                    key={snap.id}
+                    className={`td-history-entry${comparingSnap?.id === snap.id ? ' td-history-entry--active' : ''}`}
+                    onClick={() => setComparingSnap(comparingSnap?.id === snap.id ? null : snap)}
+                  >
+                    <div className="td-history-entry-dot" />
+                    <div className="td-history-entry-info">
+                      <div className="td-history-entry-label">{snap.label}</div>
+                      <div className="td-history-entry-time">
+                        {snap.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {snap.itineraries.length} option{snap.itineraries.length !== 1 ? 's' : ''}
+                      </div>
+                      {snap.context && (
+                        <div className="td-history-entry-context">"{snap.context.slice(0, 80)}{snap.context.length > 80 ? '…' : ''}"</div>
+                      )}
+                    </div>
+                    <button className="td-history-compare-btn" onClick={e => { e.stopPropagation(); setComparingSnap(comparingSnap?.id === snap.id ? null : snap); }}>
+                      {comparingSnap?.id === snap.id ? 'Close' : 'Compare →'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {comparingSnap && compareData && (
+              <div className="td-compare-panel">
+                <div className="td-compare-header">
+                  <span className="td-compare-title">Changes from <strong>{comparingSnap.label}</strong> → Current</span>
+                  <button onClick={() => setComparingSnap(null)} className="td-compare-close">✕</button>
+                </div>
+                {compareData.map(opt => (
+                  <div key={opt.letter} className="td-compare-option">
+                    <div className="td-compare-option-label">Option {opt.letter}{opt.name !== `Option ${opt.letter}` ? ` · ${opt.name}` : ''}</div>
+                    {opt.addedDays.length === 0 && opt.removedDays.length === 0 ? (
+                      <div className="td-compare-no-change">No day changes detected</div>
+                    ) : (
+                      <>
+                        {opt.addedDays.map((d, i) => <div key={`a${i}`} className="td-compare-row td-compare-row--added">+ {d}</div>)}
+                        {opt.removedDays.map((d, i) => <div key={`r${i}`} className="td-compare-row td-compare-row--removed">− {d}</div>)}
+                      </>
+                    )}
+                    {opt.oldTotal && opt.newTotal && opt.oldTotal !== opt.newTotal && (
+                      <div className="td-compare-cost">
+                        <span className="td-compare-cost-old">{opt.oldTotal}</span>
+                        <span className="td-compare-arrow"> → </span>
+                        <span className="td-compare-cost-new">{opt.newTotal}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Traveler responses panel — visible when there are multiple travelers and itinerary options */}
+        {isRealId && apiTrip && (apiTrip.customers ?? []).length > 0 && options.length > 0 && (
+          <div className="td-traveler-responses mb-24">
+            <div className="td-traveler-responses-header">
+              <span className="td-traveler-responses-title">Traveler responses</span>
+              <span className="td-traveler-responses-sub">Track which package each traveler has accepted</span>
+            </div>
+            <div className="td-traveler-responses-list">
+              {(apiTrip.customers ?? []).map(c => {
+                const selectedPkg = travelerPackages[c.customer_id] ?? '';
+                return (
+                  <div key={c.customer_id} className="td-tr-row">
+                    <div className="td-tr-avatar">{c.first_name[0]}{c.last_name[0]}</div>
+                    <div className="td-tr-name">{c.first_name} {c.last_name}</div>
+                    <select
+                      className="td-tr-pkg-select"
+                      value={selectedPkg}
+                      onChange={e => setTravelerPackages(prev => ({ ...prev, [c.customer_id]: e.target.value }))}
+                    >
+                      <option value="">— Pending —</option>
+                      {options.map(o => (
+                        <option key={o.letter} value={o.letter}>Option {o.letter}{o.name !== `Option ${o.letter}` ? ' · ' + o.name : ''}</option>
+                      ))}
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                    {selectedPkg && selectedPkg !== 'cancelled' && (
+                      <span className="td-tr-accepted">✓ Accepted {selectedPkg}</span>
+                    )}
+                    {selectedPkg === 'cancelled' && (
+                      <span className="td-tr-cancelled">✕ Cancelled</span>
                     )}
                   </div>
                 );
@@ -1170,29 +1982,37 @@ export default function TripDetail() {
                 <span className="td-add-option-label">{addingOption ? 'Adding…' : 'Add option'}</span>
               </div>
             </div>
-            {apiTrip && selectedItinerary && (
-              <div className="td-start-city-row">
-                <span className="td-start-city-label">Start city:</span>
-                {editingStartCity ? (
-                  <input
-                    className="td-start-city-input"
-                    value={startCityDraft}
-                    onChange={e => setStartCityDraft(e.target.value)}
-                    onBlur={handleSaveStartCity}
-                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                    placeholder="e.g. Accra"
-                    autoFocus
-                  />
-                ) : (
-                  <button
-                    className="td-start-city-value"
-                    onClick={() => { setStartCityDraft(selectedItinerary.start_city ?? ''); setEditingStartCity(true); }}
-                  >
-                    {selectedItinerary.start_city || '+ Set start city'}
-                  </button>
-                )}
-              </div>
-            )}
+            {(() => {
+              const customers = apiTrip.customers ?? [];
+              const allAccepted = customers.length > 0 && customers.every(c => travelerPackages[c.customer_id] && travelerPackages[c.customer_id] !== 'cancelled');
+              const allSamePkg = allAccepted && new Set(customers.map(c => travelerPackages[c.customer_id])).size === 1;
+              const anyActive = customers.some(c => !travelerPackages[c.customer_id] || travelerPackages[c.customer_id] !== 'cancelled');
+              return (
+                <div className="td-tr-actions">
+                  {allSamePkg && apiTrip.status !== TripStatus.BOOKED && (
+                    <button
+                      className="td-tr-confirm-btn"
+                      onClick={handleConfirmBookingAll}
+                      disabled={bookingAll || updatingStatus}
+                    >
+                      {bookingAll ? 'Confirming…' : `✓ Confirm booking for all · Option ${customers[0] ? travelerPackages[customers[0].customer_id] : ''}`}
+                    </button>
+                  )}
+                  {allAccepted && !allSamePkg && (
+                    <span className="td-tr-mixed-note">Travelers have different packages — book separately or agree on one option.</span>
+                  )}
+                  {anyActive && apiTrip.status !== TripStatus.CANCELLED && (
+                    <button
+                      className="td-tr-cancel-btn"
+                      onClick={() => handleStatusTransition(TripStatus.CANCELLED)}
+                      disabled={updatingStatus}
+                    >
+                      Cancel trip for all
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -1239,6 +2059,63 @@ export default function TripDetail() {
                 <p className="td-brief-text">
                   {td.brief}
                 </p>
+                <div className="td-brief-services">
+                  <span className="td-brief-services-label">Include live data:</span>
+                  <button
+                    className={`td-service-pill${includeFlights ? ' td-service-pill--on' : ''}`}
+                    onClick={() => setIncludeFlights(f => !f)}
+                  >✈ Flights</button>
+                  <button
+                    className={`td-service-pill${includeStays ? ' td-service-pill--on' : ''}`}
+                    onClick={() => setIncludeStays(f => !f)}
+                  >🏨 Hotels</button>
+                  <button
+                    className={`td-service-pill${includeEvents ? ' td-service-pill--on' : ''}`}
+                    onClick={() => setIncludeEvents(f => !f)}
+                  >🎟 Events</button>
+                </div>
+                <div className="td-brief-departure-row">
+                  <label className="td-brief-departure-label">Departure city</label>
+                  <input
+                    type="text"
+                    className="td-brief-departure-input"
+                    value={draftStartCity}
+                    onChange={e => setDraftStartCity(e.target.value)}
+                    placeholder="e.g. Accra, New York, London"
+                  />
+                </div>
+                <div className="td-brief-flight-legs">
+                  <div className="td-flight-legs-header">
+                    <span className="td-flight-legs-label">✈ Flight schedule</span>
+                    <button className="td-leg-add-btn" onClick={addLeg} title="Add a city stop">+ city</button>
+                  </div>
+                  {flightLegs.map((leg, i) => (
+                    <div key={i} className="td-leg-row">
+                      <input
+                        type="text"
+                        className="td-leg-label"
+                        value={leg.label}
+                        onChange={e => updateLeg(i, 'label', e.target.value)}
+                        placeholder={i === 0 ? 'Outbound' : i === flightLegs.length - 1 ? 'Return' : 'City stop'}
+                      />
+                      <input
+                        type="date"
+                        className="td-leg-date"
+                        value={leg.date}
+                        onChange={e => updateLeg(i, 'date', e.target.value)}
+                      />
+                      <input
+                        type="time"
+                        className="td-leg-time"
+                        value={leg.time}
+                        onChange={e => updateLeg(i, 'time', e.target.value)}
+                      />
+                      {flightLegs.length > 2 && i !== 0 && i !== flightLegs.length - 1 && (
+                        <button className="td-leg-remove-btn" onClick={() => removeLeg(i)}>×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 <button
                   onClick={handleGenerateOptions}
                   className="td-brief-generate"
@@ -1266,8 +2143,16 @@ export default function TripDetail() {
           </div>
         )}
 
+        {generateError && (
+          <div className="td-generate-error" role="alert">
+            <span className="td-generate-error-icon">⚠</span>
+            <span>{generateError}</span>
+            <button className="td-generate-error-close" onClick={() => setGenerateError(null)}>✕</button>
+          </div>
+        )}
+
         {tb.showBuilder && (
-          <div className="td-builder-layout">
+          <div className="td-builder-layout" ref={builderRef}>
             <div className="td-card">
               <div className="td-tabs-bar">
                 {builderTabs.map(t => (
@@ -1438,11 +2323,31 @@ export default function TripDetail() {
                     >
                       {addingDay ? '+ Adding...' : '+ Add day'}
                     </button>
+                    {selectedItinerary?.source_links && Object.values(selectedItinerary.source_links).some(Boolean) && (
+                      <div className="td-source-links">
+                        <span className="td-source-links-label">Generation sources:</span>
+                        {selectedItinerary.source_links.flights_url && (
+                          <a href={selectedItinerary.source_links.flights_url} target="_blank" rel="noopener noreferrer" className="td-source-link">✈ View flights search</a>
+                        )}
+                        {selectedItinerary.source_links.hotels_url && (
+                          <a href={selectedItinerary.source_links.hotels_url} target="_blank" rel="noopener noreferrer" className="td-source-link">🏨 View hotels search</a>
+                        )}
+                        {selectedItinerary.source_links.events_url && (
+                          <a href={selectedItinerary.source_links.events_url} target="_blank" rel="noopener noreferrer" className="td-source-link">🎟 View events</a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {tabFlights && (
                   <div>
+                    {selectedItinerary?.source_links?.flights_url && (
+                      <div className="td-source-links" style={{ marginBottom: 12 }}>
+                        <span className="td-source-links-label">Source:</span>
+                        <a href={selectedItinerary.source_links.flights_url} target="_blank" rel="noopener noreferrer" className="td-source-link">✈ Open Google Flights search →</a>
+                      </div>
+                    )}
                     <p className="td-flights-desc">
                       Select flights for this itinerary. Prices shown per person.
                     </p>
@@ -1471,6 +2376,9 @@ export default function TripDetail() {
                             <div className="td-flight-price">
                               {f.price}
                             </div>
+                            {f.booking_url && (
+                              <a href={f.booking_url} target="_blank" rel="noopener noreferrer" className="td-item-source-link">View source →</a>
+                            )}
                             {apiTrip && selectedItinerary?.itinerary_flights?.[i]?.flight_id && (
                               <button
                                 onClick={() => handleRemoveFlight(i)}
@@ -1504,6 +2412,12 @@ export default function TripDetail() {
 
                 {tabStays && (
                   <div>
+                    {selectedItinerary?.source_links?.hotels_url && (
+                      <div className="td-source-links" style={{ marginBottom: 12 }}>
+                        <span className="td-source-links-label">Source:</span>
+                        <a href={selectedItinerary.source_links.hotels_url} target="_blank" rel="noopener noreferrer" className="td-source-link">🏨 Open hotels search →</a>
+                      </div>
+                    )}
                     <p className="td-stays-desc">
                       Select stays for this itinerary. All prices shown per night.
                     </p>
@@ -1539,6 +2453,9 @@ export default function TripDetail() {
                                 {st.price}
                                 <span className="td-stay-price-unit"> / night</span>
                               </span>
+                              {st.booking_url && (
+                                <a href={st.booking_url} target="_blank" rel="noopener noreferrer" className="td-item-source-link">View source →</a>
+                              )}
                               {apiTrip && selectedItinerary?.itinerary_accommodation?.[i]?.accommodation_id ? (
                                 <div className="td-stay-actions">
                                   <button
@@ -1674,6 +2591,74 @@ export default function TripDetail() {
                   </div>
                 )}
 
+                {tabEvents && (
+                  <div>
+                    {selectedItinerary?.source_links?.events_url && (
+                      <div className="td-source-links" style={{ marginBottom: 12 }}>
+                        <span className="td-source-links-label">Source:</span>
+                        <a href={selectedItinerary.source_links.events_url} target="_blank" rel="noopener noreferrer" className="td-source-link">🎟 Open Ticketmaster events search →</a>
+                      </div>
+                    )}
+                    <p className="td-acts-desc">Events and experiences woven into this itinerary.</p>
+                    {apiTrip ? (
+                      <>
+                        {realActivities && realActivities.length > 0 ? (
+                          <div className="td-events-timeline">
+                            {(selectedItinerary?.itinerary_days ?? []).map((day, di) => {
+                              const dests = day.destinations ?? [];
+                              if (dests.length === 0) return null;
+                              const dt = day.date ? new Date(day.date) : null;
+                              return (
+                                <div key={di} className="td-events-day-group">
+                                  <div className="td-events-day-header">
+                                    <span className="td-events-day-label">
+                                      {dt
+                                        ? dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                                        : `Day ${day.day_number}`}
+                                    </span>
+                                    {day.title && <span className="td-events-day-title">{day.title}</span>}
+                                  </div>
+                                  {dests.map((dest, ei) => (
+                                    <div key={ei} className="td-event-row">
+                                      <div className="td-event-icon">🎟</div>
+                                      <div className="td-event-body">
+                                        <div className="td-event-name">{dest.destination?.name ?? 'Event'}</div>
+                                        {dest.activities && (
+                                          <div className="td-event-activities">{dest.activities}</div>
+                                        )}
+                                        <div className="td-event-meta-row">
+                                          {dest.cost ? (
+                                            <span className="td-event-price">{dest.currency ?? ''} {Number(dest.cost).toLocaleString()}</span>
+                                          ) : null}
+                                          {dest.booking_url && (
+                                            <a href={dest.booking_url} target="_blank" rel="noopener noreferrer" className="td-item-source-link">View source →</a>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="td-acts-empty">No events added yet. Generate an itinerary with events enabled to populate this tab.</p>
+                        )}
+                        <button
+                          onClick={handleOpenAddActivity}
+                          className="td-dashed-btn"
+                          style={{ marginTop: 12 }}
+                          disabled={bootstrapping}
+                        >
+                          {bootstrapping ? 'One moment…' : '+ Add event'}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="td-acts-empty">Open a real trip to manage events.</p>
+                    )}
+                  </div>
+                )}
+
                 {tabCalls && (
                   <div className="td-calls-grid">
                     <div>
@@ -1795,14 +2780,14 @@ export default function TripDetail() {
                                     <button
                                       onClick={() => handleToggleActionItem(a.action_item_id, a.status)}
                                       className="td-call-action-num td-call-action-toggle"
-                                      style={a.status === 'checked' ? { background: '#0E9F6E', color: '#fff' } : undefined}
+                                      style={a.status === CallActionItemStatus.CHECKED ? { background: '#0E9F6E', color: '#fff' } : undefined}
                                       title="Toggle done"
                                     >
-                                      {a.status === 'checked' ? '✓' : i + 1}
+                                      {a.status === CallActionItemStatus.CHECKED ? '✓' : i + 1}
                                     </button>
                                     <span
                                       className="td-call-action-text"
-                                      style={a.status === 'checked' ? { textDecoration: 'line-through', color: '#AEB3C2' } : undefined}
+                                      style={a.status === CallActionItemStatus.CHECKED ? { textDecoration: 'line-through', color: '#AEB3C2' } : undefined}
                                     >
                                       {a.description}
                                     </span>
@@ -1936,13 +2921,28 @@ export default function TripDetail() {
                       <div className="td-record-payment">
                         {showPaymentForm ? (
                           <div className="td-payment-form">
-                            <input
-                              value={paymentAmount}
-                              onChange={e => setPaymentAmount(e.target.value)}
-                              placeholder={`Amount (${costCurrency})`}
-                              type="number"
-                              className="td-call-input"
-                            />
+                            <div className="td-payment-amount-row">
+                              <input
+                                value={paymentAmount}
+                                onChange={e => setPaymentAmount(e.target.value)}
+                                placeholder={`Amount (${paymentCurrency})`}
+                                type="number"
+                                className="td-call-input"
+                              />
+                              <select
+                                value={paymentCurrency}
+                                onChange={e => setPaymentCurrency(e.target.value)}
+                                className="td-call-input td-payment-currency-select"
+                                aria-label="Payment currency"
+                              >
+                                {SUPPORTED_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            </div>
+                            {paymentCurrency !== 'GHS' && paymentAmount.trim() && !Number.isNaN(Number(paymentAmount)) && (
+                              <div className="td-payment-convert-hint">
+                                ≈ {format(convert(Number(paymentAmount), paymentCurrency, 'GHS'), 'GHS')} — payments are settled/recorded in GHS
+                              </div>
+                            )}
                             <input
                               value={paymentMethod}
                               onChange={e => setPaymentMethod(e.target.value)}
@@ -1951,7 +2951,7 @@ export default function TripDetail() {
                             />
                             <div className="td-payment-form-actions">
                               <button
-                                onClick={() => { setShowPaymentForm(false); setPaymentAmount(''); setPaymentMethod(''); }}
+                                onClick={() => { setShowPaymentForm(false); setPaymentAmount(''); setPaymentMethod(''); setPaymentCurrency(costCurrency); }}
                                 className="td-action-btn"
                                 style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}
                               >
@@ -1976,7 +2976,7 @@ export default function TripDetail() {
                             </div>
                           </div>
                         ) : (
-                          <button onClick={() => setShowPaymentForm(true)} className="td-dashed-btn">
+                          <button onClick={() => { setShowPaymentForm(true); setPaymentCurrency(costCurrency); }} className="td-dashed-btn">
                             + Record payment
                           </button>
                         )}
@@ -2104,7 +3104,7 @@ export default function TripDetail() {
         open={assignTravelerOpen}
         tripId={apiTrip?.trip_id ?? null}
         companyId={apiTrip?.company_id ?? null}
-        currentCustomerId={apiTrip?.customers?.[0]?.customer_id ?? null}
+        currentCustomerId={null}
         onClose={() => setAssignTravelerOpen(false)}
         onAssigned={() => { refreshTrip(); setAssignTravelerOpen(false); }}
       />
@@ -2115,6 +3115,171 @@ export default function TripDetail() {
         onClose={() => setEditTripOpen(false)}
         onSaved={refreshTrip}
       />
+
+      {/* Refine modal */}
+      {refineOpen && (
+        <div className="td-refine-overlay" onClick={e => { if (e.target === e.currentTarget) setRefineOpen(false); }}>
+          <div className="td-refine-modal">
+            <div className="td-refine-modal-header">
+              <span className="td-refine-modal-title">✦ Refine itinerary</span>
+              <button onClick={() => setRefineOpen(false)} className="td-refine-modal-close">✕</button>
+            </div>
+            <p className="td-refine-modal-desc">
+              Add context, preferences, or corrections — the AI will use this to update the generated options.
+            </p>
+            <textarea
+              className="td-refine-textarea"
+              value={refineText}
+              onChange={e => setRefineText(e.target.value)}
+              placeholder="e.g. Prefer boutique hotels, add a cooking class on Day 3, keep the budget under USD 5,000, swap the beach day for a city tour…"
+              rows={5}
+              autoFocus
+            />
+            {/* Version title — names this result in the history timeline */}
+            <input
+              className="td-refine-version-input"
+              value={refineTitle}
+              onChange={e => setRefineTitle(e.target.value)}
+              placeholder="Version title (e.g. Beach-focused, Budget option…)"
+            />
+
+            {/* Traveler context selector */}
+            {(apiTrip?.customers ?? []).length > 0 && (
+              <div className="td-refine-traveler-row">
+                <label className="td-refine-label">Refine for</label>
+                <select
+                  className="td-refine-traveler-select"
+                  value={refineFor}
+                  onChange={e => setRefineFor(e.target.value)}
+                >
+                  <option value="all">All travelers</option>
+                  {(apiTrip?.customers ?? []).map(c => (
+                    <option key={c.customer_id} value={c.customer_id}>
+                      {c.first_name} {c.last_name} only
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Flight legs — date + time per leg, multi-city supported */}
+            <div className="td-refine-flight-legs">
+              <div className="td-flight-legs-header">
+                <span className="td-refine-label">✈ Flight schedule</span>
+                <button className="td-leg-add-btn" onClick={addLeg} title="Add a city stop">+ city</button>
+              </div>
+              {flightLegs.map((leg, i) => (
+                <div key={i} className="td-leg-row">
+                  <input
+                    type="text"
+                    className="td-leg-label"
+                    value={leg.label}
+                    onChange={e => updateLeg(i, 'label', e.target.value)}
+                    placeholder={i === 0 ? 'Outbound' : i === flightLegs.length - 1 ? 'Return' : 'City stop'}
+                  />
+                  <input
+                    type="date"
+                    className="td-leg-date"
+                    value={leg.date}
+                    onChange={e => updateLeg(i, 'date', e.target.value)}
+                  />
+                  <input
+                    type="time"
+                    className="td-leg-time"
+                    value={leg.time}
+                    onChange={e => updateLeg(i, 'time', e.target.value)}
+                  />
+                  {flightLegs.length > 2 && i !== 0 && i !== flightLegs.length - 1 && (
+                    <button className="td-leg-remove-btn" onClick={() => removeLeg(i)}>×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Service toggles — shared with the main chat area */}
+            <div className="td-refine-services-row">
+              <span className="td-refine-label">Include live data:</span>
+              <button
+                className={`td-service-pill${includeFlights ? ' td-service-pill--on' : ''}`}
+                onClick={() => setIncludeFlights(f => !f)}
+              >✈ Flights</button>
+              <button
+                className={`td-service-pill${includeStays ? ' td-service-pill--on' : ''}`}
+                onClick={() => setIncludeStays(f => !f)}
+              >🏨 Hotels</button>
+              <button
+                className={`td-service-pill${includeEvents ? ' td-service-pill--on' : ''}`}
+                onClick={() => setIncludeEvents(f => !f)}
+              >🎟 Events</button>
+            </div>
+
+            <div className="td-refine-toolbar">
+              <button
+                className={`td-refine-tool-btn${isListening ? ' td-refine-tool-btn--active' : ''}`}
+                onClick={toggleVoice}
+                title={isListening ? 'Stop recording' : 'Voice input'}
+              >
+                🎙️ {isListening ? 'Listening…' : 'Voice'}
+              </button>
+              <button
+                className="td-refine-tool-btn"
+                onClick={() => refineImageRef.current?.click()}
+                title="Attach an image for context"
+              >
+                📎 {refineImageName ? refineImageName.slice(0, 22) : 'Attach image'}
+              </button>
+              <input
+                ref={refineImageRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) setRefineImageName(f.name);
+                  e.target.value = '';
+                }}
+              />
+              <select
+                className="td-refine-model-select"
+                value={refineModel}
+                onChange={e => setRefineModel(e.target.value)}
+                title="AI model"
+              >
+                <optgroup label="Claude">
+                  <option value="claude-haiku-4-5-20251001">Haiku · Fastest</option>
+                  <option value="claude-sonnet-5">Sonnet · Balanced</option>
+                  <option value="claude-opus-4-8">Opus · Most thorough</option>
+                </optgroup>
+                <optgroup label="Google">
+                  <option value="gemini-2.0-flash">Gemini Flash · Fast</option>
+                  <option value="gemini-1.5-pro">Gemini Pro · Balanced</option>
+                </optgroup>
+                <optgroup label="OpenAI">
+                  <option value="gpt-4o-mini">GPT-4o mini · Fast</option>
+                  <option value="gpt-4o">GPT-4o · Balanced</option>
+                </optgroup>
+              </select>
+            </div>
+            <div className="td-refine-modal-actions">
+              <button
+                onClick={() => { setRefineOpen(false); setRefineText(''); setRefineImageName(null); setRefineTitle(''); setRefineFor('all'); }}
+                className="td-action-btn"
+                style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRefineSubmit}
+                disabled={!refineText.trim() && !refineImageName}
+                className="td-action-btn"
+                style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}
+              >
+                ✦ Update itinerary
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

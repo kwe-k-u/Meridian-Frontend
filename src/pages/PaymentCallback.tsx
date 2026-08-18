@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { ApiService } from '../services/api-service'
 import type { TransactionResponse } from '../types/app'
+import { TransactionStatus } from '../types/app'
 import '../styles/PaymentCallback.css'
 
 // ── PaymentCallback ────────────────────────────────────────────
@@ -37,7 +38,7 @@ export default function PaymentCallback() {
         if (cancelled) return
         setTransaction(tx)
         pollCount.current += 1
-        if (tx.status === 'pending' && pollCount.current < MAX_POLLS) {
+        if (tx.status === TransactionStatus.PENDING && pollCount.current < MAX_POLLS) {
           timeoutId = setTimeout(poll, POLL_INTERVAL_MS)
         }
       } catch {
@@ -61,11 +62,11 @@ export default function PaymentCallback() {
     heading = 'Something went wrong'
     body = "We couldn't reach the server to confirm this payment. If money left your account, it will still be picked up shortly — check Financials in a few minutes."
     icon = '⚠️'
-  } else if (transaction?.status === 'completed') {
+  } else if (transaction?.status === TransactionStatus.COMPLETED) {
     heading = 'Payment received'
     body = `Your payment of ${transaction.currency} ${transaction.amount.toLocaleString('en-US')} has been confirmed.`
     icon = '✅'
-  } else if (transaction?.status === 'failed') {
+  } else if (transaction?.status === TransactionStatus.FAILED) {
     heading = 'Payment failed'
     body = "Moolre reported this payment didn't go through. No charge should have been made — you can try again."
     icon = '❌'

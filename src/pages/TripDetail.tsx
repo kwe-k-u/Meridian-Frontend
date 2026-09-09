@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
-import type { TripOption, TripStatusLabel, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse, SkippedProvider, FlightLeg, AgentFeedItem, TripDetailData, StatusBanner, PaymentPlanResponse } from '../types/app';
+import type { TripOption, TripStatusLabel, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse, SkippedProvider, FlightLeg, AgentFeedItem, TripDetailData, StatusBanner, PaymentPlanResponse, TripBalanceResponse, WeWireBeneficiaryResponse, WeWireDisbursementResponse } from '../types/app';
 import { TripStatus, ItineraryStatus, FlightStatus, TransactionStatus, CallActionItemStatus } from '../types/app';
 import { apiStatusMeta } from '../constants/app';
 import AddItemModal, { type EditingDayItem } from '../components/modals/AddItemModal';
@@ -348,6 +348,225 @@ function PaymentPlanSection({ tripId, totalCost, currency }: { tripId: string; t
   );
 }
 
+// ── Payable line item shape ─────────────────────────────────────
+// A flight, an accommodation booking, or an activity — derived client-side from the trip's
+// CONFIRMED itinerary (the booked one), since apiTrip already carries all of this. Activities
+// have no single id column on the backend, so their id is composite: "{itinerary_day_id}:
+// {destination_id}" — this exact format is also what gets sent as line_item_id on payout and
+// matched back against WeWireDisbursementResponse.line_item_id for "already paid."
+interface PayableItem {
+  type: 'flight' | 'accommodation' | 'activity';
+  id: string;
+  label: string;
+  cost: number;
+  currency: string;
+}
+
+function payableItemsFromItinerary(itinerary: ItineraryResponse | undefined): PayableItem[] {
+  if (!itinerary) return [];
+  const items: PayableItem[] = [];
+
+  for (const f of itinerary.itinerary_flights ?? []) {
+    items.push({
+      type: 'flight',
+      id: f.flight_id,
+      label: [f.airline || 'Flight', f.flight_number].filter(Boolean).join(' '),
+      cost: f.cost ?? 0,
+      currency: f.currency ?? 'GHS',
+    });
+  }
+  for (const a of itinerary.itinerary_accommodation ?? []) {
+    items.push({
+      type: 'accommodation',
+      id: a.accommodation_id,
+      label: a.accommodation_name,
+      cost: a.cost ?? 0,
+      currency: a.currency ?? 'GHS',
+    });
+  }
+  for (const day of itinerary.itinerary_days ?? []) {
+    for (const d of day.destinations ?? []) {
+      items.push({
+        type: 'activity',
+        id: `${day.itinerary_day_id}:${d.destination_id}`,
+        label: d.destination?.name || d.activities || 'Activity',
+        cost: Number(d.cost) || 0,
+        currency: d.currency ?? 'GHS',
+      });
+    }
+  }
+  return items;
+}
+
+// ── TripPayoutsSection ────────────────────────────────────────
+// Paying the trip's actual service providers (airline, hotel, activity vendors) — and, as a
+// catch-all, the agency itself — out of the trip's held WeWire balance, choosing exactly how
+// much each gets. Mirrors PaymentPlanSection's self-contained fetch-on-mount pattern.
+function TripPayoutsSection({ tripId, itineraries }: { tripId: string; itineraries: ItineraryResponse[] }) {
+  const { toastAction } = useApp();
+  const [balance, setBalance] = useState<TripBalanceResponse | null | undefined>(undefined);
+  const [beneficiaries, setBeneficiaries] = useState<WeWireBeneficiaryResponse[]>([]);
+  const [disbursements, setDisbursements] = useState<WeWireDisbursementResponse[]>([]);
+  const [payingId, setPayingId] = useState<string | null>(null); // item.id currently being paid, or 'agency'
+  const [amountDrafts, setAmountDrafts] = useState<Record<string, string>>({});
+  const [beneficiaryDrafts, setBeneficiaryDrafts] = useState<Record<string, string>>({});
+
+  const load = () => {
+    Promise.all([
+      ApiService.getWeWireTripBalances(),
+      ApiService.getWeWireBeneficiaries(),
+      ApiService.getWeWireDisbursements(),
+    ]).then(([balances, ben, dis]) => {
+      setBalance(balances.find(b => b.trip_id === tripId) ?? null);
+      setBeneficiaries(ben);
+      setDisbursements((dis.data ?? []).filter(d => d.source_trip_id === tripId));
+    }).catch(() => setBalance(null));
+  };
+
+  useEffect(() => { load(); }, [tripId]);
+
+  const confirmedItinerary = itineraries.find(i => i.status === ItineraryStatus.CONFIRMED);
+  const items = payableItemsFromItinerary(confirmedItinerary);
+
+  const paidFor = (item: PayableItem) => disbursements
+    .filter(d => d.line_item_type === item.type && d.line_item_id === item.id && (d.status === 'pending' || d.status === 'successful'))
+    .reduce((sum, d) => sum + d.amount, 0);
+
+  const heldBalance = balance?.held_balance ?? 0;
+  const currency = balance?.currency;
+
+  const handlePay = async (key: string, beneficiaryId: string, amount: number, item?: PayableItem) => {
+    if (!beneficiaryId || amount <= 0) return;
+    setPayingId(key);
+    try {
+      await ApiService.payoutTrip(tripId, {
+        beneficiary_id: beneficiaryId,
+        amount,
+        line_item_type: item?.type,
+        line_item_id: item?.id,
+        line_item_label: item?.label,
+      });
+      toastAction(item ? `Payout sent for ${item.label}` : 'Payout sent to agency');
+      setAmountDrafts(d => ({ ...d, [key]: '' }));
+      load();
+    } catch (error) {
+      toastAction(error instanceof Error ? error.message : 'Failed to send payout');
+    } finally {
+      setPayingId(null);
+    }
+  };
+
+  if (balance === undefined) return <div className="td-cost-body"><p>Loading payouts…</p></div>;
+
+  if (!balance) {
+    return (
+      <div className="td-cost-body">
+        <p style={{ color: '#8A90A2', textAlign: 'center', padding: '20px 0', fontSize: 13 }}>
+          Nothing has been collected via WeWire for this trip yet — set up a payment plan and collect at least one payment first.
+        </p>
+      </div>
+    );
+  }
+
+  const currencyBeneficiaries = (type: 'agency' | 'provider') => beneficiaries.filter(b => b.beneficiary_type === type && b.currency === currency);
+
+  return (
+    <div className="td-cost-body">
+      <div style={{ background: '#F7F8FA', borderRadius: 8, padding: 16, marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ fontWeight: 600 }}>Held balance</span>
+        <span style={{ fontWeight: 700 }}>{heldBalance} {currency}</span>
+      </div>
+
+      {items.length === 0 && (
+        <p style={{ color: '#8A90A2', textAlign: 'center', padding: '12px 0', fontSize: 13 }}>
+          No confirmed itinerary yet — accept an itinerary option to see its flights, accommodation, and activities here.
+        </p>
+      )}
+
+      {items.map(item => {
+        const key = `${item.type}:${item.id}`;
+        const paid = paidFor(item);
+        const remaining = Math.max(0, item.cost - paid);
+        const providers = currencyBeneficiaries('provider');
+        const draftAmount = amountDrafts[key] ?? (remaining > 0 ? String(remaining) : '');
+        const draftBeneficiary = beneficiaryDrafts[key] ?? providers[0]?.id ?? '';
+
+        return (
+          <div key={key} className="td-pay-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div className="td-pay-info">
+                <span className="td-pay-method">{item.label}</span>
+                <span className="td-pay-date">{paid > 0 ? `${paid} ${item.currency} paid` : 'Not paid yet'}</span>
+              </div>
+              <span className="td-pay-amount">{item.cost} {item.currency}</span>
+            </div>
+            {providers.length === 0 ? (
+              <p style={{ fontSize: 12, color: '#B7791F', margin: 0 }}>
+                No {item.currency} payout account for this provider yet — add one in Settings &gt; Payments.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select className="td-call-input" value={draftBeneficiary} onChange={e => setBeneficiaryDrafts(d => ({ ...d, [key]: e.target.value }))} style={{ flex: 1 }}>
+                  {providers.map(p => <option key={p.id} value={p.id}>{p.label || p.account_name}</option>)}
+                </select>
+                <input
+                  className="td-call-input"
+                  type="number"
+                  value={draftAmount}
+                  onChange={e => setAmountDrafts(d => ({ ...d, [key]: e.target.value }))}
+                  style={{ width: 100 }}
+                />
+                <button
+                  className="td-action-btn"
+                  style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}
+                  disabled={payingId === key || !draftBeneficiary || Number(draftAmount) <= 0 || Number(draftAmount) > heldBalance}
+                  onClick={() => handlePay(key, draftBeneficiary, Number(draftAmount), item)}
+                >
+                  {payingId === key ? 'Paying…' : 'Pay'}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <div className="td-cost-divider" />
+      <p style={{ fontWeight: 600, fontSize: 13, margin: '8px 0' }}>Pay the agency</p>
+      {(() => {
+        const agencyBens = currencyBeneficiaries('agency');
+        const key = 'agency';
+        const draftAmount = amountDrafts[key] ?? (heldBalance > 0 ? String(heldBalance) : '');
+        const draftBeneficiary = beneficiaryDrafts[key] ?? agencyBens[0]?.id ?? '';
+        if (agencyBens.length === 0) {
+          return <p style={{ fontSize: 12, color: '#B7791F' }}>No {currency} agency payout account yet — add one in Settings &gt; Payments.</p>;
+        }
+        return (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select className="td-call-input" value={draftBeneficiary} onChange={e => setBeneficiaryDrafts(d => ({ ...d, [key]: e.target.value }))} style={{ flex: 1 }}>
+              {agencyBens.map(b => <option key={b.id} value={b.id}>{b.account_name}</option>)}
+            </select>
+            <input
+              className="td-call-input"
+              type="number"
+              value={draftAmount}
+              onChange={e => setAmountDrafts(d => ({ ...d, [key]: e.target.value }))}
+              style={{ width: 100 }}
+            />
+            <button
+              className="td-action-btn"
+              style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }}
+              disabled={payingId === key || !draftBeneficiary || Number(draftAmount) <= 0 || Number(draftAmount) > heldBalance}
+              onClick={() => handlePay(key, draftBeneficiary, Number(draftAmount))}
+            >
+              {payingId === key ? 'Paying…' : 'Pay agency'}
+            </button>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 export default function TripDetail() {
   const { tripId } = useParams<{ tripId: string }>();
   const navigate = useNavigate();
@@ -415,6 +634,15 @@ export default function TripDetail() {
   const [apiCalls, setApiCalls] = useState<CallResponse[]>([]);
   const [newCallTitle, setNewCallTitle] = useState('');
   const [addingCall, setAddingCall] = useState(false);
+  // "Schedule with Google Meet" mini-form (Calls tab) — only offered once the company has
+  // Calendar connected+enabled (see Settings > Channels' Google Meet card).
+  const [calendarEnabled, setCalendarEnabled] = useState(false);
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduleTitle, setScheduleTitle] = useState('');
+  const [scheduleStart, setScheduleStart] = useState('');
+  const [scheduleEnd, setScheduleEnd] = useState('');
+  const [scheduleCustomerId, setScheduleCustomerId] = useState('');
+  const [schedulingCall, setSchedulingCall] = useState(false);
   const [newActionItemText, setNewActionItemText] = useState('');
   const [savingActionItem, setSavingActionItem] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -429,7 +657,7 @@ export default function TripDetail() {
   // is the primary surface for reviewing/accepting/declining generated itineraries — the
   // full-width per-option card grid that used to sit above the builder was retired in favor
   // of this compact list; clicking a row jumps to that option's itinerary in the builder tab.
-  const [sidebarTab, setSidebarTab] = useState<'options' | 'cost' | 'payments' | 'activity'>('cost');
+  const [sidebarTab, setSidebarTab] = useState<'options' | 'cost' | 'payments' | 'payouts' | 'activity'>('cost');
   const [travelerPackages, setTravelerPackages] = useState<Record<string, string>>({});
   const [bookingAll, setBookingAll] = useState(false);
   const [refineOpen, setRefineOpen] = useState(false);
@@ -468,6 +696,12 @@ export default function TripDetail() {
   }, [tripId, isRealId]);
 
   useEffect(() => { refreshCalls(); }, [refreshCalls]);
+
+  useEffect(() => {
+    ApiService.getGmailStatus()
+      .then(s => setCalendarEnabled(!!s.calendar_enabled))
+      .catch(() => setCalendarEnabled(false));
+  }, []);
 
   const refreshTrip = useCallback(async () => {
     if (!tripId) return;
@@ -722,6 +956,20 @@ export default function TripDetail() {
   const costSummary = computedCosts?.summary ?? null;
   const costCurrency = computedCosts?.currency ?? 'GHS';
 
+  // Once a trip is booked and has actually received money, land on the Payouts tab by default
+  // instead of Cost summary — that's the more useful view at that point (who's been paid,
+  // who's still owed). Only fires once per qualifying load so a manual tab click afterward
+  // isn't fought over, mirroring Dashboard.tsx's onboarding-progress auto-switch.
+  const hasAutoSwitchedToPayouts = useRef(false);
+  useEffect(() => {
+    if (hasAutoSwitchedToPayouts.current || !apiTrip || !costSummary) return;
+    const qualifyingStatus = apiTrip.status === TripStatus.BOOKED || apiTrip.status === TripStatus.IN_PROGRESS || apiTrip.status === TripStatus.COMPLETED;
+    if (qualifyingStatus && Number(costSummary.total_paid) > 0) {
+      hasAutoSwitchedToPayouts.current = true;
+      setSidebarTab('payouts');
+    }
+  }, [apiTrip, costSummary]);
+
   const rawDays = hasApiData && selectedItinerary?.itinerary_days
     ? itineraryDaysToDays(
         selectedItinerary.itinerary_days,
@@ -890,6 +1138,36 @@ export default function TripDetail() {
 
   const handleEndCall = async (callId: string) => {
     await ApiService.endCall(callId);
+    refreshCalls();
+  };
+
+  // Creates a real Google Calendar event (auto-generated Meet link) plus a matching Call row.
+  const handleScheduleWithMeet = async () => {
+    if (!apiTrip || !scheduleTitle.trim() || !scheduleStart || !scheduleEnd || !scheduleCustomerId) return;
+    setSchedulingCall(true);
+    try {
+      await ApiService.scheduleCallWithMeet(apiTrip.trip_id, {
+        title: scheduleTitle.trim(),
+        started_at: new Date(scheduleStart).toISOString(),
+        ended_at: new Date(scheduleEnd).toISOString(),
+        customer_id: scheduleCustomerId,
+      });
+      setScheduleTitle('');
+      setScheduleStart('');
+      setScheduleEnd('');
+      setScheduleCustomerId('');
+      setShowScheduleForm(false);
+      refreshCalls();
+    } catch {
+      ctx.toastAction('Could not schedule the Meet call — try again');
+    } finally {
+      setSchedulingCall(false);
+    }
+  };
+
+  // Toggles whether CalendarWatcherJob should leave this calendar-originated call alone.
+  const handleToggleExcludeCall = async (call: CallResponse) => {
+    await ApiService.updateCall(call.call_id, { excluded: !call.excluded });
     refreshCalls();
   };
 
@@ -2359,6 +2637,55 @@ export default function TripDetail() {
                               {addingCall ? 'Logging...' : '+ Log a call'}
                             </button>
                           </div>
+
+                          {calendarEnabled && (
+                            showScheduleForm ? (
+                              <div className="td-add-call-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                                <input
+                                  value={scheduleTitle}
+                                  onChange={e => setScheduleTitle(e.target.value)}
+                                  placeholder="Call title (e.g. Discovery call)"
+                                  className="td-call-input"
+                                />
+                                <select
+                                  value={scheduleCustomerId}
+                                  onChange={e => setScheduleCustomerId(e.target.value)}
+                                  className="td-call-input"
+                                >
+                                  <option value="">Select a traveler…</option>
+                                  {(apiTrip?.customers ?? []).map(c => (
+                                    <option key={c.customer_id} value={c.customer_id}>{c.first_name} {c.last_name}</option>
+                                  ))}
+                                </select>
+                                <input
+                                  type="datetime-local"
+                                  value={scheduleStart}
+                                  onChange={e => setScheduleStart(e.target.value)}
+                                  className="td-call-input"
+                                />
+                                <input
+                                  type="datetime-local"
+                                  value={scheduleEnd}
+                                  onChange={e => setScheduleEnd(e.target.value)}
+                                  className="td-call-input"
+                                />
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  <button
+                                    onClick={handleScheduleWithMeet}
+                                    disabled={schedulingCall || !scheduleTitle.trim() || !scheduleStart || !scheduleEnd || !scheduleCustomerId}
+                                    className="td-dashed-btn"
+                                  >
+                                    {schedulingCall ? 'Scheduling…' : 'Schedule Meet call'}
+                                  </button>
+                                  <button onClick={() => setShowScheduleForm(false)} className="td-dashed-btn">Cancel</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button onClick={() => setShowScheduleForm(true)} className="td-dashed-btn" style={{ width: '100%', marginTop: 8 }}>
+                                🎥 Schedule with Google Meet
+                              </button>
+                            )
+                          )}
                         </>
                       ) : (
                         callLogsArr.map((cl, i) => (
@@ -2417,6 +2744,15 @@ export default function TripDetail() {
                                   className="td-call-badge td-call-end-btn"
                                 >
                                   End call
+                                </button>
+                              )}
+                              {selectedCall.google_event_id && (
+                                <button
+                                  onClick={() => handleToggleExcludeCall(selectedCall)}
+                                  className="td-call-badge td-call-end-btn"
+                                  title="Google Calendar keeps syncing this call's details unless excluded"
+                                >
+                                  {selectedCall.excluded ? '↺ Re-include in auto-tracking' : '⊘ Exclude from auto-tracking'}
                                 </button>
                               )}
                               {selectedCall.notes && (
@@ -2544,6 +2880,9 @@ export default function TripDetail() {
                   </button>
                   <button className={'td-tab-btn' + (sidebarTab === 'payments' ? ' td-tab-btn--active' : '')} onClick={() => setSidebarTab('payments')}>
                     Payments
+                  </button>
+                  <button className={'td-tab-btn' + (sidebarTab === 'payouts' ? ' td-tab-btn--active' : '')} onClick={() => setSidebarTab('payouts')}>
+                    Payouts
                   </button>
                   <button className={'td-tab-btn' + (sidebarTab === 'activity' ? ' td-tab-btn--active' : '')} onClick={() => setSidebarTab('activity')}>
                     Agent activity
@@ -2767,6 +3106,10 @@ export default function TripDetail() {
                       </>
                     )}
                   </div>
+                )}
+
+                {sidebarTab === 'payouts' && apiTrip && (
+                  <TripPayoutsSection tripId={apiTrip.trip_id} itineraries={apiTrip.itineraries ?? []} />
                 )}
 
                 {sidebarTab === 'activity' && (

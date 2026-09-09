@@ -1,15 +1,10 @@
 /* ── Messages ── Styles for the Messages page (3-panel layout: inbox, chat, trip details) */
 
-/* Full-height page wrapper: keeps the demo banner in its own row above the
-   3-pane grid instead of letting it become a grid column. */
+/* Full-height page wrapper — a flex column so .msgs-layout below can flex to fill it. */
 .msgs-page {
   display: flex;
   flex-direction: column;
   height: 100vh;
-}
-
-.msgs-page > .demo-banner {
-  margin: 10px 0 6px 16px;
 }
 
 .msgs-layout {
@@ -37,8 +32,26 @@
 .msgs-inbox-heading {
   font-size: 18px;
   font-weight: 600;
-  margin: 0 0 12px;
+  margin: 0;
   color: #15161B;
+}
+
+.msgs-left-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.msgs-add-thread-btn {
+  background: var(--primary);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
 }
 
 .msgs-filter-row {
@@ -219,6 +232,17 @@
   gap: 4px;
 }
 
+.msgs-untrack-btn {
+  background: #fff;
+  border: 1px solid #F3B0A6;
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #C0392B;
+  cursor: pointer;
+}
+
 .msgs-msgs-area {
   flex: 1;
   overflow-y: auto;
@@ -250,7 +274,14 @@
   background: #F0F5FF;
   border-top: 1px solid #C4D2FF;
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.msgs-draft-header {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
 }
 
@@ -261,13 +292,50 @@
   white-space: nowrap;
 }
 
+.msgs-suggest-btn {
+  background: #fff;
+  border: 1px solid #C4D2FF;
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.msgs-suggest-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.msgs-suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.msgs-suggestion-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #C4D2FF;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.msgs-suggestion-tone {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  text-transform: capitalize;
+}
+
 .msgs-draft-text {
   flex: 1;
   font-size: 13px;
   color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .msgs-use-btn {
@@ -301,6 +369,10 @@
   color: #15161B;
 }
 
+.msgs-input:disabled {
+  opacity: 0.6;
+}
+
 .msgs-send-btn {
   width: 38px;
   height: 38px;
@@ -314,6 +386,11 @@
   color: #fff;
   font-size: 16px;
   flex-shrink: 0;
+}
+
+.msgs-send-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* Right Panel */
@@ -424,18 +501,6 @@
   margin-top: 16px;
 }
 
-.msgs-no-trip-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: #EEF0F4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  margin: 0 auto 12px;
-}
-
 .msgs-no-trip-title {
   font-size: 14px;
   font-weight: 600;
@@ -455,18 +520,6 @@
   padding: 14px;
   margin-bottom: 16px;
   border: 1px solid #C4D2FF;
-}
-
-.msgs-create-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  background: #EAF0FF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  margin-bottom: 8px;
 }
 
 .msgs-create-card-title {
@@ -493,6 +546,19 @@
   color: #fff;
   cursor: pointer;
   width: 100%;
+}
+
+.msgs-create-btn-secondary {
+  background: #fff;
+  border: 1px solid #C4D2FF;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary);
+  cursor: pointer;
+  width: 100%;
+  margin-top: 8px;
 }
 
 .msgs-noticed-card {

@@ -12,28 +12,27 @@
 //    tasks, ...). Several of these are now dead code because the pages that used to call
 //    them were rewired to fetch real data directly instead — each is flagged as orphaned
 //    (or not) in its own comment below and in constants/app.ts.
-// Trips are the one area that's partially transitioned: getTripsData() still returns a mock
-// TripItem[] shape as its "nothing loaded yet" fallback, but fetchTripsList() below fetches
-// real trips and reshapes them into that same TripItem[] shape, so the same UI components can
-// render either source without knowing which one it's getting. TripDetail.tsx/TravelerView.tsx
-// build their real-trip view models directly from ApiService.getTrip() themselves rather than
-// through this context (there is no more mock-trip-detail equivalent here).
+// Trips have fully transitioned off mock data: getTripsData() returns [] until
+// fetchTripsList() below loads real trips and reshapes them into the TripItem[] shape existing
+// UI components already expect. TripDetail.tsx/TravelerView.tsx build their real-trip view
+// models directly from ApiService.getTrip() themselves rather than through this context (there
+// is no mock-trip-detail equivalent here).
 
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
 import { ApiService } from '../services/api-service';
 import type {
   BuilderTab, BillingPeriod, ConnectStep, SettingsTab,
-  Day, TripItem, Conversation,
-  Plan, TeamMember, RoleDef, Channel, NotifSetting,
+  Day, TripItem, Conversation, Message, ConversationResponse, MessageResponse,
+  Plan, TeamMember, RoleDef, NotifSetting,
   OnboardingTask, GuideCard, GuideArticle, Flight, Stay, Activity,
   CallLog, CallDetail, AgentFeedItem, TripStatusLabel,
   InvoiceItem, InvoiceDetail,
 } from '../types/app';
 import {
-  convoData, agentFeed, callLogs, plansData,
-  teamMembers, rolesData, channelsData,
+  agentFeed, callLogs, plansData,
+  teamMembers, rolesData,
   notifDefaults, notificationsData, onboardTasks,
-  guidesData, connectChannelView, apiStatusMeta,
+  guidesData, connectChannelView, apiStatusMeta, chMeta,
   invoicesData,
 } from '../constants/app';
 
@@ -45,6 +44,34 @@ function fmtDateRange(start: string | null, end: string | null): string {
   const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
   if (!e || s.getTime() === e.getTime()) return s.toLocaleDateString('en-US', opts);
   return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+}
+
+// "4m"/"1h"/"3h"/"1d"/"12d" style relative time for the Messages inbox row, matching the shape
+// convoData()'s old mock timestamps used.
+function fmtRelativeTime(iso: string | null): string {
+  if (!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+// Deterministic initials + avatar color from a name/id, same approach Travelers.tsx's
+// getInitials()/avatarColor() use — kept local here since neither is exported from there.
+const AVATAR_COLORS = ['#2B63F6', '#0E9F6E', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#0E7C8F', '#C13584'];
+function avatarColorFor(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
 }
 
 // Everything exposed by useApp(). Grouped below (both here and in the provider) by feature:
@@ -69,7 +96,6 @@ export interface AppContextType {
   onboarded: boolean;
   billing: BillingPeriod;
   itinDays: Day[] | null;
-  genState: string | null;
   notifs: Record<string, boolean>;
 
   invoiceOpen: boolean;
@@ -87,6 +113,7 @@ export interface AppContextType {
   ccAuth: boolean;
   ccSync: boolean;
   ccDone: boolean;
+  connectedChannels: string[];
 
   setActiveOption: (letter: string) => void;
   setBuilderTab: (tab: BuilderTab) => void;
@@ -95,8 +122,6 @@ export interface AppContextType {
   addBlock: (di: number) => void;
   addSuggestion: (di: number) => void;
   addActivity: (ac: { name: string; meta: string; price: string }) => void;
-  generateOptions: () => void;
-  revealOptions: () => void;
   getDays: (tripId?: number | string, opt?: string) => Day[];
   cloneDays: (tripId?: number | string, opt?: string) => Day[];
   resetTripState: () => void;
@@ -108,9 +133,11 @@ export interface AppContextType {
   startSearch: (trip_id : string) => void;
   openConnect: () => void;
   closeConnect: () => void;
+  connectDirect: (n: string) => void;
   pickChannel: (n: string) => void;
   connectGo: () => void;
   finishConnect: () => void;
+  disconnectChannel: (n: string) => void;
   openInvoiceDetail: (invId: string) => void;
   closeInvoice: () => void;
   getInvoices: () => InvoiceItem[];
@@ -133,11 +160,13 @@ export interface AppContextType {
   getTripsData: () => TripItem[];
   fetchTripsList: () => Promise<void>;
   getConversations: () => Conversation[];
+  fetchConversationsList: () => Promise<void>;
+  reshapeMessages: (rows: MessageResponse[]) => Message[];
   getPlans: () => Plan[];
   getGuideList: () => { guideCards: GuideCard[]; worksCards: GuideCard[]; featured: GuideCard };
   getGuideArticle: (guideId: string) => GuideArticle;
   getOnboardTasks: () => OnboardingTask[];
-  getTeamData: () => { team: TeamMember[]; roles: RoleDef[]; channels: Channel[]; notifSettings: NotifSetting[]; seatsUsed: number; seatsTotal: number };
+  getTeamData: () => { team: TeamMember[]; roles: RoleDef[]; notifSettings: NotifSetting[]; seatsUsed: number; seatsTotal: number };
   getAgentFeed: () => AgentFeedItem[];
   getFlights: () => Flight[];
   getStays: () => Stay[];
@@ -172,16 +201,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [connectOpen, setConnectOpen] = useState(false);
   const [connectChannel, setConnectChannel] = useState<string | null>(null);
   const [connectStep, setConnectStep] = useState<ConnectStep>('pick');
+  // Which channels the agency has connected so far — drives the "Connected"/"Connect" state
+  // of each row in Settings > Channels. Starts empty (fresh demo company, nothing linked yet).
+  const [connectedChannels, setConnectedChannels] = useState<string[]>([]);
   // InvoiceDetailModal: which invoice id (if any) is currently open.
   const [openInvoice, setOpenInvoice] = useState<string | null>(null);
   // Toast.tsx reads this to show/hide the bottom toast message.
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   // Locally-edited copy of the current mock trip's Day[] once the user starts adding/removing
   // blocks in the builder (see getDaysFn/cloneDaysFn below) — null means "not edited yet, use
-  // the pristine mock/API data". genState drives the fake "drafting -> done" mock generation
-  // animation (see generateOptions()/revealOptions() below).
+  // the pristine mock/API data".
   const [itinDays, setItinDays] = useState<Day[] | null>(null);
-  const [genState, setGenState] = useState<string | null>(null);
   // Settings > Notifications toggle state (see notifDefaults() in constants/app.ts — this
   // whole path is orphaned since Settings.tsx's real Notifications tab keeps its own state).
   const [notifs, setNotifs] = useState<Record<string, boolean>>(notifDefaults());
@@ -196,21 +226,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setToastMsg(null);
       toastTimer.current = null;
     }, 2800);
-  }, []);
-
-  // Fake "AI drafting" delay for MOCK trips only (2.6s timeout, no network call) — this is
-  // what TripDetail.tsx's brief-page "Generate 3 itinerary options" button triggers when
-  // there's no real apiTrip loaded. For real trips, TripDetail.tsx instead calls
-  // ApiService.generateItinerary() directly and shows its own `generatingItinerary` loading
-  // state, bypassing this entirely.
-  const generateOptions = useCallback(() => {
-    setGenState('drafting');
-    setTimeout(() => setGenState('done'), 2600);
-  }, []);
-
-  // "Skip & preview" button during the fake drafting animation above — jumps straight to done.
-  const revealOptions = useCallback(() => {
-    setGenState('done');
   }, []);
 
   // Resolves the Day[] to render for the itinerary builder tab: a locally-edited copy
@@ -273,11 +288,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setBuilderTab('itinerary');
   }, [cloneDaysFn]);
 
-  // Clears the mock edit/generation state — called when navigating away from a trip so the
-  // next one visited doesn't inherit stale itinDays/genState/builderTab/activeOption.
+  // Clears the mock edit state — called when navigating away from a trip so the next one
+  // visited doesn't inherit stale itinDays/builderTab/activeOption.
   const resetTripState = useCallback(() => {
     setItinDays(null);
-    setGenState(null);
     setBuilderTab('itinerary');
     setActiveOption('A');
   }, []);
@@ -326,16 +340,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setConnectStep('auth');
   }, []);
 
+  // Jumps straight to a specific channel's auth step, skipping the picker — used by each
+  // row's "Connect" button in Settings > Channels, where the channel is already known.
+  const connectDirect = useCallback((n: string) => {
+    setConnectOpen(true);
+    setConnectChannel(n);
+    setConnectStep('auth');
+  }, []);
+
   const connectGo = useCallback(() => {
     setConnectStep('sync');
     setTimeout(() => setConnectStep('done'), 2400);
   }, []);
 
   const finishConnect = useCallback(() => {
+    setConnectedChannels(prev => connectChannel && !prev.includes(connectChannel) ? [...prev, connectChannel] : prev);
     setConnectOpen(false);
     setConnectChannel(null);
     setConnectStep('pick');
     toastAction('Channel connected');
+  }, [connectChannel, toastAction]);
+
+  const disconnectChannel = useCallback((n: string) => {
+    setConnectedChannels(prev => prev.filter(c => c !== n));
+    toastAction(n + ' disconnected');
   }, [toastAction]);
 
   const openInvoiceDetail = useCallback((invId: string) => setOpenInvoice(invId), []);
@@ -394,9 +422,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return tripsDataCache ?? [];
   }, [tripsDataCache]);
 
-  // Fetches real trips and reshapes each into the mock TripItem shape, so existing
-  // components that render getTripsData() don't need separate real/mock rendering paths.
-  // Silently keeps showing mock data if the request fails (e.g. not logged in yet).
+  // Fetches real trips and reshapes each into the TripItem shape existing components already
+  // render. Silently keeps whatever was last cached if the request fails (e.g. not logged in
+  // yet) rather than throwing.
   const fetchTripsList = useCallback(async () => {
     try {
       const result = await ApiService.getTrips();
@@ -432,9 +460,85 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // fall back to mock
     }
   }, []);
-  // Thin wrappers around the constants/app.ts mock-data generators — see that file's
-  // per-function comments for which of these are actually rendered anywhere vs orphaned.
-  const getConversations = useCallback(() => convoData(), []);
+  // Populated once fetchConversationsList() below successfully loads real conversations;
+  // until then, getConversations() returns [] — same "no mock fallback" shape getTripsData()
+  // already settled on above.
+  const [conversationsCache, setConversationsCache] = useState<Conversation[] | null>(null);
+
+  const getConversations = useCallback((): Conversation[] => {
+    return conversationsCache ?? [];
+  }, [conversationsCache]);
+
+  // Fetches real synced conversations (Gmail today) and reshapes each into the mock
+  // Conversation/Message view-model shape convoData() used to hand-build, so Messages.tsx's
+  // rendering doesn't need a separate real-data code path. Full message bodies aren't in the
+  // list response (see ConversationController::index) — Messages.tsx fetches those separately
+  // per-conversation via ApiService.getConversation() once one is opened.
+  const fetchConversationsList = useCallback(async () => {
+    try {
+      const rows = await ApiService.getConversations();
+      const items: Conversation[] = rows.map((c: ConversationResponse) => {
+        const displayName = c.customer
+          ? `${c.customer.first_name} ${c.customer.last_name}`
+          : c.latest_message?.from_name || c.latest_message?.from_email || c.subject || 'Unknown sender';
+        const cm = chMeta[c.channel] ?? ['#8A90A2', '✉️'];
+        const sm = c.trip ? apiStatusMeta[c.trip.status] : null;
+        return {
+          conversation_id: c.conversation_id,
+          name: displayName,
+          ch: c.channel,
+          av: initialsFor(displayName),
+          avBg: avatarColorFor(c.customer_id ?? c.conversation_id),
+          last: c.latest_message?.snippet || c.latest_message?.body_text || '',
+          time: fmtRelativeTime(c.last_message_at),
+          unread: c.unread_count,
+          trip: c.trip?.trip_id ?? null,
+          linkName: c.trip?.trip_name ?? null,
+          summary: c.latest_message?.snippet || '',
+          msgs: [],
+          chColor: cm[0],
+          chIcon: cm[1],
+          onClick: () => {},
+          rowBg: 'transparent',
+          unreadDisplay: c.unread_count > 0 ? 'flex' : 'none',
+          hasTrip: !!c.trip,
+          noTrip: !c.trip,
+          linkLabel: c.trip ? `linked to ${c.trip.trip_name}` : 'not linked to a trip yet',
+          tripGradient: sm?.gradient || 'linear-gradient(135deg,#1B5BBE,#5AA0FF)',
+          tripStatus: sm?.display ?? '',
+          tripStatusBg: sm?.bg ?? '#EEF0F4',
+          tripStatusFg: sm?.fg ?? '#5B6172',
+          tripValue: c.trip?.budget ? `GHS ${Number(c.trip.budget).toLocaleString()}` : '',
+          openLinkedTrip: () => {},
+        };
+      });
+      setConversationsCache(items);
+    } catch {
+      // keep showing whatever's already cached (or the empty state) if this fails
+    }
+  }, []);
+
+  // Reshapes one conversation's full message list (fetched on demand — see
+  // ApiService.getConversation()) into the mock bubble-view Message[] shape, the same way
+  // convoData() used to compute align/bubbleBg/etc. from `me`.
+  const reshapeMessages = useCallback((rows: MessageResponse[]): Message[] => {
+    return rows.map(m => {
+      const me = m.direction === 'outbound';
+      const time = m.sent_at
+        ? new Date(m.sent_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        : '';
+      return {
+        t: m.body_text || m.snippet || '',
+        time,
+        me,
+        align: me ? 'flex-end' : 'flex-start',
+        textAlign: me ? 'right' : 'left',
+        bubbleBg: me ? '#2B63F6' : '#fff',
+        bubbleFg: me ? '#fff' : '#15161B',
+        bubbleBorder: me ? 'none' : '1px solid #ECEDF2',
+      };
+    });
+  }, []);
   const getPlans = useCallback(() => plansData(billing, 'Growth', toastAction), [billing, toastAction]);
   const getGuideList = useCallback(() => {
     const { cards, worksCards, featured } = guidesData(() => {});
@@ -447,11 +551,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const getTeamData = useCallback(() => {
     const tm = teamMembers();
     const rd = rolesData();
-    const cd = channelsData(toastAction, openConnect);
     const nd = notificationsData(notifs, toggleNotif);
     const seatsUsed = rd.reduce((sum, r) => sum + (r.name === 'Super admin' || r.name === 'Agent' || r.name === 'Finance' ? r.count : 0), 0);
-    return { team: tm, roles: rd, channels: cd, notifSettings: nd, seatsUsed, seatsTotal: 5 };
-  }, [toastAction, openConnect, notifs, toggleNotif]);
+    return { team: tm, roles: rd, notifSettings: nd, seatsUsed, seatsTotal: 5 };
+  }, [notifs, toggleNotif]);
   const getAgentFeed = useCallback(() => agentFeed(), []);
   // No mock generator backs these anymore — real trips render their own live
   // flights/stays/activities directly from apiTrip; these are just the "nothing loaded yet"
@@ -479,21 +582,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     connectOpen, connectChannel, connectStep,
     openInvoice, toast: toastMsg,
     activeOption, builderTab, activeCall,
-    onboarded, billing, itinDays, genState, notifs,
+    onboarded, billing, itinDays, notifs,
 
     invoiceOpen,
     billMoBg, billMoFg, billYrBg, billYrFg,
     obNewBg, obNewFg, obEstBg, obEstFg,
-    ccView, ccPickList, ccPick, ccAuth, ccSync, ccDone,
+    ccView, ccPickList, ccPick, ccAuth, ccSync, ccDone, connectedChannels,
 
     setActiveOption, setBuilderTab, setActiveCall,
     removeBlock, addBlock, addSuggestion, addActivity,
-    generateOptions, revealOptions,
     getDays: getDaysFn, cloneDays: cloneDaysFn,
     resetTripState,
 
     openGenItin, closeGenItin, openCreate, closeCreate, startSearch,
-    openConnect, closeConnect, pickChannel, connectGo, finishConnect,
+    openConnect, closeConnect, connectDirect, pickChannel, connectGo, finishConnect, disconnectChannel,
     openInvoiceDetail, closeInvoice, getInvoices, getInvoiceDetail,
     recordPayment, sendReminder, downloadInvoice,
     createTripFromConvo,
@@ -502,7 +604,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     inviteTeammate, addSeats, saveSettings, toggleNotif, stop,
     toastAction: toastAction,
 
-    getTripsData, fetchTripsList, getConversations,
+    getTripsData, fetchTripsList, getConversations, fetchConversationsList, reshapeMessages,
     getPlans, getGuideList, getGuideArticle,
     getOnboardTasks, getTeamData, getAgentFeed,
     getFlights, getStays, getActivities,
@@ -512,24 +614,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     connectOpen, connectChannel, connectStep,
     openInvoice, toastMsg,
     activeOption, builderTab, activeCall,
-    onboarded, billing, itinDays, genState, notifs,
+    onboarded, billing, itinDays, notifs,
     invoiceOpen,
     billMoBg, billMoFg, billYrBg, billYrFg,
     obNewBg, obNewFg, obEstBg, obEstFg,
-    ccView, ccPickList, ccPick, ccAuth, ccSync, ccDone,
+    ccView, ccPickList, ccPick, ccAuth, ccSync, ccDone, connectedChannels,
     setActiveOption, setBuilderTab, setActiveCall,
     removeBlock, addBlock, addSuggestion, addActivity,
-    generateOptions, revealOptions,
     getDaysFn, cloneDaysFn, resetTripState,
     openGenItin, closeGenItin, openCreate, closeCreate, startSearch,
-    openConnect, closeConnect, pickChannel, connectGo, finishConnect,
+    openConnect, closeConnect, connectDirect, pickChannel, connectGo, finishConnect, disconnectChannel,
     openInvoiceDetail, closeInvoice, getInvoices, getInvoiceDetail,
     recordPayment, sendReminder, downloadInvoice,
     createTripFromConvo,
     setNewUser, setEstablished, setMonthly, setAnnual,
     inviteTeammate, addSeats, saveSettings, toggleNotif, stop,
     toastAction,
-    getTripsData, fetchTripsList, getConversations,
+    getTripsData, fetchTripsList, getConversations, fetchConversationsList, reshapeMessages,
     getPlans, getGuideList, getGuideArticle,
     getOnboardTasks, getTeamData, getAgentFeed,
     getFlights, getStays, getActivities,

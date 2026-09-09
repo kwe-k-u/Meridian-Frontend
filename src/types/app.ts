@@ -276,6 +276,9 @@ export interface Message {
 
 // ── Conversation Types ──
 export interface Conversation {
+  // Only present when reshaped from real data (AppContext.fetchConversationsList()) — used to
+  // route to /app/messages/:conversationId and to fetch the full thread/link a trip.
+  conversation_id?: string;
   name: string;
   ch: string;
   av: string;
@@ -414,20 +417,6 @@ export interface RoleDef {
   desc: string;
   countLabel: string;
   perms: { icon: string; label: string; color: string }[];
-}
-
-export interface Channel {
-  name: string;
-  icon: string;
-  iconBg: string;
-  sub: string;
-  connected: boolean;
-  connDisplay: string;
-  btnLabel: string;
-  btnBg: string;
-  btnFg: string;
-  btnBorder: string;
-  action: () => void;
 }
 
 export interface NotifSetting {
@@ -609,9 +598,17 @@ export type DisbursementStatus = 'pending' | 'successful' | 'failed' | 'reversed
 export const WEWIRE_SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'GHS'] as const;
 export const WEWIRE_MAX_ACCOUNTS = 3;
 
+export type BeneficiaryType = 'agency' | 'provider';
+
+// A payout account — either the agency's own (beneficiary_type='agency', the original/default
+// kind) or a specific trip service provider's (beneficiary_type='provider' — an airline,
+// hotel, or activity vendor). `label` is a free-text display name for provider beneficiaries
+// (e.g. "Emirates Airlines"), since account_name is the legal bank-account holder name.
 export interface WeWireBeneficiaryResponse {
   id: string;
   company_id: string;
+  beneficiary_type: BeneficiaryType;
+  label: string | null;
   wewire_beneficiary_id: string | null;
   currency: string;
   account_name: string;
@@ -711,6 +708,12 @@ export interface WeWireDisbursementResponse {
   beneficiary_id: string;
   source_inbound_id: string | null;
   source_trip_id: string | null;
+  // Which trip line item this paid for — a flight, an accommodation booking, or an activity
+  // (composite-keyed "{itinerary_day_id}:{destination_id}") — null for a trip-level "pay the
+  // agency" payout. line_item_label snapshots a human-readable name at payout time.
+  line_item_type: 'flight' | 'accommodation' | 'activity' | null;
+  line_item_id: string | null;
+  line_item_label: string | null;
   amount: number;
   currency: string;
   fee: number | null;
@@ -724,15 +727,24 @@ export interface WeWireDisbursementResponse {
 }
 
 // Returned by GET /wewire/trip-balances — one row per trip with money still held from WeWire
-// collections that hasn't been paid out to the agency yet. Only trips with a positive held
-// balance are included (see WeWirePaymentController::tripBalances).
+// collections that hasn't been paid out yet. Only trips with a positive held balance are
+// included (see WeWirePaymentController::tripBalances). beneficiary_id (when present) is the
+// company's default agency-type beneficiary in this currency, for one-click "pay agency" use.
 export interface TripBalanceResponse {
   trip_id: string;
   trip_name: string;
   currency: string;
   collected: number;
   held_balance: number;
+  beneficiary_id: string | null;
   can_payout: boolean;
+}
+
+// Returned by PaystackPaymentController::initiateSubscriptionPayment — `authorization_url` is
+// Paystack's hosted checkout page to redirect the customer to.
+export interface PaystackCheckoutResponse {
+  transaction_id: string;
+  authorization_url: string;
 }
 
 export interface SkippedProvider {
@@ -953,6 +965,12 @@ export interface CallResponse {
   meeting_link: string | null;
   notes: string | null;
   transcript: string | null;
+  // Set when this call was created by/detected from the company's connected Google Calendar
+  // (CalendarWatcherJob or the "Schedule with Google Meet" action) — null for a manually logged
+  // call with no Calendar backing.
+  google_event_id: string | null;
+  // When true, CalendarWatcherJob leaves this call alone even though it's calendar-originated.
+  excluded: boolean;
   created_at: string;
   updated_at: string;
   trip?: { trip_id: string; trip_name: string; company_id: string };
@@ -1106,4 +1124,80 @@ export interface CompanyResponse {
 export interface CurrencyRatesResponse {
   base: string;
   rates: Record<string, number>;
+}
+
+// GET /gmail/status — reflects the real backend GmailAccount for the caller's company, unlike
+// the mocked WhatsApp/Google Meet rows in Settings > Channels which still read from AppContext.
+export interface GmailStatusResponse {
+  connected: boolean;
+  google_email?: string;
+  status?: 'active' | 'revoked' | 'error';
+  last_synced_at?: string | null;
+  // Gmail and Calendar share one connected Google account per company (see GmailController) —
+  // these track which of the two this company has actually turned on. meet_tracking_enabled is
+  // a further toggle on top of calendar_enabled (same scope, no extra OAuth) — see
+  // GmailController::updateMeetTracking().
+  gmail_enabled?: boolean;
+  calendar_enabled?: boolean;
+  meet_tracking_enabled?: boolean;
+}
+
+// Real API shapes for GET /conversations, GET /conversations/{id}, PATCH /conversations/{id}
+// (ConversationController) — kept separate from the mock Conversation/Message view-model types
+// above, which AppContext.fetchConversationsList() reshapes these into (see convoData()).
+export interface MessageResponse {
+  message_id: string;
+  conversation_id: string;
+  external_message_id: string | null;
+  direction: 'inbound' | 'outbound';
+  from_email: string | null;
+  from_name: string | null;
+  body_text: string | null;
+  snippet: string | null;
+  sent_at: string | null;
+}
+
+export interface ConversationResponse {
+  conversation_id: string;
+  company_id: string;
+  channel: string;
+  customer_id: string | null;
+  trip_id: string | null;
+  external_thread_id: string;
+  subject: string | null;
+  last_message_at: string | null;
+  unread_count: number;
+  customer?: { customer_id: string; first_name: string; last_name: string; email: string | null } | null;
+  trip?: { trip_id: string; trip_name: string; status: TripStatus; budget: string | null } | null;
+  latest_message?: MessageResponse | null;
+  // Present only on the GET /conversations/{id} (show) response, not the list.
+  messages?: MessageResponse[];
+}
+
+// Returned by ConversationController::suggestReply — AI-drafted reply options for the active
+// thread, only fetched when the agent clicks "Suggest reply" (never automatically).
+export interface SuggestedReply {
+  text: string;
+  tone: string;
+}
+
+export interface SuggestReplyResponse {
+  suggestions: SuggestedReply[];
+  context_used: string[];
+}
+
+// GET /gmail/threads/browse (GmailThreadController) — a candidate Gmail thread not yet tracked
+// in Meridian, shown in AddGmailThreadModal's picker.
+export interface GmailThreadPreview {
+  thread_id: string;
+  subject: string | null;
+  from_name: string | null;
+  from_email: string | null;
+  date: string | null;
+  snippet: string | null;
+}
+
+export interface GmailThreadBrowseResponse {
+  threads: GmailThreadPreview[];
+  next_page_token: string | null;
 }

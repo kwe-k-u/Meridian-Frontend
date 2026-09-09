@@ -4,8 +4,8 @@
 // flows, and other placeholder data used throughout the UI during development/demo.
 
 import type {
-  Conversation, CallLog, CallDetail,
-  Plan, TeamMember, RoleDef, Channel, NotifSetting, OnboardingTask,
+  CallLog, CallDetail,
+  Plan, TeamMember, RoleDef, NotifSetting, OnboardingTask,
   GuideCard, GuideArticle, AgentFeedItem, ConnectPickItem, ConnectChannelView,
   BillingPeriod, TripStatusLabel, InvoiceItem, InvoiceDetail,
 } from '../types/app';
@@ -85,54 +85,57 @@ export const gradients = {
 };
 
 
-// Mock conversation/inbox data for the Messages page — one demo thread per channel/traveler.
-export function convoData(): Conversation[] {
-  const raw = [
-    {name:'Efua Danso',ch:'whatsapp' as const,av:'ED',avBg:'#0E7C8F',last:'Do you plan honeymoons to the Maldives?',time:'4m',unread:1,trip:null as string | null,linkName:null as string | null,
-     summary:'New enquiry · honeymoon to the Maldives, likely December. No budget shared yet. Meridian suggests turning this chat into a trip to start drafting options.',
-     msgs:[{me:false,t:'Hi! A friend booked through you and loved it 🙏',time:'11:38'},{me:false,t:'We\'re thinking about our honeymoon for December.',time:'11:39'},{me:false,t:'Do you plan honeymoons to the Maldives?',time:'11:40'}]},
-    {name:'Ama Asante',ch:'whatsapp' as const,av:'AA',avBg:'#6B46C1',last:'Can\'t wait to see the options! 😍',time:'1h',unread:2,trip:'Asante–Mensah Honeymoon',linkName:'Asante–Mensah Honeymoon',
-     summary:'Privacy, sea views & fine dining. Budget ≈ GHS 85k. Kofi is pescatarian. Max 1 stop on flights.',
-     msgs:[{me:false,t:'Hi! Following up on our honeymoon — any update?',time:'09:02'},{me:true,t:'Hi Ama! Yes — Meridian has drafted 3 options. Sending them over today 🙌',time:'09:14'},{me:false,t:'Amazing. We\'re leaning Greece + Italy but open to the Maldives idea.',time:'09:16'},{me:false,t:'Can\'t wait to see the options! 😍',time:'09:17'}]},
-    {name:'The Adjei Family',ch:'gmail' as const,av:'TA',avBg:'#2B63F6',last:'Re: Dubai July — do we need visas?',time:'3h',unread:0,trip:'Adjei Family Dubai',linkName:'Adjei Family Dubai',
-     summary:'Family of four to Dubai, mid-July. Kid-friendly with a desert safari and a couple of standout dinners. Budget ≈ GHS 41k.',
-     msgs:[{me:false,t:'Quick one — do Ghanaian passport holders need a visa for the UAE?',time:'Yesterday'},{me:true,t:'Good question! Visa on arrival is available — I\'ll add the details to your trip pack.',time:'Yesterday'}]},
-    {name:'Owusu Group',ch:'whatsapp' as const,av:'OG',avBg:'#0E9F6E',last:'Deposit sent via Paystack ✅',time:'5h',unread:0,trip:'Owusu Corporate Retreat',linkName:'Owusu Corporate Retreat',
-     summary:'Corporate retreat for 12 in Cape Town, early Aug. Needs meeting space and team dinners. Budget ≈ GHS 128k.',
-     msgs:[{me:true,t:'Here\'s the secure payment link for the 50% deposit.',time:'08:20'},{me:false,t:'Deposit sent via Paystack ✅',time:'08:41'}]},
-    {name:'Yaa Boateng',ch:'instagram' as const,av:'YB',avBg:'#D64545',last:'Loved option B but can we change…',time:'1d',unread:1,trip:'Boateng Anniversary',linkName:'Boateng Anniversary',
-     summary:'Anniversary in Zanzibar. Asked to swap the resort for somewhere quieter, away from the main strip.',
-     msgs:[{me:false,t:'Loved option B but can we change the resort to something quieter?',time:'Mon'}]},
-  ];
-  return raw.map((c,i)=> {
-    const cm = chMeta[c.ch];
-    return {
-      ...c,
-      chColor: cm[0],
-      chIcon: cm[1],
-      onClick: () => {},
-      rowBg: i === 0 ? '#F4F7FF' : 'transparent',
-      unreadDisplay: c.unread > 0 ? 'flex' as const : 'none' as const,
-      hasTrip: !!c.linkName,
-      noTrip: !c.linkName,
-      linkLabel: c.linkName ? `linked to ${c.linkName}` : 'not linked to a trip yet',
-      tripGradient: 'linear-gradient(135deg,#1B5BBE,#5AA0FF)',
-      tripStatus: '',
-      tripStatusBg: '#EEF0F4',
-      tripStatusFg: '#5B6172',
-      tripValue: '',
-      openLinkedTrip: () => {},
-      msgs: c.msgs.map(m => ({
-        t: m.t, time: m.time, me: m.me,
-        align: m.me ? 'flex-end' as const : 'flex-start' as const,
-        textAlign: m.me ? 'right' as const : 'left' as const,
-        bubbleBg: m.me ? '#2B63F6' : '#fff',
-        bubbleFg: m.me ? '#fff' : '#15161B',
-        bubbleBorder: m.me ? 'none' : '1px solid #ECEDF2',
-      })),
-    };
-  });
-}
+// Mock conversation/inbox data for the Messages page — retired now that Messages.tsx renders
+// real synced conversations via AppContext.fetchConversationsList()/getConversations() instead
+// (same retirement shape as tripsData() below: commented out, not deleted, as a reference for
+// the view-model fields a Conversation/Message is expected to carry).
+// export function convoData(): Conversation[] {
+//   const raw = [
+//     {name:'Efua Danso',ch:'whatsapp' as const,av:'ED',avBg:'#0E7C8F',last:'Do you plan honeymoons to the Maldives?',time:'4m',unread:1,trip:null as string | null,linkName:null as string | null,
+//      summary:'New enquiry · honeymoon to the Maldives, likely December. No budget shared yet. Meridian suggests turning this chat into a trip to start drafting options.',
+//      msgs:[{me:false,t:'Hi! A friend booked through you and loved it 🙏',time:'11:38'},{me:false,t:'We\'re thinking about our honeymoon for December.',time:'11:39'},{me:false,t:'Do you plan honeymoons to the Maldives?',time:'11:40'}]},
+//     {name:'Ama Asante',ch:'whatsapp' as const,av:'AA',avBg:'#6B46C1',last:'Can\'t wait to see the options! 😍',time:'1h',unread:2,trip:'Asante–Mensah Honeymoon',linkName:'Asante–Mensah Honeymoon',
+//      summary:'Privacy, sea views & fine dining. Budget ≈ GHS 85k. Kofi is pescatarian. Max 1 stop on flights.',
+//      msgs:[{me:false,t:'Hi! Following up on our honeymoon — any update?',time:'09:02'},{me:true,t:'Hi Ama! Yes — Meridian has drafted 3 options. Sending them over today 🙌',time:'09:14'},{me:false,t:'Amazing. We\'re leaning Greece + Italy but open to the Maldives idea.',time:'09:16'},{me:false,t:'Can\'t wait to see the options! 😍',time:'09:17'}]},
+//     {name:'The Adjei Family',ch:'gmail' as const,av:'TA',avBg:'#2B63F6',last:'Re: Dubai July — do we need visas?',time:'3h',unread:0,trip:'Adjei Family Dubai',linkName:'Adjei Family Dubai',
+//      summary:'Family of four to Dubai, mid-July. Kid-friendly with a desert safari and a couple of standout dinners. Budget ≈ GHS 41k.',
+//      msgs:[{me:false,t:'Quick one — do Ghanaian passport holders need a visa for the UAE?',time:'Yesterday'},{me:true,t:'Good question! Visa on arrival is available — I\'ll add the details to your trip pack.',time:'Yesterday'}]},
+//     {name:'Owusu Group',ch:'whatsapp' as const,av:'OG',avBg:'#0E9F6E',last:'Deposit sent via Paystack ✅',time:'5h',unread:0,trip:'Owusu Corporate Retreat',linkName:'Owusu Corporate Retreat',
+//      summary:'Corporate retreat for 12 in Cape Town, early Aug. Needs meeting space and team dinners. Budget ≈ GHS 128k.',
+//      msgs:[{me:true,t:'Here\'s the secure payment link for the 50% deposit.',time:'08:20'},{me:false,t:'Deposit sent via Paystack ✅',time:'08:41'}]},
+//     {name:'Yaa Boateng',ch:'instagram' as const,av:'YB',avBg:'#D64545',last:'Loved option B but can we change…',time:'1d',unread:1,trip:'Boateng Anniversary',linkName:'Boateng Anniversary',
+//      summary:'Anniversary in Zanzibar. Asked to swap the resort for somewhere quieter, away from the main strip.',
+//      msgs:[{me:false,t:'Loved option B but can we change the resort to something quieter?',time:'Mon'}]},
+//   ];
+//   return raw.map((c,i)=> {
+//     const cm = chMeta[c.ch];
+//     return {
+//       ...c,
+//       chColor: cm[0],
+//       chIcon: cm[1],
+//       onClick: () => {},
+//       rowBg: i === 0 ? '#F4F7FF' : 'transparent',
+//       unreadDisplay: c.unread > 0 ? 'flex' as const : 'none' as const,
+//       hasTrip: !!c.linkName,
+//       noTrip: !c.linkName,
+//       linkLabel: c.linkName ? `linked to ${c.linkName}` : 'not linked to a trip yet',
+//       tripGradient: 'linear-gradient(135deg,#1B5BBE,#5AA0FF)',
+//       tripStatus: '',
+//       tripStatusBg: '#EEF0F4',
+//       tripStatusFg: '#5B6172',
+//       tripValue: '',
+//       openLinkedTrip: () => {},
+//       msgs: c.msgs.map(m => ({
+//         t: m.t, time: m.time, me: m.me,
+//         align: m.me ? 'flex-end' as const : 'flex-start' as const,
+//         textAlign: m.me ? 'right' as const : 'left' as const,
+//         bubbleBg: m.me ? '#2B63F6' : '#fff',
+//         bubbleFg: m.me ? '#fff' : '#15161B',
+//         bubbleBorder: m.me ? 'none' : '1px solid #ECEDF2',
+//       })),
+//     };
+//   });
+// }
 
 // The 7 demo trips shown on the Trips list / Dashboard "trips in motion" panel when no real
 // API trip data is available. Each tuple in `raw` is positional — see the destructure below
@@ -617,7 +620,7 @@ export function plansData(billing: BillingPeriod, currentPlan: string, toast: (m
 
 // Mock team roster. Reachable via AppContext.getTeamData(), but Settings.tsx's Team & Seats
 // tab now fetches the real company's users from the API instead — effectively orphaned,
-// along with rolesData()/channelsData()/notificationsData() below (same getTeamData() bundle).
+// along with rolesData()/notificationsData() below (same getTeamData() bundle).
 export function teamMembers(): TeamMember[] {
   const raw = [
     {name:'Kweku Ansah', email:'kweku@oasistravel.com', initials:'KA', avatarBg:'#2B63F6', role:'Super admin', roleBg:'#EAF0FF', roleFg:'#2B63F6', active:'Active now', you:true},
@@ -657,25 +660,6 @@ export function rolesData(): RoleDef[] {
     ...r,
     countLabel: r.count + (r.count === 1 ? ' member' : ' members'),
     perms: r.perms.map(([icon,label]) => ({icon, label, color: icon === yes ? '#0E9F6E' : '#C2410C'})),
-  }));
-}
-
-// Mock connected-channels list for the Settings > Channels tab. Orphaned — see teamMembers()
-// above; Settings.tsx's real ChannelsSection renders its own hardcoded channel list instead.
-export function channelsData(toast: (msg: string) => void, openConnectFor: (n: string) => void): Channel[] {
-  const raw = [
-    {name:'WhatsApp Business', icon:'💬', iconBg:'#E3F7EF', sub:'+233 24 555 0192 · Oasis Travel', connected:true},
-    {name:'Gmail', icon:'✉️', iconBg:'#FFE9E6', sub:'bookings@oasistravel.com', connected:true},
-    {name:'Instagram', icon:'📷', iconBg:'#F0EBFF', sub:'Connect your linked business account', connected:false},
-  ];
-  return raw.map(c => ({
-    ...c,
-    connDisplay: c.connected ? 'inline-flex' as const : 'none' as const,
-    btnLabel: c.connected ? 'Disconnect' : 'Connect',
-    btnBg: c.connected ? '#fff' : '#2B63F6',
-    btnFg: c.connected ? '#5B6172' : '#fff',
-    btnBorder: c.connected ? '#DDE0E8' : '#2B63F6',
-    action: () => { if (c.connected) { toast(c.name + ' disconnected'); } else { openConnectFor(c.name); } },
   }));
 }
 
@@ -836,12 +820,12 @@ export function guidesData(openGuide: (id: string) => void): {
   return { cards, worksCards, featured, article };
 }
 
-// The channel picker list shown on step 1 of ConnectChannelModal (WhatsApp/Gmail/Instagram).
+// The channel picker list shown on step 1 of ConnectChannelModal — WhatsApp only now. Gmail and
+// Google Meet both have their own real OAuth-backed cards in Settings > Channels (GoogleAppCard)
+// instead of this simulated flow.
 export function connectPickList(pickChannel: (n: string) => void): ConnectPickItem[] {
   return [
     {name:'WhatsApp Business', icon:'💬', iconBg:'#E3F7EF', sub:'Link with a QR code, like WhatsApp Web', pick: () => pickChannel('WhatsApp Business')},
-    {name:'Gmail', icon:'✉️', iconBg:'#FFE9E6', sub:'Authorise with your Google account', pick: () => pickChannel('Gmail')},
-    {name:'Instagram', icon:'📷', iconBg:'#F0EBFF', sub:'Connect a linked business account', pick: () => pickChannel('Instagram')},
   ];
 }
 
@@ -864,22 +848,6 @@ export function connectChannelView(name: string | null): ConnectChannelView | nu
         {name:'Kojo Adjei', initials:'KA', avatarBg:'#7C5CFC', source:'Name from WhatsApp profile', tag:'New traveler', tagBg:'#E3F7EF', tagFg:'#0E9F6E'},
         {name:'Yaa Boateng', initials:'YB', avatarBg:'#0E9F6E', source:'Same number as an existing traveler', tag:'Merged', tagBg:'#EAF0FF', tagFg:'#2B63F6'},
         {name:'+233 24 991 2030', initials:'#', avatarBg:'#B7791F', source:'No profile name saved — add one', tag:'Needs review', tagBg:'#FFF3E0', tagFg:'#B7791F'},
-      ]},
-    'Gmail': {short:'Gmail', icon:'✉️', iconBg:'#FFE9E6', mode:'account',
-      authTitle:'Choose a Google account', authBody:'Meridian reads incoming enquiries and lets you reply from your inbox. You can disconnect at any time.',
-      cta:'Continue with Google', synced:'320 threads', createdN:54, reviewN:6,
-      contacts:[
-        {name:'Linda Mensah', initials:'LM', avatarBg:'#2B63F6', source:'Name from the email "From" field', tag:'New traveler', tagBg:'#E3F7EF', tagFg:'#0E9F6E'},
-        {name:'David Otoo', initials:'DO', avatarBg:'#7C5CFC', source:'Name from the email "From" field', tag:'New traveler', tagBg:'#E3F7EF', tagFg:'#0E9F6E'},
-        {name:'Owusu Group', initials:'OG', avatarBg:'#0E9F6E', source:'Matched to an existing traveler', tag:'Merged', tagBg:'#EAF0FF', tagFg:'#2B63F6'},
-      ]},
-    'Instagram': {short:'Instagram', icon:'📷', iconBg:'#F0EBFF', mode:'account',
-      authTitle:'Connect your Instagram business account', authBody:'Log in to the business account linked to your page. Meridian brings DMs into your unified inbox.',
-      cta:'Connect account', synced:'64 conversations', createdN:21, reviewN:3,
-      contacts:[
-        {name:'travelwithefua', initials:'TE', avatarBg:'#2B63F6', source:'Name from the Instagram handle', tag:'New traveler', tagBg:'#E3F7EF', tagFg:'#0E9F6E'},
-        {name:'kofi.explores', initials:'KE', avatarBg:'#7C5CFC', source:'Name from the Instagram handle', tag:'New traveler', tagBg:'#E3F7EF', tagFg:'#0E9F6E'},
-        {name:'Adjei Family', initials:'AF', avatarBg:'#0E9F6E', source:'Matched to an existing traveler', tag:'Merged', tagBg:'#EAF0FF', tagFg:'#2B63F6'},
       ]},
   };
   const cc = cfg[name];

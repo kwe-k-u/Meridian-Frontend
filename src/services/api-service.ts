@@ -19,11 +19,13 @@ import type {
   CustomerResponse, TransactionResponse, TripResponse, TripCostResponse, ItineraryResponse, GenerateItineraryApiResponse,
   ItineraryDayResponse, ItineraryFlightResponse, ItineraryAccommodationResponse,
   DestinationResponse, AirportResponse, CompanyResponse, CallResponse, CallActionItemResponse,
-  SubscriptionTierResponse, CompanySubscriptionResponse, MoolreCheckoutResponse,
-  FlightSearchResponse, HotelSearchResponse, CurrencyRatesResponse,
+  SubscriptionTierResponse, CompanySubscriptionResponse, MoolreCheckoutResponse, PaystackCheckoutResponse,
+  SuggestReplyResponse,
+  FlightSearchResponse, HotelSearchResponse, CurrencyRatesResponse, GmailStatusResponse,
+  ConversationResponse, MessageResponse, GmailThreadBrowseResponse,
   VirtualAccountResponse, WeWireBeneficiaryResponse, PaymentPlanResponse, WeWireLookupResponse,
   WeWireInboundResponse, WeWireKycStatus, FundHandling,
-  WeWireDisbursementResponse, DisbursementStatus, TripBalanceResponse,
+  WeWireDisbursementResponse, DisbursementStatus, TripBalanceResponse, BeneficiaryType,
 } from '../types/app';
 import { TripStatus, ItineraryStatus, FlightStatus, AccommodationStatus, TransactionStatus, CallActionItemStatus } from '../types/app';
 
@@ -656,8 +658,21 @@ export class ApiService {
     meeting_link: string;
     notes: string;
     transcript: string;
+    excluded: boolean;
   }>): Promise<CallResponse> {
     const res = await axios.put(`${ApiService.BASE_URL}/calls/${id}`, data);
+    return res.data;
+  }
+
+  // Creates a real Google Calendar event with an auto-generated Meet link (via the company's
+  // connected Google account) plus a matching Call row. 422s if Calendar isn't connected+enabled.
+  public static async scheduleCallWithMeet(tripId: string, data: {
+    title: string;
+    started_at: string;
+    ended_at: string;
+    customer_id: string;
+  }): Promise<CallResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/trips/${tripId}/calls/schedule`, data);
     return res.data;
   }
 
@@ -767,8 +782,8 @@ export class ApiService {
     return res.data;
   }
 
-  public static async getWeWireBeneficiaries(): Promise<WeWireBeneficiaryResponse[]> {
-    const res = await axios.get(`${ApiService.BASE_URL}/wewire/beneficiaries`);
+  public static async getWeWireBeneficiaries(type?: BeneficiaryType): Promise<WeWireBeneficiaryResponse[]> {
+    const res = await axios.get(`${ApiService.BASE_URL}/wewire/beneficiaries`, { params: type ? { type } : {} });
     return res.data;
   }
 
@@ -826,8 +841,14 @@ export class ApiService {
     return res.data;
   }
 
-  public static async payoutTrip(tripId: string): Promise<WeWireDisbursementResponse> {
-    const res = await axios.post(`${ApiService.BASE_URL}/trips/${tripId}/payout`);
+  public static async payoutTrip(tripId: string, data: {
+    beneficiary_id: string;
+    amount?: number;
+    line_item_type?: 'flight' | 'accommodation' | 'activity';
+    line_item_id?: string;
+    line_item_label?: string;
+  }): Promise<WeWireDisbursementResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/trips/${tripId}/payout`, data);
     return res.data;
   }
 
@@ -835,6 +856,22 @@ export class ApiService {
   // the /travel/:tripId public trip endpoints (the reference code is the "credential").
   public static async lookupWeWirePaymentByReference(reference: string): Promise<WeWireLookupResponse> {
     const res = await axios.get(`${ApiService.BASE_URL}/public/payments/wewire/lookup/${reference}`);
+    return res.data;
+  }
+
+  // ── Paystack payments (https://paystack.com/docs/) ──
+  // Used for tour operator subscription payments — see PaystackPaymentController. Unlike the
+  // Moolre subscription flow, this single call both creates the (pending) subscription and
+  // starts the hosted checkout, since a subscription shouldn't be marked active until payment
+  // is confirmed. Payment completion is confirmed by polling checkPaystackPaymentStatus() from
+  // the page the customer lands back on (see PaymentCallback.tsx).
+  public static async initiatePaystackSubscriptionPayment(tierId: string): Promise<PaystackCheckoutResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/payments/paystack/subscription`, { tier_id: tierId });
+    return res.data;
+  }
+
+  public static async checkPaystackPaymentStatus(transactionId: string): Promise<TransactionResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/payments/paystack/${transactionId}/status`);
     return res.data;
   }
 
@@ -865,6 +902,123 @@ export class ApiService {
   // CurrencyContext to convert every displayed amount into the caller's preferred currency.
   public static async getCurrencyRates(): Promise<CurrencyRatesResponse> {
     const res = await axios.get(`${ApiService.BASE_URL}/currency-rates`);
+    return res.data;
+  }
+
+  // ── Gmail / Calendar (Settings > Channels) ──
+  // Gmail and Calendar share one connected Google account per company — `app` picks which
+  // scopes this particular connect/disconnect call is for (see GmailController). getGmailAuthUrl
+  // returns Google's consent URL; the caller does `window.location.href = url` itself rather
+  // than the browser following an XHR redirect, since a Bearer token can't ride along on a real
+  // navigation (see GmailController's docblock on the backend).
+  public static async getGmailAuthUrl(app: 'gmail' | 'calendar' = 'gmail'): Promise<string> {
+    const res = await axios.get(`${ApiService.BASE_URL}/gmail/connect?app=${app}`);
+    return res.data.url;
+  }
+
+  public static async getGmailStatus(): Promise<GmailStatusResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/gmail/status`);
+    return res.data;
+  }
+
+  public static async disconnectGmail(app: 'gmail' | 'calendar' = 'gmail'): Promise<void> {
+    await axios.post(`${ApiService.BASE_URL}/gmail/disconnect?app=${app}`);
+  }
+
+  // Toggles Meet call tracking on top of an already-connected Calendar — no OAuth round-trip,
+  // just a feature flag (see GmailController::updateMeetTracking). 422s if Calendar isn't
+  // connected yet.
+  public static async updateMeetTracking(enabled: boolean): Promise<{ meet_tracking_enabled: boolean }> {
+    const res = await axios.patch(`${ApiService.BASE_URL}/gmail/meet-tracking`, { enabled });
+    return res.data;
+  }
+
+  // ── Conversations (Messages page) ──
+  public static async getConversations(): Promise<ConversationResponse[]> {
+    const res = await axios.get(`${ApiService.BASE_URL}/conversations`);
+    return res.data;
+  }
+
+  // Full thread (messages included) — the list endpoint above deliberately omits message
+  // bodies, so this is called on demand once the agent opens a specific conversation.
+  public static async getConversation(id: string): Promise<ConversationResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/conversations/${id}`);
+    return res.data;
+  }
+
+  // tripId null unlinks the conversation from whatever trip it was attached to.
+  public static async linkConversationToTrip(id: string, tripId: string | null): Promise<ConversationResponse> {
+    const res = await axios.patch(`${ApiService.BASE_URL}/conversations/${id}`, { trip_id: tripId });
+    return res.data;
+  }
+
+  // Untrack — removes the conversation (and its messages) from Meridian only; never touches
+  // the source mailbox. Re-adding it later (AddGmailThreadModal) re-syncs from scratch.
+  public static async untrackConversation(id: string): Promise<void> {
+    await axios.delete(`${ApiService.BASE_URL}/conversations/${id}`);
+  }
+
+  // Sends a real reply into the tracked Gmail thread (ConversationController::sendMessage) —
+  // not a mock/local-only action. Server message surfaced on failure (e.g. "Connect Gmail in
+  // Settings first.") since it's directly actionable for the agent.
+  public static async sendConversationMessage(id: string, body: string): Promise<MessageResponse> {
+    try {
+      const res = await axios.post(`${ApiService.BASE_URL}/conversations/${id}/messages`, { body });
+      return res.data;
+    } catch (error) {
+      let errorMessage = 'Failed to send your reply.';
+      if (axios.isAxiosError(error) && error.response) {
+        errorMessage = error.response.data.message || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+  }
+
+  // Asks meridian-ai for draft reply suggestions for this thread — only called when the agent
+  // clicks "Suggest reply" (see Messages.tsx), never automatically.
+  public static async suggestReply(id: string): Promise<SuggestReplyResponse> {
+    try {
+      const res = await axios.post(`${ApiService.BASE_URL}/conversations/${id}/suggest-reply`);
+      return res.data;
+    } catch (error) {
+      let errorMessage = 'Failed to draft a suggestion.';
+      if (axios.isAxiosError(error) && error.response) {
+        errorMessage = error.response.data.message || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+  }
+
+
+  // Asks meridian-ai for message draft to request for more details for this thread
+  // — only called when the agent  clicks "Suggest reply" (see Messages.tsx), never automatically.
+  public static async requestTravelDetails(id: string): Promise<SuggestReplyResponse> {
+    try {
+      const res = await axios.post(`${ApiService.BASE_URL}/conversations/${id}/request-travel-details`);
+      return res.data;
+    } catch (error) {
+      let errorMessage = 'Failed to draft a suggestion.';
+      if (axios.isAxiosError(error) && error.response) {
+        errorMessage = error.response.data.message || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+  }
+
+  // ── Gmail threads (Messages page "+ Add" picker) ──
+  // Candidate threads not already tracked — see GmailThreadController for why nothing syncs
+  // automatically. 422s with a message if Gmail isn't connected yet.
+  public static async browseGmailThreads(q?: string, pageToken?: string): Promise<GmailThreadBrowseResponse> {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (pageToken) params.set('page_token', pageToken);
+    const res = await axios.get(`${ApiService.BASE_URL}/gmail/threads/browse?${params.toString()}`);
+    return res.data;
+  }
+
+  // Idempotent — re-adding an already-tracked thread just returns it.
+  public static async addGmailThread(threadId: string): Promise<ConversationResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/gmail/threads`, { thread_id: threadId });
     return res.data;
   }
 }

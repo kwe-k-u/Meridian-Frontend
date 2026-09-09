@@ -87,12 +87,13 @@ function Dashboard() {
   useEffect(() => { loadTripBalances(); }, []);
 
   const handlePayoutTrip = async (balance: TripBalanceResponse) => {
+    if (!balance.beneficiary_id) return; // can_payout already guards this, just defensive
     if (!window.confirm(`Pay out ${balance.held_balance} ${balance.currency} to your agency's payout account for "${balance.trip_name}"?`)) {
       return;
     }
     setPayingOutTripId(balance.trip_id);
     try {
-      await ApiService.payoutTrip(balance.trip_id);
+      await ApiService.payoutTrip(balance.trip_id, { beneficiary_id: balance.beneficiary_id });
       ctx.toastAction(`Payout initiated for ${balance.trip_name}`);
       loadTripBalances();
     } catch (error) {

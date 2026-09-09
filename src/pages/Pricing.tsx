@@ -8,9 +8,11 @@ import '../styles/Pricing.css'
 // Purpose: Displays current plan info, billing toggle (monthly/annual),
 //          and a grid of available plans with features.
 // State: billing period from AppContext; real tiers/currentSub, loading, subscribingTierId.
-// API: ApiService.getSubscriptionTiers, .getCompanySubscriptions, .subscribeToTier,
-//      .initiateMoolreSubscriptionPayment (redirects to Moolre's hosted checkout — see
-//      PaymentCallback.tsx for how the payment is confirmed once the customer returns).
+// API: ApiService.getSubscriptionTiers, .getCompanySubscriptions,
+//      .initiatePaystackSubscriptionPayment (creates the pending subscription and redirects to
+//      Paystack's hosted checkout — see PaymentCallback.tsx for how the payment is confirmed
+//      once the customer returns). Moolre remains available on the backend for subscription
+//      payments but is no longer surfaced here — Paystack is the default going forward.
 //
 // Falls back to AppContext's mock getPlans() if the real tier fetch fails or returns no
 // active tiers — the monthly/annual billing toggle only affects that mock fallback pricing
@@ -46,25 +48,14 @@ export default function Pricing() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // Subscribes the company to a tier (1-year term starting today), then hands off to Moolre
-  // for the actual payment — subscribeToTier() alone only creates the subscription record;
-  // the browser is redirected to Moolre's hosted checkout page to actually collect payment,
-  // and PaymentCallback.tsx confirms it once the customer is sent back.
+  // Starts a subscription to a tier via Paystack — the backend creates the subscription as
+  // `pending` (1-year term starting today) and returns Paystack's hosted checkout page to
+  // redirect the customer to. PaymentCallback.tsx confirms the payment once the customer is
+  // sent back, which is also what flips the subscription to `active`.
   const handleSubscribe = async (tier: SubscriptionTierResponse) => {
     setSubscribingTierId(tier.tier_id)
     try {
-      const start = new Date()
-      const end = new Date(start)
-      end.setFullYear(end.getFullYear() + 1)
-      const toDateString = (d: Date) => d.toISOString().split('T')[0]
-
-      const sub = await ApiService.subscribeToTier({
-        tier_id: tier.tier_id,
-        start_date: toDateString(start),
-        end_date: toDateString(end),
-        status: 'active',
-      })
-      const checkout = await ApiService.initiateMoolreSubscriptionPayment(sub.subscription_id, Math.round(tier.price_quarterly))
+      const checkout = await ApiService.initiatePaystackSubscriptionPayment(tier.tier_id)
       window.location.href = checkout.authorization_url
     } catch {
       ctx.toastAction('Failed to start your subscription payment')

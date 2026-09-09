@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext'
 import { useAuth } from '../contexts/AuthContext'
 import { ApiService } from '../services/api-service'
-import type { SettingsTab, CompanyResponse, CompanyUser, VirtualAccountResponse, WeWireBeneficiaryResponse, WeWireInboundResponse, WeWireDisbursementResponse, FundHandling, WeWireKycStatus } from '../types/app'
+import type { SettingsTab, CompanyResponse, CompanyUser, VirtualAccountResponse, WeWireBeneficiaryResponse, WeWireInboundResponse, WeWireDisbursementResponse, FundHandling, WeWireKycStatus, GmailStatusResponse } from '../types/app'
 import { WEWIRE_SUPPORTED_CURRENCIES, WEWIRE_MAX_ACCOUNTS } from '../types/app'
 import DemoBanner from '../components/DemoBanner'
 import '../styles/Settings.css'
@@ -359,43 +359,260 @@ function Roles() {
 }
 
 // ── Channels Section ──────────────────────────────────────────
-// Placeholder UI for connected communication channels.
-// Uses AppContext openConnect flow for the connect modal.
+// WhatsApp is still the frontend-only simulation (AppContext's connectedChannels/connectDirect).
+// Gmail, Google Calendar, and Google Meet are all real. Gmail and Calendar share one connected
+// Google account per company (see GmailController's docblock on the backend) — GoogleAppCard
+// renders either one, reading the same GET /gmail/status response but toggling its own
+// app-specific flag (gmail_enabled/calendar_enabled) via the `app` query param on
+// connect/disconnect. Google Meet is a further feature toggle on top of Calendar (same OAuth
+// scope, no extra consent) — GoogleMeetToggleCard, not a connect/disconnect flow.
+
+// Mock rows — matches ConnectChannelModal/constants/app.ts's per-channel auth/sync copy
+// (connectPickList/connectChannelView). Gmail/Calendar/Meet are rendered separately, not from
+// this list.
+const MOCK_CHANNEL_DEFS = [
+  { name: 'WhatsApp Business', label: 'WhatsApp', sub: 'Send quotes and updates', icon: '💬', iconBg: '#E3F7EF' },
+];
+
+const GOOGLE_APPS: {
+  app: 'gmail' | 'calendar';
+  label: string;
+  sub: string;
+  icon: string;
+  iconBg: string;
+}[] = [
+  { app: 'gmail', label: 'Gmail', sub: 'Read and reply to enquiries from your inbox', icon: '✉️', iconBg: '#FFE9E6' },
+  { app: 'calendar', label: 'Google Calendar', sub: 'See upcoming events so Meridian can match calls to a trip', icon: '📅', iconBg: '#EAF0FF' },
+];
+
+function GoogleAppCard({ app, label, sub, icon, iconBg, status, onChanged }: {
+  app: 'gmail' | 'calendar';
+  label: string;
+  sub: string;
+  icon: string;
+  iconBg: string;
+  status: GmailStatusResponse | null;
+  onChanged: () => void;
+}) {
+  const { toastAction } = useApp();
+  const [busy, setBusy] = useState(false);
+
+  const connected = app === 'gmail' ? !!status?.gmail_enabled : !!status?.calendar_enabled;
+  // Once either app is connected, the underlying Google account already exists — connecting the
+  // other one is a quick incremental-scope consent, not a full reauthentication (see
+  // GmailController::connect()'s `incremental` handling).
+  const accountExists = !!status?.connected;
+
+  const handleConnect = async () => {
+    setBusy(true);
+    try {
+      const url = await ApiService.getGmailAuthUrl(app);
+      window.location.href = url;
+    } catch {
+      toastAction(`Could not start ${label} connect — please try again`);
+      setBusy(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setBusy(true);
+    try {
+      await ApiService.disconnectGmail(app);
+      toastAction(`${label} disconnected`);
+      onChanged();
+    } catch {
+      toastAction(`Failed to disconnect ${label}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="channel-card">
+      <div className="ch-left">
+        <div className="ch-icon" style={{ background: iconBg }}>{icon}</div>
+        <div className="ch-info">
+          <p className="ch-name">{label}</p>
+          <p className="ch-sub">
+            {connected ? status?.google_email : accountExists ? `Included with your Google connection (${status?.google_email})` : sub}
+          </p>
+          {connected && <span className="ch-conn">● Connected</span>}
+        </div>
+      </div>
+      {connected ? (
+        <button
+          className="action-btn"
+          style={{ background: '#fff', border: '1px solid #F3B0A6', color: '#C0392B' }}
+          onClick={handleDisconnect}
+          disabled={busy}
+        >
+          {busy ? 'Disconnecting…' : 'Disconnect'}
+        </button>
+      ) : (
+        <button
+          className="action-btn"
+          style={{ background: '#2B63F6', border: '1px solid transparent', color: '#fff' }}
+          onClick={handleConnect}
+          disabled={busy}
+        >
+          {busy ? 'Redirecting…' : 'Connect'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Meet call tracking (CalendarWatcherJob + "Schedule with Google Meet") is a feature toggle on
+// top of an already-connected Calendar, not its own OAuth connection — so this card calls
+// PATCH /gmail/meet-tracking directly instead of a connect/disconnect redirect, and disables
+// itself until Calendar is on.
+function GoogleMeetToggleCard({ status, onChanged }: {
+  status: GmailStatusResponse | null;
+  onChanged: () => void;
+}) {
+  const { toastAction } = useApp();
+  const [busy, setBusy] = useState(false);
+
+  const calendarConnected = !!status?.calendar_enabled;
+  const enabled = !!status?.meet_tracking_enabled;
+
+  const handleToggle = async () => {
+    setBusy(true);
+    try {
+      await ApiService.updateMeetTracking(!enabled);
+      toastAction(enabled ? 'Google Meet tracking turned off' : 'Google Meet tracking turned on');
+      onChanged();
+    } catch {
+      toastAction('Could not update Google Meet — please try again');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="channel-card">
+      <div className="ch-left">
+        <div className="ch-icon" style={{ background: '#F0EBFF' }}>🎥</div>
+        <div className="ch-info">
+          <p className="ch-name">Google Meet</p>
+          <p className="ch-sub">
+            {calendarConnected ? 'Auto-detect and schedule Meet calls for a trip' : 'Connect Google Calendar first to turn this on'}
+          </p>
+          {enabled && <span className="ch-conn">● Connected</span>}
+        </div>
+      </div>
+      {enabled ? (
+        <button
+          className="action-btn"
+          style={{ background: '#fff', border: '1px solid #F3B0A6', color: '#C0392B' }}
+          onClick={handleToggle}
+          disabled={busy}
+        >
+          {busy ? 'Turning off…' : 'Disconnect'}
+        </button>
+      ) : (
+        <button
+          className="action-btn"
+          style={{
+            background: calendarConnected ? '#2B63F6' : '#EEF0F4',
+            border: '1px solid transparent',
+            color: calendarConnected ? '#fff' : '#AEB3C2',
+            cursor: calendarConnected ? 'pointer' : 'not-allowed',
+          }}
+          onClick={handleToggle}
+          disabled={busy || !calendarConnected}
+        >
+          {busy ? 'Turning on…' : 'Connect'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function GoogleAppCards() {
+  const { toastAction } = useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [status, setStatus] = useState<GmailStatusResponse | null>(null);
+
+  const refreshStatus = useCallback(() => {
+    ApiService.getGmailStatus()
+      .then(setStatus)
+      .catch(() => setStatus({ connected: false }));
+  }, []);
+
+  useEffect(() => {
+    const gmailParam = searchParams.get('gmail');
+    if (gmailParam === 'connected') {
+      toastAction('Google account connected');
+    } else if (gmailParam === 'error') {
+      toastAction('Failed to connect — please try again');
+    }
+    if (gmailParam) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('gmail');
+      setSearchParams(next, { replace: true });
+    }
+    refreshStatus();
+    // Only meant to run once on mount (plus whenever the ?gmail= redirect param changes) —
+    // refreshStatus/toastAction/setSearchParams are stable, searchParams itself isn't a
+    // dependency we want re-running this for every unrelated query-param change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <>
+      {GOOGLE_APPS.map(a => (
+        <GoogleAppCard key={a.app} {...a} status={status} onChanged={refreshStatus} />
+      ))}
+      <GoogleMeetToggleCard status={status} onChanged={refreshStatus} />
+    </>
+  );
+}
 
 function ChannelsSection() {
   const ctx = useApp();
 
-  // Static channel list — no dedicated backend API yet.
-  const channels = [
-    { name: 'Email', sub: 'Connect your business email', icon: '@', iconBg: '#EAF0FF', connected: false, btnLabel: 'Connect', btnBg: '#2B63F6', btnBorder: 'transparent', btnFg: '#fff', action: ctx.openConnect },
-    { name: 'WhatsApp', sub: 'Send quotes and updates', icon: 'WA', iconBg: '#E3F7EF', connected: false, btnLabel: 'Connect', btnBg: '#2B63F6', btnBorder: 'transparent', btnFg: '#fff', action: ctx.openConnect },
-    { name: 'SMS', sub: 'Text message notifications', icon: '✉', iconBg: '#FFF3E0', connected: false, btnLabel: 'Connect', btnBg: '#2B63F6', btnBorder: 'transparent', btnFg: '#fff', action: ctx.openConnect },
-    { name: 'Slack', sub: 'Team notifications & alerts', icon: 'S', iconBg: '#EEF0F4', connected: false, btnLabel: 'Connect', btnBg: '#2B63F6', btnBorder: 'transparent', btnFg: '#fff', action: ctx.openConnect },
-  ];
-
   return (
     <div className="settings-section">
-      <DemoBanner label="Demo feature — channel connections are not yet wired to a backend" />
+      <DemoBanner label="Demo feature — WhatsApp connections are not yet wired to a backend (Gmail/Google Meet are real)" />
       <div className="head-row">
         <p className="head-title">Connected channels</p>
         <button className="btn-connect" onClick={ctx.openConnect}>Connect channel</button>
       </div>
       <div className="ch-list">
-        {channels.map((ch, i) => (
-          <div key={i} className="channel-card">
-            <div className="ch-left">
-              <div className="ch-icon" style={{ background: ch.iconBg }}>{ch.icon}</div>
-              <div className="ch-info">
-                <p className="ch-name">{ch.name}</p>
-                <p className="ch-sub">{ch.sub}</p>
-                {ch.connected && <span className="ch-conn">● Connected</span>}
+        <GoogleAppCards />
+        {MOCK_CHANNEL_DEFS.map((ch) => {
+          const connected = ctx.connectedChannels.includes(ch.name);
+          return (
+            <div key={ch.name} className="channel-card">
+              <div className="ch-left">
+                <div className="ch-icon" style={{ background: ch.iconBg }}>{ch.icon}</div>
+                <div className="ch-info">
+                  <p className="ch-name">{ch.label}</p>
+                  <p className="ch-sub">{ch.sub}</p>
+                  {connected && <span className="ch-conn">● Connected</span>}
+                </div>
               </div>
+              {connected ? (
+                <button
+                  className="action-btn"
+                  style={{ background: '#fff', border: '1px solid #F3B0A6', color: '#C0392B' }}
+                  onClick={() => ctx.disconnectChannel(ch.name)}
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <button
+                  className="action-btn"
+                  style={{ background: '#2B63F6', border: '1px solid transparent', color: '#fff' }}
+                  onClick={() => ctx.connectDirect(ch.name)}
+                >
+                  Connect
+                </button>
+              )}
             </div>
-            <button className="action-btn" style={{ background: ch.btnBg, border: `1px solid ${ch.btnBorder}`, color: ch.btnFg }} onClick={ch.action}>
-              {ch.btnLabel}
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -594,6 +811,22 @@ function PaymentAccounts() {
   const [requesting, setRequesting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
+  // Add-beneficiary form (payout account — for the agency itself, or a specific trip service
+  // provider like an airline or hotel). Currently the only way to add one from the UI.
+  const [showAddBeneficiary, setShowAddBeneficiary] = useState(false);
+  const [addingBeneficiary, setAddingBeneficiary] = useState(false);
+  const [benType, setBenType] = useState<'agency' | 'provider'>('agency');
+  const [benLabel, setBenLabel] = useState('');
+  const [benCurrency, setBenCurrency] = useState('USD');
+  const [benAccountName, setBenAccountName] = useState('');
+  const [benBankName, setBenBankName] = useState('');
+  const [benCountry, setBenCountry] = useState('');
+  const [benAccountNumber, setBenAccountNumber] = useState('');
+  const [benIban, setBenIban] = useState('');
+  const [benSettlementMethod, setBenSettlementMethod] = useState('WIRE');
+  const [benAddressLine1, setBenAddressLine1] = useState('');
+  const [benCity, setBenCity] = useState('');
+
   const load = () => {
     setLoading(true);
     Promise.all([
@@ -669,6 +902,40 @@ function PaymentAccounts() {
     }
   };
 
+  const resetBeneficiaryForm = () => {
+    setBenType('agency'); setBenLabel(''); setBenCurrency('USD'); setBenAccountName('');
+    setBenBankName(''); setBenCountry(''); setBenAccountNumber(''); setBenIban('');
+    setBenSettlementMethod('WIRE'); setBenAddressLine1(''); setBenCity('');
+  };
+
+  const handleAddBeneficiary = async () => {
+    if (!benAccountName.trim() || !benCountry.trim() || !benAddressLine1.trim() || !benCity.trim()) return;
+    setAddingBeneficiary(true);
+    try {
+      await ApiService.createWeWireBeneficiary({
+        beneficiary_type: benType,
+        label: benType === 'provider' ? (benLabel.trim() || null) : null,
+        currency: benCurrency,
+        account_name: benAccountName.trim(),
+        bank_name: benBankName.trim() || null,
+        country: benCountry.trim().toUpperCase(),
+        account_number: benAccountNumber.trim() || null,
+        iban: benIban.trim() || null,
+        settlement_method: benSettlementMethod,
+        address_line1: benAddressLine1.trim(),
+        city: benCity.trim(),
+      });
+      toastAction('Payout account added');
+      setShowAddBeneficiary(false);
+      resetBeneficiaryForm();
+      load();
+    } catch (error) {
+      toastAction(error instanceof Error ? error.message : 'Failed to add payout account');
+    } finally {
+      setAddingBeneficiary(false);
+    }
+  };
+
   const handleMatchInbound = async (item: WeWireInboundResponse) => {
     const installmentId = window.prompt('Enter the installment ID to match this transfer to:');
     if (!installmentId) return;
@@ -705,31 +972,27 @@ function PaymentAccounts() {
     );
   }
 
-  const kycNeedsAction = wewireKycStatus === 'not_started' || wewireKycStatus === 'draft' || wewireKycStatus === 'rejected' || wewireKycStatus === 'resubmission';
+  // NOTE: WeWire's real KYC endpoint is currently broken on their end, so KYC submission runs
+  // simulated (see WEWIRE_SIMULATE in the backend) and will sit in draft/in_review forever —
+  // there's no webhook to ever move it to APPROVED. So this is a quiet status line, not an
+  // actionable error/nag like it used to be. Revisit once WeWire's KYC is confirmed working.
   const kycStatusCopy: Record<WeWireKycStatus, string> = {
-    not_started: 'Business KYC not started',
-    draft: 'Business KYC not yet submitted',
-    in_review: 'Business KYC is in review with WeWire',
-    approved: 'Business KYC approved',
-    rejected: 'Business KYC was rejected — resubmit to continue',
-    resubmission: 'WeWire requested more information — resubmit to continue',
+    not_started: 'Business verification not started yet',
+    draft: 'Business verification not yet submitted',
+    in_review: 'Business verification in review',
+    approved: 'Business verification approved',
+    rejected: 'Business verification needs another look — resubmit when ready',
+    resubmission: 'WeWire requested more information — resubmit when ready',
   };
 
   return (
     <div className="settings-section-wide">
       {wewireKycStatus && wewireKycStatus !== 'approved' && (
         <div style={{
-          background: kycNeedsAction ? '#FFF8E6' : '#EAF2FF',
-          border: `1px solid ${kycNeedsAction ? '#F5D98B' : '#BBD4FA'}`,
-          borderRadius: 10, padding: 16, marginBottom: 20,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+          background: '#F7F8FA', border: '1px solid #EEF0F4', borderRadius: 10,
+          padding: '10px 16px', marginBottom: 20, fontSize: 13, color: 'var(--text-muted, #5B6172)',
         }}>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{kycStatusCopy[wewireKycStatus]}</p>
-          {kycNeedsAction && (
-            <button className="btn-save" onClick={() => navigate('/app/onboarding/payments')} style={{ whiteSpace: 'nowrap' }}>
-              Continue KYC
-            </button>
-          )}
+          {kycStatusCopy[wewireKycStatus]}
         </div>
       )}
 
@@ -776,18 +1039,66 @@ function PaymentAccounts() {
       )}
 
       <div className="head-row" style={{ marginTop: 32 }}>
-        <p className="head-title">Beneficiary accounts</p>
+        <p className="head-title">Payout accounts</p>
+        <button className="btn-connect" onClick={() => setShowAddBeneficiary(s => !s)}>
+          {showAddBeneficiary ? 'Cancel' : '+ Add payout account'}
+        </button>
       </div>
+      <p className="field-hint">
+        Your agency's own account gets paid trip proceeds you hold on to; a provider account (an airline, hotel, or
+        activity vendor) is for paying that specific vendor for a trip — see the Payouts tab on a trip.
+      </p>
+
+      {showAddBeneficiary && (
+        <div className="table-card" style={{ padding: 16, marginBottom: 16 }}>
+          <div className="row-2" style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+            <select className="field-input" value={benType} onChange={e => setBenType(e.target.value as 'agency' | 'provider')}>
+              <option value="agency">Agency payout account</option>
+              <option value="provider">Service provider account</option>
+            </select>
+            {benType === 'provider' && (
+              <input className="field-input" placeholder="Vendor name (e.g. Emirates Airlines)" value={benLabel} onChange={e => setBenLabel(e.target.value)} />
+            )}
+          </div>
+          <div className="row-2" style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+            <select className="field-input" value={benCurrency} onChange={e => setBenCurrency(e.target.value)}>
+              {WEWIRE_SUPPORTED_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <input className="field-input" placeholder="Account holder name" value={benAccountName} onChange={e => setBenAccountName(e.target.value)} />
+          </div>
+          <div className="row-2" style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+            <input className="field-input" placeholder="Bank name (optional)" value={benBankName} onChange={e => setBenBankName(e.target.value)} />
+            <select className="field-input" value={benSettlementMethod} onChange={e => setBenSettlementMethod(e.target.value)}>
+              {['WIRE', 'SEPA', 'FPS', 'CHAPS', 'ACH', 'SWIFT'].map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div className="row-2" style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+            <input className="field-input" placeholder="Account number" value={benAccountNumber} onChange={e => setBenAccountNumber(e.target.value)} />
+            <input className="field-input" placeholder="IBAN (optional)" value={benIban} onChange={e => setBenIban(e.target.value)} />
+          </div>
+          <div className="row-2" style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+            <input className="field-input" placeholder="Country code (e.g. GHA)" value={benCountry} onChange={e => setBenCountry(e.target.value.toUpperCase())} maxLength={3} />
+            <input className="field-input" placeholder="City" value={benCity} onChange={e => setBenCity(e.target.value)} />
+          </div>
+          <input className="field-input" placeholder="Address line 1" value={benAddressLine1} onChange={e => setBenAddressLine1(e.target.value)} style={{ marginBottom: 10 }} />
+          <button className="btn-save" onClick={handleAddBeneficiary} disabled={addingBeneficiary}>
+            {addingBeneficiary ? 'Adding...' : 'Add payout account'}
+          </button>
+        </div>
+      )}
+
       <div className="table-card">
         <div className="th-row">
           <span className="th-text">Name</span>
+          <span className="th-text">Type</span>
           <span className="th-text">Currency</span>
           <span className="th-text">Bank</span>
         </div>
-        {beneficiaries.length === 0 && <div className="tr"><span className="name-text">No beneficiary accounts added yet.</span></div>}
+        {beneficiaries.length === 0 && <div className="tr"><span className="name-text">No payout accounts added yet.</span></div>}
         {beneficiaries.map(b => (
           <div key={b.id} className="tr">
-            <span className="name-text">{b.account_name}</span>
+            <span className="name-text">{b.label || b.account_name}</span>
+            <span className="active-text">{b.beneficiary_type === 'provider' ? 'Provider' : 'Agency'}</span>
             <span className="active-text">{b.currency}</span>
             <span className="email-text">{b.bank_name || b.iban || b.account_number}</span>
           </div>
@@ -814,7 +1125,9 @@ function PaymentAccounts() {
                 <div key={d.id} className="tr">
                   <span className="active-text">{new Date(d.initiated_at).toLocaleString()}</span>
                   <span className="name-text">{d.amount} {d.currency}</span>
-                  <span className="email-text">{d.source_trip ? d.source_trip.trip_name : 'Auto (single payment)'}</span>
+                  <span className="email-text">
+                    {d.line_item_label ? `${d.source_trip?.trip_name ?? ''} — ${d.line_item_label}` : d.source_trip ? d.source_trip.trip_name : 'Auto (single payment)'}
+                  </span>
                   <span className="email-text">{d.beneficiary?.account_name ?? '—'}</span>
                   <span className="active-text" style={{ color: d.status === 'successful' ? '#0E9F6E' : ['failed', 'initiation_failed', 'reversed'].includes(d.status) ? '#F04438' : undefined }}>
                     {d.status.replace('_', ' ')}

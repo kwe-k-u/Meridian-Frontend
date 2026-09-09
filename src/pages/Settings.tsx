@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext'
 import { useAuth } from '../contexts/AuthContext'
 import { ApiService } from '../services/api-service'
-import type { SettingsTab, CompanyResponse, CompanyUser } from '../types/app'
+import type { SettingsTab, CompanyResponse, CompanyUser, VirtualAccountResponse, WeWireBeneficiaryResponse, WeWireInboundResponse, WeWireDisbursementResponse, FundHandling, WeWireKycStatus } from '../types/app'
+import { WEWIRE_SUPPORTED_CURRENCIES, WEWIRE_MAX_ACCOUNTS } from '../types/app'
 import DemoBanner from '../components/DemoBanner'
 import '../styles/Settings.css'
 
@@ -27,6 +28,7 @@ const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
   { key: 'channels', label: 'Channels' },
   { key: 'notifications', label: 'Notifications' },
   { key: 'ai', label: 'AI & Models' },
+  { key: 'payments', label: 'Payments' },
 ];
 
 // ── TabBar ─────────────────────────────────────────────────────
@@ -572,6 +574,293 @@ function AiSettings() {
   );
 }
 
+// ── Payment Accounts ──────────────────────────────────────────
+// WeWire multi-currency virtual accounts (up to WEWIRE_MAX_ACCOUNTS), each account's
+// hold-vs-disburse setting, beneficiary management, and the unmatched-inbound-transfer
+// reconciliation queue. Reachable here after onboarding (see PaymentsOnboarding.tsx) and any
+// time after, since accounts/beneficiaries can be added or changed at will.
+
+function PaymentAccounts() {
+  const { toastAction } = useApp();
+  const navigate = useNavigate();
+  const [accounts, setAccounts] = useState<VirtualAccountResponse[]>([]);
+  const [beneficiaries, setBeneficiaries] = useState<WeWireBeneficiaryResponse[]>([]);
+  const [inbound, setInbound] = useState<WeWireInboundResponse[]>([]);
+  const [disbursements, setDisbursements] = useState<WeWireDisbursementResponse[]>([]);
+  const [wewireSubcustomerId, setWewireSubcustomerId] = useState<string | null>(null);
+  const [wewireKycStatus, setWewireKycStatus] = useState<WeWireKycStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [addingCurrency, setAddingCurrency] = useState('');
+  const [requesting, setRequesting] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    Promise.all([
+      ApiService.getWeWireStatus(),
+      ApiService.getWeWireAccounts(),
+      ApiService.getWeWireBeneficiaries(),
+      ApiService.getWeWireInboundQueue('unmatched'),
+      ApiService.getWeWireDisbursements(),
+    ])
+      .then(([status, acc, ben, inb, dis]) => {
+        setWewireSubcustomerId(status.wewire_subcustomer_id);
+        setWewireKycStatus(status.wewire_kyc_status);
+        setAccounts(acc); setBeneficiaries(ben); setInbound(inb.data ?? []); setDisbursements(dis.data ?? []);
+      })
+      .catch(() => toastAction('Failed to load payment accounts'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const availableCurrencies = WEWIRE_SUPPORTED_CURRENCIES.filter(c => !accounts.some(a => a.currency === c));
+
+  const handleAddAccount = async () => {
+    if (!addingCurrency) return;
+    setRequesting(true);
+    try {
+      await ApiService.createWeWireAccount(addingCurrency);
+      toastAction(`${addingCurrency} account requested`);
+      setAddingCurrency('');
+      load();
+    } catch (error) {
+      toastAction(error instanceof Error ? error.message : 'Failed to request account');
+    } finally {
+      setRequesting(false);
+    }
+  };
+
+  const handleFundHandlingChange = async (account: VirtualAccountResponse, fundHandling: FundHandling) => {
+    if (fundHandling === 'disburse' && !account.beneficiary_account_id) {
+      const match = beneficiaries.find(b => b.currency === account.currency);
+      if (!match) {
+        toastAction(`Add a ${account.currency} beneficiary account first`);
+        return;
+      }
+      try {
+        await ApiService.updateWeWireAccount(account.id, { fund_handling: fundHandling, beneficiary_account_id: match.id });
+        toastAction('Payout setting updated');
+        load();
+      } catch {
+        toastAction('Failed to update payout setting');
+      }
+      return;
+    }
+    try {
+      await ApiService.updateWeWireAccount(account.id, { fund_handling: fundHandling });
+      toastAction('Payout setting updated');
+      load();
+    } catch {
+      toastAction('Failed to update payout setting');
+    }
+  };
+
+  const handleRetryDisbursement = async (disbursement: WeWireDisbursementResponse) => {
+    setRetryingId(disbursement.id);
+    try {
+      await ApiService.retryWeWireDisbursement(disbursement.id);
+      toastAction('Disbursement retried');
+      load();
+    } catch (error) {
+      toastAction(error instanceof Error ? error.message : 'Failed to retry disbursement');
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  const handleMatchInbound = async (item: WeWireInboundResponse) => {
+    const installmentId = window.prompt('Enter the installment ID to match this transfer to:');
+    if (!installmentId) return;
+    try {
+      await ApiService.matchWeWireInbound(item.id, installmentId);
+      toastAction('Transfer matched');
+      load();
+    } catch (error) {
+      toastAction(error instanceof Error ? error.message : 'Failed to match transfer');
+    }
+  };
+
+  if (loading) return <div className="settings-section-wide"><p>Loading payment accounts...</p></div>;
+
+  if (!wewireSubcustomerId) {
+    return (
+      <div className="settings-section-wide">
+        <div style={{
+          background: '#FFF8E6', border: '1px solid #F5D98B', borderRadius: 10,
+          padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+        }}>
+          <div>
+            <p style={{ fontWeight: 700, margin: '0 0 4px' }}>Complete WeWire business registration</p>
+            <p style={{ margin: 0, color: 'var(--text-muted, #5B6172)', fontSize: 14 }}>
+              You need to register your business and submit KYC with WeWire before you can request
+              currency accounts.
+            </p>
+          </div>
+          <button className="btn-save" onClick={() => navigate('/app/onboarding/payments')} style={{ whiteSpace: 'nowrap' }}>
+            Complete registration
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const kycNeedsAction = wewireKycStatus === 'not_started' || wewireKycStatus === 'draft' || wewireKycStatus === 'rejected' || wewireKycStatus === 'resubmission';
+  const kycStatusCopy: Record<WeWireKycStatus, string> = {
+    not_started: 'Business KYC not started',
+    draft: 'Business KYC not yet submitted',
+    in_review: 'Business KYC is in review with WeWire',
+    approved: 'Business KYC approved',
+    rejected: 'Business KYC was rejected — resubmit to continue',
+    resubmission: 'WeWire requested more information — resubmit to continue',
+  };
+
+  return (
+    <div className="settings-section-wide">
+      {wewireKycStatus && wewireKycStatus !== 'approved' && (
+        <div style={{
+          background: kycNeedsAction ? '#FFF8E6' : '#EAF2FF',
+          border: `1px solid ${kycNeedsAction ? '#F5D98B' : '#BBD4FA'}`,
+          borderRadius: 10, padding: 16, marginBottom: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+        }}>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{kycStatusCopy[wewireKycStatus]}</p>
+          {kycNeedsAction && (
+            <button className="btn-save" onClick={() => navigate('/app/onboarding/payments')} style={{ whiteSpace: 'nowrap' }}>
+              Continue KYC
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="head-row">
+        <p className="head-title">Currency accounts ({accounts.length}/{WEWIRE_MAX_ACCOUNTS})</p>
+      </div>
+
+      <div className="table-card">
+        <div className="th-row">
+          <span className="th-text">Currency</span>
+          <span className="th-text">Status</span>
+          <span className="th-text">Account details</span>
+          <span className="th-text">Funds</span>
+        </div>
+        {accounts.length === 0 && <div className="tr"><span className="name-text">No currency accounts yet.</span></div>}
+        {accounts.map(a => (
+          <div key={a.id} className="tr">
+            <span className="name-text">{a.currency}</span>
+            <span className="active-text">{a.status}</span>
+            <span className="email-text">{a.account_number || a.iban || '— pending provisioning —'}</span>
+            <select
+              className="field-input"
+              value={a.fund_handling}
+              onChange={e => handleFundHandlingChange(a, e.target.value as FundHandling)}
+              style={{ maxWidth: 160 }}
+            >
+              <option value="hold">Hold in Meridian</option>
+              <option value="disburse">Disburse to beneficiary</option>
+            </select>
+          </div>
+        ))}
+      </div>
+
+      {availableCurrencies.length > 0 && accounts.length < WEWIRE_MAX_ACCOUNTS && (
+        <div className="invite-row">
+          <select className="field-input" value={addingCurrency} onChange={e => setAddingCurrency(e.target.value)}>
+            <option value="" disabled>Select a currency</option>
+            {availableCurrencies.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button className="btn-save" onClick={handleAddAccount} disabled={requesting || !addingCurrency}>
+            {requesting ? 'Requesting...' : 'Add account'}
+          </button>
+        </div>
+      )}
+
+      <div className="head-row" style={{ marginTop: 32 }}>
+        <p className="head-title">Beneficiary accounts</p>
+      </div>
+      <div className="table-card">
+        <div className="th-row">
+          <span className="th-text">Name</span>
+          <span className="th-text">Currency</span>
+          <span className="th-text">Bank</span>
+        </div>
+        {beneficiaries.length === 0 && <div className="tr"><span className="name-text">No beneficiary accounts added yet.</span></div>}
+        {beneficiaries.map(b => (
+          <div key={b.id} className="tr">
+            <span className="name-text">{b.account_name}</span>
+            <span className="active-text">{b.currency}</span>
+            <span className="email-text">{b.bank_name || b.iban || b.account_number}</span>
+          </div>
+        ))}
+      </div>
+
+      {disbursements.length > 0 && (
+        <>
+          <div className="head-row" style={{ marginTop: 32 }}>
+            <p className="head-title">Disbursements</p>
+          </div>
+          <div className="table-card">
+            <div className="th-row">
+              <span className="th-text">Initiated</span>
+              <span className="th-text">Amount</span>
+              <span className="th-text">For</span>
+              <span className="th-text">Beneficiary</span>
+              <span className="th-text">Status</span>
+              <span className="th-text"></span>
+            </div>
+            {disbursements.map(d => {
+              const retryable = ['initiation_failed', 'failed', 'reversed', 'cancelled'].includes(d.status);
+              return (
+                <div key={d.id} className="tr">
+                  <span className="active-text">{new Date(d.initiated_at).toLocaleString()}</span>
+                  <span className="name-text">{d.amount} {d.currency}</span>
+                  <span className="email-text">{d.source_trip ? d.source_trip.trip_name : 'Auto (single payment)'}</span>
+                  <span className="email-text">{d.beneficiary?.account_name ?? '—'}</span>
+                  <span className="active-text" style={{ color: d.status === 'successful' ? '#0E9F6E' : ['failed', 'initiation_failed', 'reversed'].includes(d.status) ? '#F04438' : undefined }}>
+                    {d.status.replace('_', ' ')}
+                  </span>
+                  {retryable ? (
+                    <button className="btn-save" onClick={() => handleRetryDisbursement(d)} disabled={retryingId === d.id}>
+                      {retryingId === d.id ? 'Retrying...' : 'Retry'}
+                    </button>
+                  ) : <span />}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {inbound.length > 0 && (
+        <>
+          <div className="head-row" style={{ marginTop: 32 }}>
+            <p className="head-title">Unmatched transfers ({inbound.length})</p>
+          </div>
+          <p className="field-hint">
+            These WeWire transfers arrived without a recognizable reference code and need to be matched to a trip's installment manually.
+          </p>
+          <div className="table-card">
+            <div className="th-row">
+              <span className="th-text">Received</span>
+              <span className="th-text">Amount</span>
+              <span className="th-text">Quoted reference</span>
+              <span className="th-text"></span>
+            </div>
+            {inbound.map(item => (
+              <div key={item.id} className="tr">
+                <span className="active-text">{new Date(item.received_at).toLocaleString()}</span>
+                <span className="name-text">{item.amount} {item.currency}</span>
+                <span className="email-text">{item.reference_raw || '—'}</span>
+                <button className="btn-save" onClick={() => handleMatchInbound(item)}>Match</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Settings (main) ────────────────────────────────────────────
 
 export default function Settings() {
@@ -589,6 +878,7 @@ export default function Settings() {
         {currentTab === 'channels' && <ChannelsSection />}
         {currentTab === 'notifications' && <Notifications />}
         {currentTab === 'ai' && <AiSettings />}
+        {currentTab === 'payments' && <PaymentAccounts />}
       </div>
     </div>
   );

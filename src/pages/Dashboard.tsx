@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
-import type { DashboardResponse, GuideCard } from '../types/app';
+import type { DashboardResponse, GuideCard, TripBalanceResponse } from '../types/app';
 import { apiStatusMeta } from '../constants/app';
 import DemoBanner from '../components/DemoBanner';
 import '../styles/Dashboard.css';
@@ -75,6 +75,32 @@ function Dashboard() {
       .catch(err => console.error('Failed to load dashboard:', err))
       .finally(() => setLoading(false));
   }, []);
+
+  // Trips with money still held from WeWire collections — the "Pay out agency" panel below.
+  const [tripBalances, setTripBalances] = useState<TripBalanceResponse[]>([]);
+  const [payingOutTripId, setPayingOutTripId] = useState<string | null>(null);
+
+  const loadTripBalances = () => {
+    ApiService.getWeWireTripBalances().then(setTripBalances).catch(() => {});
+  };
+
+  useEffect(() => { loadTripBalances(); }, []);
+
+  const handlePayoutTrip = async (balance: TripBalanceResponse) => {
+    if (!window.confirm(`Pay out ${balance.held_balance} ${balance.currency} to your agency's payout account for "${balance.trip_name}"?`)) {
+      return;
+    }
+    setPayingOutTripId(balance.trip_id);
+    try {
+      await ApiService.payoutTrip(balance.trip_id);
+      ctx.toastAction(`Payout initiated for ${balance.trip_name}`);
+      loadTripBalances();
+    } catch (error) {
+      ctx.toastAction(error instanceof Error ? error.message : 'Failed to initiate payout');
+    } finally {
+      setPayingOutTripId(null);
+    }
+  };
 
   const agentFeed = ctx.getAgentFeed();
 
@@ -345,6 +371,32 @@ function Dashboard() {
               ))}
             </div>
           </div>
+
+          {tripBalances.length > 0 && (
+            <div className="dashboard-panel" style={{ marginTop: 24 }}>
+              <div className="dashboard-panel-header">
+                <h3 className="dashboard-panel-title">Pay out agency</h3>
+              </div>
+              {tripBalances.map((b) => (
+                <div key={b.trip_id} className="dashboard-trip-row" style={{ cursor: 'default' }}>
+                  <div className="dashboard-trip-info">
+                    <div className="dashboard-trip-name">{b.trip_name}</div>
+                    <div className="dashboard-trip-next">
+                      {b.held_balance} {b.currency} held
+                      {!b.can_payout && <span style={{ color: '#F59E0B' }}> — add a {b.currency} payout account in Settings &gt; Payments</span>}
+                    </div>
+                  </div>
+                  <button
+                    className="dashboard-hero-btn"
+                    onClick={() => handlePayoutTrip(b)}
+                    disabled={!b.can_payout || payingOutTripId === b.trip_id}
+                  >
+                    {payingOutTripId === b.trip_id ? 'Paying out…' : 'Pay out →'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

@@ -131,7 +131,9 @@ function AuthPage() {
       // `else` branch below is just a defensive fallback that shouldn't normally trigger.
       if (response.access_token) {
         auth.login(response)
-        navigate(getSafeNext())
+        // A `next` param (e.g. from an invite link) still wins over onboarding — only brand
+        // new signups with nowhere specific to go land on the WeWire payments wizard first.
+        navigate(searchParams.get('next') ? getSafeNext() : '/app/onboarding/payments')
       } else {
         navigate('/login')
       }
@@ -173,7 +175,7 @@ function AuthPage() {
             token_type: 'bearer',
             user: updatedUser,
           })
-          navigate(getSafeNext())
+          navigate(searchParams.get('next') ? getSafeNext() : '/app/onboarding/payments')
         } catch {
           setErrorMessage(message)
         }

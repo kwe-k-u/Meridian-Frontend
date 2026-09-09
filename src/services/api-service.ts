@@ -21,6 +21,9 @@ import type {
   DestinationResponse, AirportResponse, CompanyResponse, CallResponse, CallActionItemResponse,
   SubscriptionTierResponse, CompanySubscriptionResponse, MoolreCheckoutResponse,
   FlightSearchResponse, HotelSearchResponse, CurrencyRatesResponse,
+  VirtualAccountResponse, WeWireBeneficiaryResponse, PaymentPlanResponse, WeWireLookupResponse,
+  WeWireInboundResponse, WeWireKycStatus, FundHandling,
+  WeWireDisbursementResponse, DisbursementStatus, TripBalanceResponse,
 } from '../types/app';
 import { TripStatus, ItineraryStatus, FlightStatus, AccommodationStatus, TransactionStatus, CallActionItemStatus } from '../types/app';
 
@@ -726,6 +729,112 @@ export class ApiService {
 
   public static async checkMoolrePaymentStatus(transactionId: string): Promise<TransactionResponse> {
     const res = await axios.get(`${ApiService.BASE_URL}/payments/moolre/${transactionId}/status`);
+    return res.data;
+  }
+
+  // ── WeWire payments (https://docs.wewire.com/) ──
+  // Multi-currency virtual accounts (up to 3 per company) and trip installment plans. Unlike
+  // Moolre, WeWire has no hosted checkout link — collection happens via the company's own
+  // virtual account bank details, shown on the public /pay/:reference page (see
+  // lookupWeWirePaymentByReference below) and reconciled server-side by reference code.
+  public static async registerWeWireSubCustomer(data: { email: string; country: string; business_type: string }): Promise<{ wewire_subcustomer_id: string; wewire_kyc_status: WeWireKycStatus }> {
+    const res = await axios.post(`${ApiService.BASE_URL}/wewire/subcustomer`, data);
+    return res.data;
+  }
+
+  public static async submitWeWireKyc(data: Record<string, unknown>): Promise<{ wewire_kyc_status: WeWireKycStatus; hosted_owner_kyc_link?: string | null }> {
+    const res = await axios.post(`${ApiService.BASE_URL}/wewire/subcustomer/kyc`, data);
+    return res.data;
+  }
+
+  public static async getWeWireStatus(): Promise<{ wewire_subcustomer_id: string | null; wewire_kyc_status: WeWireKycStatus }> {
+    const res = await axios.get(`${ApiService.BASE_URL}/wewire/subcustomer`);
+    return res.data;
+  }
+
+  public static async getWeWireAccounts(): Promise<VirtualAccountResponse[]> {
+    const res = await axios.get(`${ApiService.BASE_URL}/wewire/accounts`);
+    return res.data;
+  }
+
+  public static async createWeWireAccount(currency: string): Promise<VirtualAccountResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/wewire/accounts`, { currency });
+    return res.data;
+  }
+
+  public static async updateWeWireAccount(accountId: string, data: { fund_handling?: FundHandling; beneficiary_account_id?: string | null }): Promise<VirtualAccountResponse> {
+    const res = await axios.put(`${ApiService.BASE_URL}/wewire/accounts/${accountId}`, data);
+    return res.data;
+  }
+
+  public static async getWeWireBeneficiaries(): Promise<WeWireBeneficiaryResponse[]> {
+    const res = await axios.get(`${ApiService.BASE_URL}/wewire/beneficiaries`);
+    return res.data;
+  }
+
+  public static async createWeWireBeneficiary(data: Record<string, unknown>): Promise<WeWireBeneficiaryResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/wewire/beneficiaries`, data);
+    return res.data;
+  }
+
+  public static async createPaymentPlan(tripId: string, data: { total_amount: number; currency: string; installments: { amount: number; due_date?: string | null }[] }): Promise<PaymentPlanResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/trips/${tripId}/payment-plan`, data);
+    return res.data;
+  }
+
+  public static async getPaymentPlan(tripId: string): Promise<PaymentPlanResponse | null> {
+    try {
+      const res = await axios.get(`${ApiService.BASE_URL}/trips/${tripId}/payment-plan`);
+      return res.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  public static async updatePaymentPlanReference(planId: string, paymentReference: string): Promise<PaymentPlanResponse> {
+    const res = await axios.patch(`${ApiService.BASE_URL}/payment-plans/${planId}/reference`, { payment_reference: paymentReference });
+    return res.data;
+  }
+
+  public static async getWeWireInboundQueue(status: 'unmatched' | 'all' = 'unmatched'): Promise<{ data: WeWireInboundResponse[] }> {
+    const res = await axios.get(`${ApiService.BASE_URL}/wewire/inbound`, { params: { status } });
+    return res.data;
+  }
+
+  public static async matchWeWireInbound(inboundId: string, installmentId: string): Promise<WeWireInboundResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/wewire/inbound/${inboundId}/match`, { installment_id: installmentId });
+    return res.data;
+  }
+
+  public static async getWeWireDisbursements(status?: DisbursementStatus): Promise<{ data: WeWireDisbursementResponse[] }> {
+    const res = await axios.get(`${ApiService.BASE_URL}/wewire/disbursements`, { params: status ? { status } : {} });
+    return res.data;
+  }
+
+  public static async retryWeWireDisbursement(disbursementId: string): Promise<WeWireDisbursementResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/wewire/disbursements/${disbursementId}/retry`);
+    return res.data;
+  }
+
+  // Trips with money still held from WeWire collections, for the Dashboard's "Pay out
+  // agency" panel — see WeWirePaymentController::tripBalances/payoutTrip.
+  public static async getWeWireTripBalances(): Promise<TripBalanceResponse[]> {
+    const res = await axios.get(`${ApiService.BASE_URL}/wewire/trip-balances`);
+    return res.data;
+  }
+
+  public static async payoutTrip(tripId: string): Promise<WeWireDisbursementResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/trips/${tripId}/payout`);
+    return res.data;
+  }
+
+  // Public — the /pay/:reference page's data source. No auth required, same trust model as
+  // the /travel/:tripId public trip endpoints (the reference code is the "credential").
+  public static async lookupWeWirePaymentByReference(reference: string): Promise<WeWireLookupResponse> {
+    const res = await axios.get(`${ApiService.BASE_URL}/public/payments/wewire/lookup/${reference}`);
     return res.data;
   }
 

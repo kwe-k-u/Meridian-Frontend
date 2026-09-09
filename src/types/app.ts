@@ -85,7 +85,7 @@ export type BillingPeriod = 'monthly' | 'annual';
 
 export type ChannelType = 'whatsapp' | 'gmail' | 'instagram';
 
-export type SettingsTab = 'profile' | 'workspace' | 'team' | 'roles' | 'channels' | 'notifications' | 'ai';
+export type SettingsTab = 'profile' | 'workspace' | 'team' | 'roles' | 'channels' | 'notifications' | 'ai' | 'payments';
 
 export type ConnectStep = 'pick' | 'auth' | 'sync' | 'done';
 
@@ -206,7 +206,6 @@ export interface StatusBanner {
   refs: { label: string; value: string }[];
   showBuilder: boolean;
   showDraft: boolean;
-  showDrafting: boolean;
   showOptions: boolean;
 }
 
@@ -580,6 +579,11 @@ export interface TransactionResponse {
     notes: string | null;
     trip?: { trip_id: string; trip_name: string; company_id: string; customers?: { first_name: string; last_name: string }[] };
   } | null;
+  installment_payment?: {
+    transaction_id: string;
+    installment_id: string;
+    notes: string | null;
+  } | null;
 }
 
 // Returned by MoolrePaymentController::initiateTripPayment/initiateSubscriptionPayment —
@@ -587,6 +591,148 @@ export interface TransactionResponse {
 export interface MoolreCheckoutResponse {
   transaction_id: string;
   authorization_url: string;
+}
+
+// ── WeWire ── Multi-currency virtual accounts, up to 3 per company (one per currency), and
+// the trip installment plans/public collection page built on top of them. WeWire has no
+// hosted checkout link product, so there's no MoolreCheckoutResponse equivalent — see
+// WeWireLookupResponse instead.
+
+export type VirtualAccountStatus = 'requested' | 'pending' | 'active' | 'denied' | 'suspended' | 'closed';
+export type FundHandling = 'hold' | 'disburse';
+export type PaymentPlanStatus = 'draft' | 'active' | 'completed' | 'cancelled';
+export type InstallmentStatus = 'pending' | 'partially_paid' | 'paid' | 'overdue';
+export type WeWireKycStatus = 'not_started' | 'draft' | 'in_review' | 'approved' | 'rejected' | 'resubmission';
+export type InboundMatchStatus = 'unmatched' | 'matched' | 'reconciled';
+export type DisbursementStatus = 'pending' | 'successful' | 'failed' | 'reversed' | 'cancelled' | 'initiation_failed';
+
+export const WEWIRE_SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'GHS'] as const;
+export const WEWIRE_MAX_ACCOUNTS = 3;
+
+export interface WeWireBeneficiaryResponse {
+  id: string;
+  company_id: string;
+  wewire_beneficiary_id: string | null;
+  currency: string;
+  account_name: string;
+  bank_name: string | null;
+  account_number: string | null;
+  iban: string | null;
+  sort_code: string | null;
+  routing_number: string | null;
+  swift_bic: string | null;
+  settlement_method: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VirtualAccountResponse {
+  id: string;
+  company_id: string;
+  currency: string;
+  wewire_account_id: string | null;
+  status: VirtualAccountStatus;
+  account_number: string | null;
+  iban: string | null;
+  sort_code: string | null;
+  routing_number: string | null;
+  fund_handling: FundHandling;
+  beneficiary_account_id: string | null;
+  beneficiary?: WeWireBeneficiaryResponse | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InstallmentResponse {
+  id: string;
+  payment_plan_id: string;
+  sequence: number;
+  amount: number;
+  currency: string;
+  due_date: string | null;
+  status: InstallmentStatus;
+}
+
+export interface PaymentPlanResponse {
+  id: string;
+  trip_id: string;
+  payment_reference: string;
+  total_amount: number;
+  currency: string;
+  status: PaymentPlanStatus;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  installments: InstallmentResponse[];
+}
+
+// Returned by the public GET /public/payments/wewire/lookup/{reference} endpoint — what the
+// /pay/:reference page renders. payment_account is null until the company has an ACTIVE
+// virtual account in the plan's currency.
+export interface WeWireLookupResponse {
+  payment_reference: string;
+  trip_name: string;
+  company_name: string;
+  total_amount: number;
+  currency: string;
+  outstanding: number;
+  status: PaymentPlanStatus;
+  installments: (InstallmentResponse & { paid_amount: number; outstanding: number })[];
+  payment_account: {
+    currency: string;
+    account_number: string | null;
+    iban: string | null;
+    sort_code: string | null;
+    routing_number: string | null;
+  } | null;
+}
+
+export interface WeWireInboundResponse {
+  id: string;
+  wewire_transaction_id: string;
+  amount: number;
+  currency: string;
+  reference_raw: string | null;
+  matched_payment_reference: string | null;
+  status: InboundMatchStatus;
+  received_at: string;
+  virtual_account?: VirtualAccountResponse;
+  installment?: InstallmentResponse & { payment_plan?: { trip?: { trip_id: string; trip_name: string } } };
+}
+
+// One payout attempt to an agency's beneficiary — either automatic (source_inbound_id, one
+// inbound payment on a "disburse" virtual account) or manually triggered from the dashboard's
+// "pay out agency" panel for everything held on a trip (source_trip_id). See
+// WeWireDisbursement on the backend. A retry creates a new row rather than reusing this one.
+export interface WeWireDisbursementResponse {
+  id: string;
+  wewire_transaction_id: string | null;
+  virtual_account_id: string;
+  beneficiary_id: string;
+  source_inbound_id: string | null;
+  source_trip_id: string | null;
+  amount: number;
+  currency: string;
+  fee: number | null;
+  status: DisbursementStatus;
+  failure_reason: string | null;
+  initiated_at: string;
+  settled_at: string | null;
+  virtual_account?: VirtualAccountResponse;
+  beneficiary?: WeWireBeneficiaryResponse;
+  source_trip?: { trip_id: string; trip_name: string };
+}
+
+// Returned by GET /wewire/trip-balances — one row per trip with money still held from WeWire
+// collections that hasn't been paid out to the agency yet. Only trips with a positive held
+// balance are included (see WeWirePaymentController::tripBalances).
+export interface TripBalanceResponse {
+  trip_id: string;
+  trip_name: string;
+  currency: string;
+  collected: number;
+  held_balance: number;
+  can_payout: boolean;
 }
 
 export interface SkippedProvider {
@@ -770,6 +916,7 @@ export interface TripResponse {
       paid_at: string | null;
     };
   }[];
+  payment_plan?: PaymentPlanResponse | null;
 }
 
 export interface DestinationResponse {

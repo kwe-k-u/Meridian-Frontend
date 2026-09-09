@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { ApiService } from '../services/api-service';
-import type { TripOption, TripStatusLabel, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse, SkippedProvider, FlightLeg, AgentFeedItem, TripDetailData, StatusBanner } from '../types/app';
+import type { TripOption, TripStatusLabel, Day, DayBlock, Flight, Stay, ItineraryResponse, TripResponse, TripCostResponse, CallResponse, ItineraryAccommodationResponse, ItineraryFlightResponse, SkippedProvider, FlightLeg, AgentFeedItem, TripDetailData, StatusBanner, PaymentPlanResponse } from '../types/app';
 import { TripStatus, ItineraryStatus, FlightStatus, TransactionStatus, CallActionItemStatus } from '../types/app';
 import { apiStatusMeta } from '../constants/app';
 import AddItemModal, { type EditingDayItem } from '../components/modals/AddItemModal';
@@ -47,7 +47,7 @@ const emptyTd: TripDetailData = {
 const emptyTb: StatusBanner = {
   bg: '#EEF0F4', border: '#DDE0E8', fg: '#5B6172', iconBg: '#EEF0F4', icon: '•',
   headline: 'Loading trip…', desc: '', descColor: '#8A90A2', chipBorder: '#DDE0E8',
-  showRefs: false, refs: [], showBuilder: false, showDraft: false, showDrafting: false, showOptions: false,
+  showRefs: false, refs: [], showBuilder: false, showDraft: false, showOptions: false,
 };
 
 const blockKindMeta: Record<string, { icon: string; iconBg: string; kindColor: string }> = {
@@ -225,6 +225,129 @@ function fmtDateRange(start: string | null, end: string | null): string {
   return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
+// ── PaymentPlanSection ────────────────────────────────────────
+// WeWire installment plan for this trip — the "payment link" flow. If no plan exists yet,
+// shows a form to create one (agency defines a fixed set of installments summing to the
+// trip's total cost). Once created, shows the reference code customers quote to pay via the
+// public /pay/:reference page, plus each installment's status.
+function PaymentPlanSection({ tripId, totalCost, currency }: { tripId: string; totalCost: number; currency: string }) {
+  const { toastAction } = useApp();
+  const [plan, setPlan] = useState<PaymentPlanResponse | null | undefined>(undefined);
+  const [creating, setCreating] = useState(false);
+  const [installmentCount, setInstallmentCount] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [editingRef, setEditingRef] = useState(false);
+  const [refDraft, setRefDraft] = useState('');
+
+  useEffect(() => {
+    ApiService.getPaymentPlan(tripId).then(setPlan).catch(() => setPlan(null));
+  }, [tripId]);
+
+  const publicLink = plan ? `${window.location.origin}/pay/${plan.payment_reference}` : '';
+
+  const handleCreate = async () => {
+    if (totalCost <= 0) return;
+    setSaving(true);
+    try {
+      const base = Math.floor((totalCost / installmentCount) * 100) / 100;
+      const installments = Array.from({ length: installmentCount }, (_, i) => ({
+        amount: i === installmentCount - 1 ? Math.round((totalCost - base * (installmentCount - 1)) * 100) / 100 : base,
+      }));
+      const created = await ApiService.createPaymentPlan(tripId, { total_amount: totalCost, currency, installments });
+      setPlan(created);
+      setCreating(false);
+      toastAction('Payment plan created');
+    } catch (error) {
+      toastAction(error instanceof Error ? error.message : 'Failed to create payment plan');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveReference = async () => {
+    if (!plan || !refDraft.trim()) return;
+    try {
+      const updated = await ApiService.updatePaymentPlanReference(plan.id, refDraft.trim().toUpperCase());
+      setPlan(updated);
+      setEditingRef(false);
+      toastAction('Reference code updated');
+    } catch (error) {
+      toastAction(error instanceof Error ? error.message : 'Failed to update reference code');
+    }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard?.writeText(publicLink);
+    toastAction('Payment link copied');
+  };
+
+  if (plan === undefined) return null;
+
+  return (
+    <div className="td-record-payment" style={{ marginTop: 12 }}>
+      <div className="td-cost-divider" />
+      <p style={{ fontWeight: 600, fontSize: 13, margin: '8px 0' }}>Customer payment link</p>
+      {plan ? (
+        <div className="td-payment-form">
+          <div className="td-payment-amount-row" style={{ alignItems: 'center' }}>
+            {editingRef ? (
+              <>
+                <input className="td-call-input" value={refDraft} onChange={e => setRefDraft(e.target.value.toUpperCase())} maxLength={8} />
+                <button className="td-action-btn" style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }} onClick={handleSaveReference}>Save</button>
+              </>
+            ) : (
+              <>
+                <span style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700 }}>{plan.payment_reference}</span>
+                <button className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }} onClick={() => { setRefDraft(plan.payment_reference); setEditingRef(true); }}>
+                  Edit code
+                </button>
+              </>
+            )}
+          </div>
+          <div className="td-payment-amount-row">
+            <input className="td-call-input" value={publicLink} readOnly />
+            <button className="td-action-btn" style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }} onClick={copyLink}>Copy link</button>
+          </div>
+          {plan.installments.map(inst => (
+            <div key={inst.id} className="td-pay-row">
+              <div className="td-pay-info">
+                <span className="td-pay-method">Installment {inst.sequence}</span>
+                <span className="td-pay-status" data-status={inst.status === 'paid' ? 'completed' : inst.status === 'overdue' ? 'failed' : 'pending'}>{inst.status}</span>
+              </div>
+              <span className="td-pay-amount">{inst.amount} {inst.currency}</span>
+            </div>
+          ))}
+        </div>
+      ) : creating ? (
+        <div className="td-payment-form">
+          <div className="td-payment-amount-row">
+            <label style={{ fontSize: 13, color: '#5B6172' }}>Number of installments</label>
+            <input
+              className="td-call-input"
+              type="number"
+              min={1}
+              max={12}
+              value={installmentCount}
+              onChange={e => setInstallmentCount(Math.max(1, Math.min(12, Number(e.target.value) || 1)))}
+            />
+          </div>
+          <p className="field-hint">Total: {totalCost} {currency}, split evenly across {installmentCount} installment{installmentCount > 1 ? 's' : ''}.</p>
+          <div className="td-payment-form-actions">
+            <button onClick={() => setCreating(false)} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }}>Cancel</button>
+            <button onClick={handleCreate} disabled={saving || totalCost <= 0} className="td-action-btn" style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }}>
+              {saving ? 'Creating...' : 'Create plan'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setCreating(true)} className="td-dashed-btn" disabled={totalCost <= 0}>
+          + Set up installment plan
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function TripDetail() {
   const { tripId } = useParams<{ tripId: string }>();
   const navigate = useNavigate();
@@ -273,10 +396,6 @@ export default function TripDetail() {
   // The accommodation being edited (Stays tab's per-card "Edit" button) — reuses AddStayModal.
   const [editingStay, setEditingStay] = useState<ItineraryAccommodationResponse | null>(null);
   const [assignTravelerOpen, setAssignTravelerOpen] = useState(false);
-  const [editingStartCity, setEditingStartCity] = useState(false);
-  const [startCityDraft, setStartCityDraft] = useState('');
-  const [editingItinName, setEditingItinName] = useState<string | null>(null);
-  const [itinNameDraft, setItinNameDraft] = useState('');
   const [editingDayTitle, setEditingDayTitle] = useState<string | null>(null);
   const [dayTitleDraft, setDayTitleDraft] = useState('');
   // Which days are expanded in the Itinerary tab's accordion (keyed by day index `di`).
@@ -304,13 +423,13 @@ export default function TripDetail() {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
   const [payingWithMoolre, setPayingWithMoolre] = useState(false);
-  // Sidebar tab (Cost summary / Payments / Agent activity) — these used to be two always-open
-  // cards (with Payments nested inside Cost summary), switched to a single tabbed card so the
-  // user can flip between them instead of scrolling a long stacked sidebar.
-  const [sidebarTab, setSidebarTab] = useState<'cost' | 'payments' | 'activity'>('cost');
-  const [expandedChatOption, setExpandedChatOption] = useState<string | null>(null);
-  const [shareMenuOption, setShareMenuOption] = useState<string | null>(null);
-  const [shareAllOpen, setShareAllOpen] = useState(false);
+  // Sidebar tab (Options / Cost summary / Payments / Agent activity) — these used to be two
+  // always-open cards (with Payments nested inside Cost summary), switched to a single tabbed
+  // card so the user can flip between them instead of scrolling a long stacked sidebar. Options
+  // is the primary surface for reviewing/accepting/declining generated itineraries — the
+  // full-width per-option card grid that used to sit above the builder was retired in favor
+  // of this compact list; clicking a row jumps to that option's itinerary in the builder tab.
+  const [sidebarTab, setSidebarTab] = useState<'options' | 'cost' | 'payments' | 'activity'>('cost');
   const [travelerPackages, setTravelerPackages] = useState<Record<string, string>>({});
   const [bookingAll, setBookingAll] = useState(false);
   const [refineOpen, setRefineOpen] = useState(false);
@@ -396,10 +515,7 @@ export default function TripDetail() {
   };
 
   const handleGenerateItinerary = useCallback(async (prefs?: { budget?: string; style?: string; priorities?: string[]; notes?: string; start_city?: string; model?: string; snapshotTitle?: string; include_events?: boolean; flight_departure_time?: string; return_flight_time?: string }) => {
-    if (!tripId || !isRealId) {
-      ctx.generateOptions();
-      return;
-    }
+    if (!tripId) return;
     setGeneratingItinerary(true);
     setGenerateError(null);
     try {
@@ -462,7 +578,7 @@ export default function TripDetail() {
     } finally {
       setGeneratingItinerary(false);
     }
-  }, [tripId, isRealId, ctx, refreshTrip, refreshCosts, setActiveOption, setBuilderTab]);
+  }, [tripId, ctx, refreshTrip, refreshCosts, setActiveOption, setBuilderTab]);
 
   // ── Derived data ──
   // tripTd/tripTb build the view-model banner/detail objects straight from apiTrip. There's no
@@ -519,7 +635,6 @@ export default function TripDetail() {
       fg: hasItins ? '#2B63F6' : '#5B6172',
       descColor: '#5B6172',
       chipBorder: '#C4D2FF',
-      showDrafting: false,
       showBuilder: true,
       showDraft: apiTrip.status === TripStatus.PLANNING || apiTrip.status === TripStatus.INQUIRY,
       showOptions: hasItins,
@@ -664,26 +779,6 @@ export default function TripDetail() {
       await ApiService.removeAccommodation(accommodation.accommodation_id);
       refreshTrip();
     }
-  };
-
-  // Saves the selected itinerary's start_city (see AddFlightModal/AddStayModal, which default
-  // their search fields from it) — a no-op if the value hasn't actually changed.
-  const handleSaveStartCity = async () => {
-    setEditingStartCity(false);
-    if (!selectedItinerary) return;
-    const trimmed = startCityDraft.trim();
-    if (trimmed === (selectedItinerary.start_city ?? '')) return;
-    await ApiService.updateItinerary(selectedItinerary.itinerary_id, { start_city: trimmed });
-    refreshTrip();
-  };
-
-  // Renames an itinerary option (e.g. "Option A" -> "Beach-focused"). No-op if unchanged.
-  const handleSaveItinName = async (itineraryId: string, original: string) => {
-    setEditingItinName(null);
-    const trimmed = itinNameDraft.trim();
-    if (!trimmed || trimmed === original) return;
-    await ApiService.updateItinerary(itineraryId, { itinerary_name: trimmed });
-    refreshTrip();
   };
 
   // Renames a single day's title (e.g. "Day 1" -> "Arrival & check-in"). No-op if unchanged.
@@ -1198,177 +1293,9 @@ export default function TripDetail() {
     return { flights: fmt(fc), accommodation: fmt(sc), activities: fmt(ac), fee: fmt(fee), total: fmt(total), hasData: total > 0, currency: cur };
   };
 
-  const buildItineraryText = (itin: ItineraryResponse, rich = false): string => {
-    const sep = rich ? '─'.repeat(40) : '---';
-    const nl = '\n';
-    const travelerNames = (apiTrip?.customers ?? []).map(c => `${c.first_name} ${c.last_name}`).join(', ');
-    const dateRange = fmtDateRange(apiTrip?.start_date ?? null, apiTrip?.end_date ?? null);
-    const cost = computeOptionCost(itin);
-
-    const dayLines = (itin.itinerary_days ?? []).map(d => {
-      const activities = (d.destinations ?? []).map(dst =>
-        `    • ${dst.destination?.name ?? dst.activities ?? 'Activity'}${dst.cost ? ` (${dst.currency ?? ''} ${dst.cost})` : ''}`
-      ).join(nl);
-      return `${rich ? '📅 ' : ''}Day ${d.day_number}${d.title ? ': ' + d.title : ''}${d.location ? ' — ' + d.location : ''}${activities ? nl + activities : ''}`;
-    }).join(nl + nl);
-
-    const flightLines = (itin.itinerary_flights ?? []).map(f =>
-      `${rich ? '✈️ ' : ''}${f.airline ?? 'Flight'}: ${f.departure_airport ?? '—'} → ${f.arrival_airport ?? '—'}${f.departure_datetime ? ' · ' + new Date(f.departure_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}${f.cost ? ' · ' + (f.currency ?? '') + ' ' + Number(f.cost).toLocaleString() : ''}`
-    ).join(nl);
-
-    const stayLines = (itin.itinerary_accommodation ?? []).map(a =>
-      `${rich ? '🏨 ' : ''}${a.accommodation_name}${a.address ? ' — ' + a.address : ''}${a.cost ? ' · ' + (a.currency ?? '') + ' ' + Number(a.cost).toLocaleString() + '/night' : ''}`
-    ).join(nl);
-
-    const costBlock = cost?.hasData
-      ? `${nl}${rich ? '💰 ' : ''}COST ESTIMATE${nl}${sep}${nl}Flights: ${cost.flights}${nl}Accommodation: ${cost.accommodation}${nl}Activities & transfers: ${cost.activities}${nl}Service fee (5%): ${cost.fee}${nl}Total: ${cost.total}`
-      : '';
-
-    return (
-`Dear ${travelerNames || 'Traveler'},
-
-I'm excited to share your personalised itinerary for ${td.name}! After considering your preferences and travel goals, we've put together what we believe will be an unforgettable journey.
-
-${rich ? '🌍 ' : ''}TRIP OVERVIEW
-${sep}
-Destination: ${td.where}
-Dates: ${dateRange}
-Travelers: ${travelerNames || '—'}${apiTrip?.budget ? '\nBudget: GHS ' + Number(apiTrip.budget).toLocaleString() : ''}
-
-${rich ? '✨ ' : ''}${(itin.itinerary_name ?? 'YOUR ITINERARY').toUpperCase()}
-${sep}
-${dayLines || 'No days planned yet.'}
-${flightLines ? `\n${rich ? '✈️ ' : ''}FLIGHTS\n${sep}\n${flightLines}` : ''}
-${stayLines ? `\n${rich ? '🏨 ' : ''}ACCOMMODATION\n${sep}\n${stayLines}` : ''}
-${costBlock}
-
-Every detail has been thoughtfully curated to balance exploration, comfort and value. Whether it's the hand-picked stays, the carefully timed activities, or the seamless transfers — this itinerary is designed to let you travel with zero stress.
-
-${rich ? '📌 ' : ''}NEXT STEPS
-${sep}
-1. Review the itinerary above and let me know your thoughts
-2. Share any adjustments — I'm happy to tailor anything to make this perfect
-3. Once you're satisfied, we'll lock in bookings and send your full travel pack
-
-I'm here to make this trip exceptional. Don't hesitate to reach out with any questions!
-
-Warm regards,
-${tripAgentName}
-Meridian Travel`
-    );
-  };
-
-  const handleShareEmail = (itin: ItineraryResponse) => {
-    setShareMenuOption(null);
-    const body = buildItineraryText(itin, true);
-    const subject = encodeURIComponent(`Your ${td.name} Itinerary — ${itin.itinerary_name ?? 'Option A'} ✈️`);
-    window.open(`mailto:?subject=${subject}&body=${encodeURIComponent(body)}`, '_blank');
-  };
-
-  const handleShareChat = (itin: ItineraryResponse) => {
-    setShareMenuOption(null);
-    // Build a concise but engaging message for the chat channel
-    const cost = computeOptionCost(itin);
-    const highlights = (itin.itinerary_days ?? []).slice(0, 5).map(d =>
-      `Day ${d.day_number}${d.title ? ': ' + d.title : ''}${d.location ? ' in ' + d.location : ''}`
-    ).join('\n');
-    const extra = (itin.itinerary_days?.length ?? 0) > 5
-      ? `\n...and ${(itin.itinerary_days?.length ?? 0) - 5} more days of adventure!`
-      : '';
-    const message = `✈️ Here's your personalised ${td.name} itinerary — ${itin.itinerary_name ?? 'Option A'}!\n\n${highlights}${extra}${cost?.hasData ? '\n\n💰 Estimated total: ' + cost.total : ''}\n\nI've handpicked every stay, activity and transfer to match what you're looking for. Let me know if you'd like any adjustments — I want this to be perfect for you! 🌍`;
-    navigator.clipboard.writeText(message)
-      .then(() => {
-        ctx.toastAction('Itinerary copied! Head to Messages and paste it for your traveler.');
-        navigate('/app/messages');
-      })
-      .catch(() => ctx.toastAction('Could not copy — please try again.'));
-  };
-
-  // Live shareable link for the traveler view — always reflects the latest itinerary
-  const tripLink = isRealId && tripId ? `${window.location.origin}/travel/${tripId}` : null;
-
-  const handleCopyTripLink = (option?: string) => {
-    if (!tripLink) return;
-    const link = option ? `${tripLink}?option=${option}` : tripLink;
-    navigator.clipboard.writeText(link)
-      .then(() => ctx.toastAction(option ? `Option ${option} link copied!` : 'Trip link copied to clipboard!'))
-      .catch(() => ctx.toastAction('Could not copy link.'));
-    setShareAllOpen(false);
-    setShareMenuOption(null);
-  };
-
-  const handleShareAllWhatsApp = () => {
-    if (!tripLink) return;
-    const count = options.length;
-    const travelerNames = (apiTrip?.customers ?? []).map(c => c.first_name).join(', ') || 'there';
-    const msg = `Hi ${travelerNames}! 👋\n\nI've prepared ${count} itinerary option${count !== 1 ? 's' : ''} for your *${td.name}* trip. Take a look and let me know which one speaks to you:\n\n🔗 ${tripLink}\n\n_This link is always live — whenever I update your options, the link reflects the changes automatically. No need to ask for a new one!_ ✈️`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-    setShareAllOpen(false);
-  };
-
-  const handleShareOptionWhatsApp = (itin: ItineraryResponse, optLetter: string, optName: string) => {
-    const link = tripLink ? `${tripLink}?option=${optLetter}` : '';
-    const cost = computeOptionCost(itin);
-    const days = itin.itinerary_days?.length ?? 0;
-    const highlights = (itin.itinerary_days ?? []).slice(0, 4).map(d => `• Day ${d.day_number}: ${d.title || d.location || ''}`).join('\n');
-    const msg = `✈️ *${td.name}* — ${optName}\n\n${highlights}${days > 4 ? `\n• ...and ${days - 4} more days!` : ''}${cost?.hasData ? '\n\n💰 Est. total: ' + cost.total : ''}\n\nHere's Option ${optLetter} of your trip. What do you think?\n${link ? '\n🔗 ' + link : ''}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-    setShareMenuOption(null);
-  };
-
-  const handleShareAllEmail = () => {
-    if (!tripLink) return;
-    const travelerNames = (apiTrip?.customers ?? []).map(c => `${c.first_name} ${c.last_name}`).join(', ') || 'Traveler';
-    const optionsSummary = options.map((opt, i) => {
-      const itin = apiTrip?.itineraries?.[i];
-      const cost = itin ? computeOptionCost(itin) : null;
-      const days = itin?.itinerary_days?.length ?? 0;
-      const flights = itin?.itinerary_flights?.length ?? 0;
-      const stays = itin?.itinerary_accommodation?.length ?? 0;
-      return `  Option ${opt.letter}: ${opt.name}${days > 0 ? ` · ${days} days` : ''}${flights > 0 ? ` · ${flights} flight${flights !== 1 ? 's' : ''}` : ''}${stays > 0 ? ` · ${stays} stay${stays !== 1 ? 's' : ''}` : ''}${cost?.hasData ? ' · Est. ' + cost.total : ''}`;
-    }).join('\n');
-    const subject = encodeURIComponent(`Your ${td.name} Itinerary Options — Choose Your Perfect Trip ✈️`);
-    const body = encodeURIComponent(
-`Dear ${travelerNames},
-
-I'm thrilled to present your personalised itinerary options for ${td.name}! I've curated ${options.length} distinct option${options.length !== 1 ? 's' : ''}, each with a different style and focus, so you can choose the experience that truly resonates with you.
-
-YOUR ${options.length} OPTIONS AT A GLANCE
-${'─'.repeat(50)}
-${optionsSummary}
-${'─'.repeat(50)}
-
-👉 REVIEW ALL OPTIONS HERE (always up to date):
-${tripLink}
-
-This link is live — whenever I refine or update your itinerary based on your feedback, you'll see the latest version at the same link. No need to request a new one!
-
-HOW IT WORKS
-${'─'.repeat(50)}
-1. Click the link above to see all options side by side
-2. Browse each option's full day-by-day plan, flights, and stays
-3. Click "Accept" on the option you love — or reply to this email with your thoughts
-4. I'll lock in the bookings and send your full travel pack once you've confirmed
-
-Every option has been personally crafted with your preferences in mind. Whether it's the pace of the days, the style of accommodation, or the balance of activities — these are built around you.
-
-I can't wait to hear which one excites you most!
-
-Warm regards,
-${tripAgentName}
-Meridian Travel
-
-─────────────────────────────────────
-Questions? Simply reply to this email or reach out directly.`
-    );
-    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
-    setShareAllOpen(false);
-  };
-
   const tripAgent = apiTrip?.created_by
     ? (typeof apiTrip.created_by === 'object' ? apiTrip.created_by.display_name : null)
     : null;
-  const tripAgentName = tripAgent ?? ['Kweku Ansah', 'Adwoa Mensah', 'Yaw Boateng', 'Efua Osei'][tid % 4];
 
   const builderTabs = [
     { key: 'itinerary' as const, label: 'Itinerary' },
@@ -1429,6 +1356,14 @@ Questions? Simply reply to this email or reach out directly.`
       onClick: () => setActiveOption(o.letter),
     }));
   }, [apiTrip, td.options, setActiveOption]);
+
+  // Sidebar "Options" tab row click — selects the option and scrolls to the builder so its
+  // itinerary is visible, same as the main hero's option pills.
+  const jumpToOption = (letter: string) => {
+    setActiveOption(letter);
+    setBuilderTab('itinerary');
+    setTimeout(() => builderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
 
   // ── Render ──
 
@@ -1603,279 +1538,6 @@ Questions? Simply reply to this email or reach out directly.`
           </div>
         )}
 
-        {tb.showOptions && (options.length > 0 || apiTrip) && (
-          <div className="td-chat-options-section mb-24">
-            {/* AI intro + share-all trigger */}
-            <div className="td-chat-ai-row">
-              <div className="td-chat-ai-avatar">✦</div>
-              <div className="td-chat-ai-bubble">
-                {options.length === 0
-                  ? 'All options were declined.'
-                  : <>Here {options.length === 1 ? 'is' : 'are'} <strong>{options.length} itinerary option{options.length !== 1 ? 's' : ''}</strong> for <strong>{td.name}</strong>. Review each one below and accept the best fit.</>
-                }
-              </div>
-              {isRealId && tripLink && options.length > 0 && (
-                <button
-                  className={`td-share-all-btn${shareAllOpen ? ' td-share-all-btn--open' : ''}`}
-                  onClick={() => setShareAllOpen(o => !o)}
-                >
-                  ↗ Share with traveler
-                </button>
-              )}
-            </div>
-
-            {/* Live share panel */}
-            {shareAllOpen && tripLink && (
-              <div className="td-share-all-panel">
-                <div className="td-share-all-top">
-                  <div>
-                    <div className="td-share-all-title">🔗 Live trip link</div>
-                    <div className="td-share-all-subtitle">Always shows the latest options — no need to resend if the itinerary changes</div>
-                  </div>
-                  <button onClick={() => setShareAllOpen(false)} className="td-share-all-close">✕</button>
-                </div>
-                <div className="td-share-all-link-row">
-                  <span className="td-share-all-link">{tripLink}</span>
-                  <button className="td-share-all-copy-btn" onClick={() => handleCopyTripLink()}>Copy link</button>
-                </div>
-                <div className="td-share-all-actions">
-                  <button className="td-share-all-action-btn" onClick={handleShareAllWhatsApp}>
-                    📱 WhatsApp all options
-                  </button>
-                  <button className="td-share-all-action-btn" onClick={handleShareAllEmail}>
-                    ✉ Email all options
-                  </button>
-                  <button className="td-share-all-action-btn td-share-all-preview-btn" onClick={() => { setShareAllOpen(false); navigate('/travel/' + tripId); }}>
-                    Preview traveler view →
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {options.length === 0 && apiTrip && (
-              <div className="td-options-all-declined">
-                <span className="td-options-all-declined-msg">All options declined.</span>
-                <button className="td-options-regen-btn" onClick={() => handleGenerateItinerary()} disabled={generatingItinerary}>
-                  {generatingItinerary ? 'Generating…' : '↺ Generate new options'}
-                </button>
-              </div>
-            )}
-
-            <div className="td-chat-cards-grid">
-            {(apiTrip?.itineraries ?? []).map((itin, i) => {
-              const opt = options[i];
-              if (!opt) return null;
-              const isExpanded = expandedChatOption === opt.letter;
-              const isAccepted = acceptedItineraryId === itin.itinerary_id;
-              const isBusy = removingItinerary || acceptingItineraryId === itin.itinerary_id;
-              const cost = computeOptionCost(itin);
-
-              return (
-                <div key={opt.letter} className={`td-chat-card${isAccepted ? ' td-chat-card--accepted' : ''}`}>
-                  {/* Header */}
-                  <div className="td-chat-card-header" onClick={() => {
-                    setExpandedChatOption(isExpanded ? null : opt.letter);
-                    setActiveOption(opt.letter);
-                    setShareMenuOption(null);
-                  }}>
-                    <div className="td-chat-letter" style={{ background: isAccepted ? '#13B981' : opt.cover }}>
-                      {isAccepted ? '✓' : opt.letter}
-                    </div>
-                    <div className="td-chat-card-info">
-                      {editingItinName === itin.itinerary_id ? (
-                        <input
-                          className="td-option-name-input"
-                          value={itinNameDraft}
-                          onChange={e => setItinNameDraft(e.target.value)}
-                          onBlur={() => handleSaveItinName(itin.itinerary_id, opt.name)}
-                          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                          onClick={e => e.stopPropagation()}
-                          autoFocus
-                        />
-                      ) : (
-                        <div className="td-chat-card-name" onDoubleClick={e => {
-                          e.stopPropagation();
-                          setItinNameDraft(opt.name);
-                          setEditingItinName(itin.itinerary_id);
-                        }}>
-                          {opt.name}
-                          {!isAccepted && <button className="td-edit-icon-btn" onClick={e => { e.stopPropagation(); setItinNameDraft(opt.name); setEditingItinName(itin.itinerary_id); }} title="Rename">✎</button>}
-                        </div>
-                      )}
-                      <div className="td-chat-card-meta">
-                        {opt.rec && <span className="td-ai-pick" style={{ marginRight: 6 }}>✦ AI pick</span>}
-                        {(itin.itinerary_days?.length ?? 0) > 0 && `${itin.itinerary_days!.length} days`}
-                      </div>
-                    </div>
-                    <div className="td-chat-card-cost">
-                      {cost?.hasData ? (
-                        <>
-                          <div className="td-chat-card-cost-num">{cost.total}</div>
-                          <div className="td-chat-card-cost-label">est. total</div>
-                        </>
-                      ) : (
-                        <div className="td-chat-card-cost-label">review details</div>
-                      )}
-                    </div>
-                    <div className={`td-chat-card-chevron${isExpanded ? ' open' : ''}`}>›</div>
-                  </div>
-
-                  {/* Expanded body */}
-                  {isExpanded && (
-                    <div className="td-chat-card-body">
-                      {cost && (
-                        <div className="td-chat-cost-table">
-                          <div className="td-chat-cost-row"><span>Flights</span><span>{cost.flights}</span></div>
-                          <div className="td-chat-cost-row"><span>Accommodation</span><span>{cost.accommodation}</span></div>
-                          <div className="td-chat-cost-row"><span>Activities</span><span>{cost.activities}</span></div>
-                          <div className="td-chat-cost-row td-chat-cost-fee"><span>Service fee (5%)</span><span>{cost.fee}</span></div>
-                          <div className="td-chat-cost-row td-chat-cost-total"><span>Total</span><span>{cost.total}</span></div>
-                        </div>
-                      )}
-                      {(itin.itinerary_days?.length ?? 0) > 0 && (
-                        <div className="td-chat-day-list">
-                          <div className="td-chat-day-list-label">Highlights</div>
-                          {itin.itinerary_days!.slice(0, 5).map((day, di) => (
-                            <div key={di} className="td-chat-day-row">
-                              <span className="td-chat-day-num">Day {day.day_number}</span>
-                              <span className="td-chat-day-title">{day.title}</span>
-                              {day.destinations?.[0]?.destination?.name && (
-                                <span className="td-chat-day-place">{day.destinations[0].destination.name}</span>
-                              )}
-                            </div>
-                          ))}
-                          {itin.itinerary_days!.length > 5 && (
-                            <button className="td-chat-see-all" onClick={e => { e.stopPropagation(); setBuilderTab('itinerary'); }}>
-                              + {itin.itinerary_days!.length - 5} more days — full itinerary ↓
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="td-chat-card-actions" onClick={e => e.stopPropagation()}>
-                    {isAccepted ? (
-                      <button className="td-opt-undo-btn" onClick={() => handleAcceptItinerary(itin.itinerary_id)} disabled={isBusy}>
-                        ↩ Undo accept
-                      </button>
-                    ) : (
-                      <>
-                        <button className="td-opt-accept-btn" onClick={() => handleAcceptItinerary(itin.itinerary_id)} disabled={isBusy}>✓ Accept</button>
-                        <button className="td-opt-decline-btn" onClick={() => handleDeclineItinerary(itin.itinerary_id)} disabled={isBusy}>✕ Decline</button>
-                      </>
-                    )}
-                    <div className="td-share-wrap">
-                      <button className="td-share-btn" onClick={() => setShareMenuOption(shareMenuOption === opt.letter ? null : opt.letter)}>
-                        ↗ Share
-                      </button>
-                      {shareMenuOption === opt.letter && (
-                        <div className="td-share-menu">
-                          {tripLink && (
-                            <button onClick={() => handleCopyTripLink(opt.letter)}>
-                              🔗 Copy option link
-                            </button>
-                          )}
-                          <button onClick={() => handleShareOptionWhatsApp(itin, opt.letter, opt.name)}>
-                            📱 WhatsApp option
-                          </button>
-                          <button onClick={() => handleShareChat(itin)}>
-                            💬 Copy for chat
-                          </button>
-                          <button onClick={() => handleShareEmail(itin)}>
-                            ✉ Send via email
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <button className="td-view-builder-btn" onClick={() => { setActiveOption(opt.letter); setBuilderTab('itinerary'); }}>
-                      View full →
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            </div>
-
-            {/* Service include toggles — always visible so the agent can flip before generating */}
-            {apiTrip && (
-              <div className="td-services-row">
-                <span className="td-services-label">Include:</span>
-                <button
-                  className={`td-service-pill${includeFlights ? ' td-service-pill--on' : ''}`}
-                  onClick={() => setIncludeFlights(f => !f)}
-                >✈ Flights</button>
-                <button
-                  className={`td-service-pill${includeStays ? ' td-service-pill--on' : ''}`}
-                  onClick={() => setIncludeStays(f => !f)}
-                >🏨 Hotels</button>
-                <button
-                  className={`td-service-pill${includeEvents ? ' td-service-pill--on' : ''}`}
-                  onClick={() => setIncludeEvents(f => !f)}
-                >🎟 Events</button>
-              </div>
-            )}
-
-            {/* Start city + regen row */}
-            {apiTrip && options.length > 0 && (
-              <div className="td-chat-bottom-row">
-                {selectedItinerary && (
-                  <div className="td-start-city-row" style={{ margin: 0 }}>
-                    <span className="td-start-city-label">Start city:</span>
-                    {editingStartCity ? (
-                      <input className="td-start-city-input" value={startCityDraft} onChange={e => setStartCityDraft(e.target.value)} onBlur={handleSaveStartCity} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} placeholder="e.g. Accra" autoFocus />
-                    ) : (
-                      <button className="td-start-city-value" onClick={() => { setStartCityDraft(selectedItinerary.start_city ?? ''); setEditingStartCity(true); }}>
-                        {selectedItinerary.start_city || '+ Set start city'}
-                      </button>
-                    )}
-                  </div>
-                )}
-                {/* Flight legs — date + time per leg, multi-city supported */}
-                <div className="td-flight-legs">
-                  <div className="td-flight-legs-header">
-                    <span className="td-flight-legs-label">✈ Flight schedule</span>
-                    <button className="td-leg-add-btn" onClick={addLeg} title="Add a city stop">+ city</button>
-                  </div>
-                  {flightLegs.map((leg, i) => (
-                    <div key={i} className="td-leg-row">
-                      <input
-                        type="text"
-                        className="td-leg-label"
-                        value={leg.label}
-                        onChange={e => updateLeg(i, 'label', e.target.value)}
-                        placeholder={i === 0 ? 'Outbound' : i === flightLegs.length - 1 ? 'Return' : 'City stop'}
-                      />
-                      <input
-                        type="date"
-                        className="td-leg-date"
-                        value={leg.date}
-                        onChange={e => updateLeg(i, 'date', e.target.value)}
-                      />
-                      <input
-                        type="time"
-                        className="td-leg-time"
-                        value={leg.time}
-                        onChange={e => updateLeg(i, 'time', e.target.value)}
-                      />
-                      {flightLegs.length > 2 && i !== 0 && i !== flightLegs.length - 1 && (
-                        <button className="td-leg-remove-btn" onClick={() => removeLeg(i)}>×</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <button className="td-refine-btn" onClick={() => setRefineOpen(true)} disabled={generatingItinerary}>
-                  ✦ Refine results
-                </button>
-                <button className="td-chat-regen-btn" onClick={() => handleGenerateItinerary()} disabled={generatingItinerary}>
-                  ↺ {generatingItinerary ? 'Generating…' : 'Regenerate'}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Generation history timeline */}
         {isRealId && generationHistory.length > 0 && (
           <div className="td-history-panel mb-24">
@@ -2017,7 +1679,7 @@ Questions? Simply reply to this email or reach out directly.`
           </div>
         )}
 
-        {(tb.showDrafting || generatingItinerary) && (
+        {generatingItinerary && (
           <div className="td-generating-card">
             <div className="td-generating-icon">✦</div>
             <h2 className="td-generating-title">Meridian is building options…</h2>
@@ -2039,14 +1701,6 @@ Questions? Simply reply to this email or reach out directly.`
                 <span>Curating your itinerary…</span>
               </div>
             </div>
-            {!generatingItinerary && (
-              <button
-                onClick={ctx.revealOptions}
-                className="td-drafting-skip"
-              >
-                Skip & preview
-              </button>
-            )}
           </div>
         )}
 
@@ -2880,6 +2534,11 @@ Questions? Simply reply to this email or reach out directly.`
             <div className="td-sticky-sidebar">
               <div className="td-right-card">
                 <div className="td-tabs-bar">
+                  {tb.showOptions && (
+                    <button className={'td-tab-btn' + (sidebarTab === 'options' ? ' td-tab-btn--active' : '')} onClick={() => setSidebarTab('options')}>
+                      Options
+                    </button>
+                  )}
                   <button className={'td-tab-btn' + (sidebarTab === 'cost' ? ' td-tab-btn--active' : '')} onClick={() => setSidebarTab('cost')}>
                     Cost summary
                   </button>
@@ -2890,6 +2549,81 @@ Questions? Simply reply to this email or reach out directly.`
                     Agent activity
                   </button>
                 </div>
+
+                {sidebarTab === 'options' && (
+                  <div className="td-sidebar-options-body">
+                    {apiTrip && (
+                      <div className="td-sidebar-options-toolbar">
+                        <button
+                          className="td-sidebar-opt-tool-btn"
+                          onClick={() => setRefineOpen(true)}
+                          disabled={generatingItinerary}
+                        >
+                          ✦ Refine
+                        </button>
+                        <button
+                          className="td-sidebar-opt-tool-btn"
+                          onClick={() => handleGenerateItinerary()}
+                          disabled={generatingItinerary}
+                        >
+                          {generatingItinerary ? 'Generating…' : '↺ Regenerate'}
+                        </button>
+                      </div>
+                    )}
+                    {options.length === 0 && (
+                      <div className="td-sidebar-options-empty">All options were declined.</div>
+                    )}
+                    {options.map(opt => {
+                      const itin = (apiTrip?.itineraries ?? []).find(it => it.itinerary_id === opt.itineraryId);
+                      const cost = computeOptionCost(itin);
+                      const isAccepted = acceptedItineraryId === opt.itineraryId;
+                      const isBusy = removingItinerary || acceptingItineraryId === opt.itineraryId;
+                      return (
+                        <div
+                          key={opt.letter}
+                          className={'td-sidebar-opt-row' + (activeOption === opt.letter ? ' td-sidebar-opt-row--active' : '')}
+                          onClick={() => jumpToOption(opt.letter)}
+                        >
+                          <div className="td-sidebar-opt-avatar" style={{ background: isAccepted ? '#13B981' : opt.cover }}>
+                            {isAccepted ? '✓' : opt.letter}
+                          </div>
+                          <div className="td-sidebar-opt-info">
+                            <div className="td-sidebar-opt-name">{opt.name}</div>
+                            {cost?.hasData && <div className="td-sidebar-opt-cost">{cost.total}</div>}
+                          </div>
+                          <div className="td-sidebar-opt-actions" onClick={e => e.stopPropagation()}>
+                            {isAccepted ? (
+                              <button
+                                className="td-sidebar-opt-btn"
+                                disabled={isBusy}
+                                onClick={() => handleAcceptItinerary(opt.itineraryId)}
+                              >
+                                Accepted
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  className="td-sidebar-opt-btn td-sidebar-opt-btn--accept"
+                                  disabled={isBusy}
+                                  onClick={() => handleAcceptItinerary(opt.itineraryId)}
+                                >
+                                  Accept
+                                </button>
+                                <button
+                                  className="td-sidebar-opt-btn td-sidebar-opt-btn--decline"
+                                  disabled={isBusy}
+                                  onClick={() => handleDeclineItinerary(opt.itineraryId)}
+                                >
+                                  Decline
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {sidebarTab === 'cost' && (
                   <div className="td-cost-body">
@@ -2986,6 +2720,9 @@ Questions? Simply reply to this email or reach out directly.`
                           </button>
                         )}
                       </div>
+                    )}
+                    {apiTrip && (
+                      <PaymentPlanSection tripId={apiTrip.trip_id} totalCost={Number(costSummary?.total_cost ?? 0)} currency={costCurrency} />
                     )}
                     {payments.length > 0 ? (
                       <>

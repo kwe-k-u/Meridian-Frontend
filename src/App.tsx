@@ -27,6 +27,8 @@ import Help from './pages/Help'
 import GuideArticle from './pages/GuideArticle'
 import TravelerView from './components/TravelerView'
 import TravelerPaymentCallback from './pages/TravelerPaymentCallback'
+import PayInstallment from './pages/PayInstallment'
+import PaymentsOnboarding from './pages/onboarding/PaymentsOnboarding'
 import MainLayout from './components/Layout/MainLayout'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -42,7 +44,14 @@ function App() {
           <Route element={<AppProvider><Outlet /></AppProvider>}>
             <Route path="/travel/:tripId" element={<TravelerView />} />
             <Route path="/travel/:tripId/payment-callback" element={<TravelerPaymentCallback />} />
+            {/* The customer-facing WeWire "payment link" page — no Meridian account required,
+                same public trust model as /travel/:tripId (see App.tsx module comment). */}
+            <Route path="/pay" element={<PayInstallment />} />
+            <Route path="/pay/:reference" element={<PayInstallment />} />
             <Route element={<ProtectedRoute />}>
+              {/* Skippable post-signup wizard (see AuthPage.tsx's handleSignup) — deliberately
+                  outside MainLayout, full-screen like AuthPage itself. */}
+              <Route path="/app/onboarding/payments" element={<PaymentsOnboarding />} />
               <Route path="/app" element={<MainLayout />}>
                 <Route index element={<Navigate to="dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />

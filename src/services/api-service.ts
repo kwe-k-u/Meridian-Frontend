@@ -13,6 +13,7 @@
 // payment as already-completed — kept for a possible future "record an offline payment" flow.
 
 import axios from 'axios';
+import { confirmWeWireFallback, extractWeWireFallback } from './wewire-fallback';
 import type { LoginResponse } from '../types/auth';
 import type {
   DashboardResponse, ApiPaginatedResponse,
@@ -22,7 +23,7 @@ import type {
   SubscriptionTierResponse, CompanySubscriptionResponse, MoolreCheckoutResponse, PaystackCheckoutResponse,
   SuggestReplyResponse,
   FlightSearchResponse, HotelSearchResponse, CurrencyRatesResponse, GmailStatusResponse,
-  ConversationResponse, MessageResponse, GmailThreadBrowseResponse,
+  ConversationResponse, MessageResponse, GmailThreadBrowseResponse, TripDetailsExtraction,
   VirtualAccountResponse, WeWireBeneficiaryResponse, PaymentPlanResponse, WeWireLookupResponse,
   WeWireInboundResponse, WeWireKycStatus, FundHandling,
   WeWireDisbursementResponse, DisbursementStatus, TripBalanceResponse, BeneficiaryType,
@@ -44,6 +45,31 @@ export class ApiService {
 
   public static setAuthToken(token: string | null) {
     ApiService.authToken = token;
+  }
+
+  // POSTs a WeWire-backed endpoint; if the backend responds 409 with `requires_confirmation`
+  // (see WeWireService::liveCall on the backend — the live call failed), shows the "Response
+  // from wewire server" popup and, if the user accepts, resubmits the same request with
+  // `confirm_simulated: true` so the backend proceeds using the simulated result it already
+  // proposed. Any other error (validation, a plain 502 with no fallback offered, etc) just
+  // propagates as usual.
+  private static async postWithWeWireFallback<T>(url: string, data: Record<string, unknown>): Promise<T> {
+    try {
+      const res = await axios.post(url, data);
+      return res.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        const fallback = extractWeWireFallback(error.response.data);
+        if (fallback) {
+          const accepted = await confirmWeWireFallback(fallback);
+          if (accepted) {
+            const res = await axios.post(url, { ...data, confirm_simulated: true });
+            return res.data;
+          }
+        }
+      }
+      throw error;
+    }
   }
 
   // ── Auth ──
@@ -773,8 +799,7 @@ export class ApiService {
   }
 
   public static async createWeWireAccount(currency: string): Promise<VirtualAccountResponse> {
-    const res = await axios.post(`${ApiService.BASE_URL}/wewire/accounts`, { currency });
-    return res.data;
+    return ApiService.postWithWeWireFallback(`${ApiService.BASE_URL}/wewire/accounts`, { currency });
   }
 
   public static async updateWeWireAccount(accountId: string, data: { fund_handling?: FundHandling; beneficiary_account_id?: string | null }): Promise<VirtualAccountResponse> {
@@ -788,8 +813,7 @@ export class ApiService {
   }
 
   public static async createWeWireBeneficiary(data: Record<string, unknown>): Promise<WeWireBeneficiaryResponse> {
-    const res = await axios.post(`${ApiService.BASE_URL}/wewire/beneficiaries`, data);
-    return res.data;
+    return ApiService.postWithWeWireFallback(`${ApiService.BASE_URL}/wewire/beneficiaries`, data);
   }
 
   public static async createPaymentPlan(tripId: string, data: { total_amount: number; currency: string; installments: { amount: number; due_date?: string | null }[] }): Promise<PaymentPlanResponse> {
@@ -830,8 +854,7 @@ export class ApiService {
   }
 
   public static async retryWeWireDisbursement(disbursementId: string): Promise<WeWireDisbursementResponse> {
-    const res = await axios.post(`${ApiService.BASE_URL}/wewire/disbursements/${disbursementId}/retry`);
-    return res.data;
+    return ApiService.postWithWeWireFallback(`${ApiService.BASE_URL}/wewire/disbursements/${disbursementId}/retry`, {});
   }
 
   // Trips with money still held from WeWire collections, for the Dashboard's "Pay out
@@ -848,8 +871,7 @@ export class ApiService {
     line_item_id?: string;
     line_item_label?: string;
   }): Promise<WeWireDisbursementResponse> {
-    const res = await axios.post(`${ApiService.BASE_URL}/trips/${tripId}/payout`, data);
-    return res.data;
+    return ApiService.postWithWeWireFallback(`${ApiService.BASE_URL}/trips/${tripId}/payout`, data);
   }
 
   // Public — the /pay/:reference page's data source. No auth required, same trust model as
@@ -857,6 +879,19 @@ export class ApiService {
   public static async lookupWeWirePaymentByReference(reference: string): Promise<WeWireLookupResponse> {
     const res = await axios.get(`${ApiService.BASE_URL}/public/payments/wewire/lookup/${reference}`);
     return res.data;
+  }
+
+  // The /pay/:reference page's "Proceed with payment" button — only works while WeWire is in
+  // simulation mode server-side (WEWIRE_SIMULATE). Stands in for the customer's bank transfer
+  // and returns the same shape as lookupWeWirePaymentByReference so the page can just swap it in.
+  // The "Proceed with payment" button on the public /pay/:reference page. Actually attempts a
+  // real WeWire check (is the receiving virtual account genuinely ACTIVE right now?) before
+  // anything is faked — see WeWirePaymentController::simulatePublicPayment. A verified account
+  // returns `{ ...lookup, verified: true }` with nothing simulated; a failed check goes through
+  // the same "Response from wewire server" popup as every other WeWire-backed action
+  // (postWithWeWireFallback), and only settles a simulated payment if the customer accepts it.
+  public static async attemptWeWirePayment(reference: string): Promise<WeWireLookupResponse> {
+    return ApiService.postWithWeWireFallback(`${ApiService.BASE_URL}/public/payments/wewire/simulate/${reference}`, {});
   }
 
   // ── Paystack payments (https://paystack.com/docs/) ──
@@ -884,6 +919,16 @@ export class ApiService {
 
   public static async getPublicTripCosts(tripId: string): Promise<TripCostResponse> {
     const res = await axios.get(`${ApiService.BASE_URL}/public/trips/${tripId}/costs`);
+    return res.data;
+  }
+
+  // Marks an itinerary option as the one the traveler chose — the actual mutation behind
+  // TravelerView.tsx's "Accept this option" button. Public (no auth), unlike updateItinerary()
+  // above, since a traveler viewing the shareable /travel/:tripId link has no Meridian account.
+  // Also what auto-creates the trip's default WeWire payment plans on the backend (see
+  // TripController::acceptItinerary / DefaultPaymentPlanService).
+  public static async acceptPublicItinerary(tripId: string, itineraryId: string): Promise<ItineraryResponse> {
+    const res = await axios.post(`${ApiService.BASE_URL}/public/trips/${tripId}/itineraries/${itineraryId}/accept`);
     return res.data;
   }
 
@@ -998,6 +1043,21 @@ export class ApiService {
       return res.data;
     } catch (error) {
       let errorMessage = 'Failed to draft a suggestion.';
+      if (axios.isAxiosError(error) && error.response) {
+        errorMessage = error.response.data.message || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+  }
+
+  // "Create trip from this chat" (see Messages.tsx / CreateTripModal.tsx) — reads the thread
+  // and returns a prefilled (not blank) trip form for the agent to review before creating.
+  public static async extractTripDetails(id: string): Promise<TripDetailsExtraction> {
+    try {
+      const res = await axios.post(`${ApiService.BASE_URL}/conversations/${id}/extract-trip-details`);
+      return res.data;
+    } catch (error) {
+      let errorMessage = "Couldn't read this conversation to prefill the trip.";
       if (axios.isAxiosError(error) && error.response) {
         errorMessage = error.response.data.message || errorMessage;
       }

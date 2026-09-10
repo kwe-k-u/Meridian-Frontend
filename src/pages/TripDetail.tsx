@@ -398,18 +398,38 @@ function payableItemsFromItinerary(itinerary: ItineraryResponse | undefined): Pa
   return items;
 }
 
+// ISO alpha-3 country pre-filled (editable) when opening AddPayoutAccountModal — WeWire
+// requires a country on every beneficiary; this is just a sane starting point per currency,
+// not a claim about where the real account is. Settlement methods and their required extra
+// fields, per WeWire's real /v1/beneficiaries schema (confirmed against a real 400 response —
+// see the wewire_real_account_rollout memory note): WIRE needs routingNumber + accountCategory,
+// the others aren't enforced the same way so are left optional here.
+const SANDBOX_COUNTRY_BY_CURRENCY: Record<string, string> = { USD: 'USA', GHS: 'GHA', GBP: 'GBR', EUR: 'DEU' };
+const SETTLEMENT_METHODS = ['WIRE', 'ACH', 'SEPA', 'FPS', 'CHAPS', 'SWIFT'] as const;
+
 // ── TripPayoutsSection ────────────────────────────────────────
 // Paying the trip's actual service providers (airline, hotel, activity vendors) — and, as a
 // catch-all, the agency itself — out of the trip's held WeWire balance, choosing exactly how
 // much each gets. Mirrors PaymentPlanSection's self-contained fetch-on-mount pattern.
+//
+// One unified "Send a payout" control (destination/agency picker + beneficiary + amount + Pay
+// button) sits above the destinations list — the list itself is read-only status (paid/not
+// paid), not a form per row, so it reads as a plain activity list rather than a stack of
+// repeated forms. "+ Add payout account" opens AddPayoutAccountModal, which lets the user pick
+// which destination (or the agency) a new beneficiary is for and fill in its details, rather
+// than blindly bulk-creating fake accounts for everything at once.
+const AGENCY_PAYOUT_KEY = 'agency';
+
 function TripPayoutsSection({ tripId, itineraries }: { tripId: string; itineraries: ItineraryResponse[] }) {
   const { toastAction } = useApp();
   const [balance, setBalance] = useState<TripBalanceResponse | null | undefined>(undefined);
   const [beneficiaries, setBeneficiaries] = useState<WeWireBeneficiaryResponse[]>([]);
   const [disbursements, setDisbursements] = useState<WeWireDisbursementResponse[]>([]);
-  const [payingId, setPayingId] = useState<string | null>(null); // item.id currently being paid, or 'agency'
-  const [amountDrafts, setAmountDrafts] = useState<Record<string, string>>({});
-  const [beneficiaryDrafts, setBeneficiaryDrafts] = useState<Record<string, string>>({});
+  const [paying, setPaying] = useState(false);
+  const [selectedKey, setSelectedKey] = useState<string>(AGENCY_PAYOUT_KEY);
+  const [amountDraft, setAmountDraft] = useState('');
+  const [beneficiaryDraft, setBeneficiaryDraft] = useState('');
+  const [addAccountOpen, setAddAccountOpen] = useState(false);
 
   const load = () => {
     Promise.all([
@@ -435,26 +455,55 @@ function TripPayoutsSection({ tripId, itineraries }: { tripId: string; itinerari
   const heldBalance = balance?.held_balance ?? 0;
   const currency = balance?.currency;
 
-  const handlePay = async (key: string, beneficiaryId: string, amount: number, item?: PayableItem) => {
-    if (!beneficiaryId || amount <= 0) return;
-    setPayingId(key);
+  const currencyBeneficiaries = (type: 'agency' | 'provider') => beneficiaries.filter(b => b.beneficiary_type === type && b.currency === currency);
+
+  const selectedItem = selectedKey === AGENCY_PAYOUT_KEY ? null : items.find(i => `${i.type}:${i.id}` === selectedKey) ?? null;
+  const selectedRemaining = selectedItem ? Math.max(0, selectedItem.cost - paidFor(selectedItem)) : heldBalance;
+  const selectedBeneficiaries = currencyBeneficiaries(selectedItem ? 'provider' : 'agency');
+
+  // amountDraft/beneficiaryDraft only hold an explicit user edit — falling back to a computed
+  // default (the remaining amount, the first available beneficiary) whenever they're blank.
+  // Picking a different destination clears both (see the <select>'s onChange below) so the
+  // default recomputes for whatever's newly selected, without needing an effect just to sync
+  // derived state.
+  const effectiveAmount = amountDraft || (selectedRemaining > 0 ? String(selectedRemaining) : '');
+  const effectiveBeneficiary = beneficiaryDraft || selectedBeneficiaries[0]?.id || '';
+
+  const handleSelectDestination = (key: string) => {
+    setSelectedKey(key);
+    setAmountDraft('');
+    setBeneficiaryDraft('');
+  };
+
+  const handlePay = async () => {
+    const amount = Number(effectiveAmount);
+    if (!effectiveBeneficiary || amount <= 0) return;
+    setPaying(true);
     try {
       await ApiService.payoutTrip(tripId, {
-        beneficiary_id: beneficiaryId,
+        beneficiary_id: effectiveBeneficiary,
         amount,
-        line_item_type: item?.type,
-        line_item_id: item?.id,
-        line_item_label: item?.label,
+        line_item_type: selectedItem?.type,
+        line_item_id: selectedItem?.id,
+        line_item_label: selectedItem?.label,
       });
-      toastAction(item ? `Payout sent for ${item.label}` : 'Payout sent to agency');
-      setAmountDrafts(d => ({ ...d, [key]: '' }));
+      toastAction(selectedItem ? `Payout sent for ${selectedItem.label}` : 'Payout sent to agency');
+      setAmountDraft('');
       load();
     } catch (error) {
       toastAction(error instanceof Error ? error.message : 'Failed to send payout');
     } finally {
-      setPayingId(null);
+      setPaying(false);
     }
   };
+
+  // Destinations that don't have a matching provider beneficiary yet (matched by label —
+  // beneficiaries aren't linked to a specific line item in the schema, so this is best-effort).
+  // Just informs the "+ Add payout account" button's count; AddPayoutAccountModal does the
+  // actual creating, one at a time, with the user filling in real details.
+  const missingAccountItems = items.filter(item =>
+    !beneficiaries.some(b => b.beneficiary_type === 'provider' && b.label === item.label && b.currency === item.currency)
+  );
 
   if (balance === undefined) return <div className="td-cost-body"><p>Loading payouts…</p></div>;
 
@@ -468,101 +517,296 @@ function TripPayoutsSection({ tripId, itineraries }: { tripId: string; itinerari
     );
   }
 
-  const currencyBeneficiaries = (type: 'agency' | 'provider') => beneficiaries.filter(b => b.beneficiary_type === type && b.currency === currency);
-
   return (
     <div className="td-cost-body">
+      {addAccountOpen && (
+        <AddPayoutAccountModal
+          items={items}
+          defaultCurrency={currency}
+          onClose={() => setAddAccountOpen(false)}
+          onCreated={load}
+        />
+      )}
       <div style={{ background: '#F7F8FA', borderRadius: 8, padding: 16, marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
         <span style={{ fontWeight: 600 }}>Held balance</span>
         <span style={{ fontWeight: 700 }}>{heldBalance} {currency}</span>
       </div>
 
-      {items.length === 0 && (
+      {items.length === 0 ? (
         <p style={{ color: '#8A90A2', textAlign: 'center', padding: '12px 0', fontSize: 13 }}>
           No confirmed itinerary yet — accept an itinerary option to see its flights, accommodation, and activities here.
         </p>
-      )}
+      ) : (
+        <>
+          <button
+            onClick={() => setAddAccountOpen(true)}
+            className="td-dashed-btn"
+            style={{ width: '100%', marginBottom: 16 }}
+          >
+            + Add payout account{missingAccountItems.length > 0 ? ` (${missingAccountItems.length} destination${missingAccountItems.length === 1 ? '' : 's'} still need one)` : ''}
+          </button>
 
-      {items.map(item => {
-        const key = `${item.type}:${item.id}`;
-        const paid = paidFor(item);
-        const remaining = Math.max(0, item.cost - paid);
-        const providers = currencyBeneficiaries('provider');
-        const draftAmount = amountDrafts[key] ?? (remaining > 0 ? String(remaining) : '');
-        const draftBeneficiary = beneficiaryDrafts[key] ?? providers[0]?.id ?? '';
+          {/* Unified pay control — on top of the destinations list below. */}
+          <p style={{ fontWeight: 600, fontSize: 13, margin: '0 0 8px' }}>Send a payout</p>
+          <select
+            className="td-call-input"
+            value={selectedKey}
+            onChange={e => handleSelectDestination(e.target.value)}
+            style={{ width: '100%', marginBottom: 8 }}
+          >
+            {items.map(item => {
+              const key = `${item.type}:${item.id}`;
+              const paid = paidFor(item);
+              return (
+                <option key={key} value={key}>
+                  {item.label} — {item.cost} {item.currency}{paid > 0 ? ` (${paid} paid)` : ''}
+                </option>
+              );
+            })}
+            <option value={AGENCY_PAYOUT_KEY}>Pay the agency</option>
+          </select>
 
-        return (
-          <div key={key} className="td-pay-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <div className="td-pay-info">
-                <span className="td-pay-method">{item.label}</span>
-                <span className="td-pay-date">{paid > 0 ? `${paid} ${item.currency} paid` : 'Not paid yet'}</span>
-              </div>
-              <span className="td-pay-amount">{item.cost} {item.currency}</span>
+          {selectedBeneficiaries.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#B7791F', margin: 0 }}>
+              No {currency} payout account for {selectedItem ? 'this provider' : 'the agency'} yet — add one in Settings &gt; Payments.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select className="td-call-input" value={effectiveBeneficiary} onChange={e => setBeneficiaryDraft(e.target.value)} style={{ flex: 1 }}>
+                {selectedBeneficiaries.map(b => <option key={b.id} value={b.id}>{b.label || b.account_name}</option>)}
+              </select>
+              <input
+                className="td-call-input"
+                type="number"
+                value={effectiveAmount}
+                onChange={e => setAmountDraft(e.target.value)}
+                style={{ width: 100 }}
+              />
+              <button
+                className="td-action-btn"
+                style={{ background: selectedItem ? '#2B63F6' : '#13B981', color: '#fff', borderColor: selectedItem ? '#2B63F6' : '#13B981' }}
+                disabled={paying || !effectiveBeneficiary || Number(effectiveAmount) <= 0 || Number(effectiveAmount) > heldBalance}
+                onClick={handlePay}
+              >
+                {paying ? 'Paying…' : selectedItem ? 'Pay' : 'Pay agency'}
+              </button>
             </div>
-            {providers.length === 0 ? (
-              <p style={{ fontSize: 12, color: '#B7791F', margin: 0 }}>
-                No {item.currency} payout account for this provider yet — add one in Settings &gt; Payments.
-              </p>
-            ) : (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <select className="td-call-input" value={draftBeneficiary} onChange={e => setBeneficiaryDrafts(d => ({ ...d, [key]: e.target.value }))} style={{ flex: 1 }}>
-                  {providers.map(p => <option key={p.id} value={p.id}>{p.label || p.account_name}</option>)}
-                </select>
-                <input
-                  className="td-call-input"
-                  type="number"
-                  value={draftAmount}
-                  onChange={e => setAmountDrafts(d => ({ ...d, [key]: e.target.value }))}
-                  style={{ width: 100 }}
-                />
-                <button
-                  className="td-action-btn"
-                  style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}
-                  disabled={payingId === key || !draftBeneficiary || Number(draftAmount) <= 0 || Number(draftAmount) > heldBalance}
-                  onClick={() => handlePay(key, draftBeneficiary, Number(draftAmount), item)}
-                >
-                  {payingId === key ? 'Paying…' : 'Pay'}
-                </button>
+          )}
+
+          <div className="td-cost-divider" />
+
+          {/* Destinations — read-only status list. */}
+          <p style={{ fontWeight: 600, fontSize: 13, margin: '8px 0' }}>Destinations</p>
+          {items.map(item => {
+            const key = `${item.type}:${item.id}`;
+            const paid = paidFor(item);
+            return (
+              <div key={key} className="td-pay-row">
+                <div className="td-pay-info">
+                  <span className="td-pay-method">{item.label}</span>
+                  <span className="td-pay-date">{paid > 0 ? `${paid} ${item.currency} paid` : 'Not paid yet'}</span>
+                </div>
+                <span className="td-pay-amount">{item.cost} {item.currency}</span>
               </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── AddPayoutAccountModal ────────────────────────────────────
+// Lets the user pick which destination (or the agency) a new WeWire beneficiary is for, then
+// fill in its bank details and submit — one account at a time, real details in, real WeWire
+// validation errors surfaced via toast (or the "Response from wewire server" popup if the live
+// call itself fails — see ApiService.createWeWireBeneficiary/postWithWeWireFallback). Only
+// mounted while open (see TripPayoutsSection's `{addAccountOpen && <AddPayoutAccountModal .../>}`)
+// so every open starts with a fresh, prefilled form rather than needing a reset effect.
+function AddPayoutAccountModal({ items, defaultCurrency, onClose, onCreated }: {
+  items: PayableItem[];
+  defaultCurrency?: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const { toastAction } = useApp();
+  const firstItem = items[0];
+  const [targetKey, setTargetKey] = useState<string>(firstItem ? `${firstItem.type}:${firstItem.id}` : AGENCY_PAYOUT_KEY);
+  const target = targetKey === AGENCY_PAYOUT_KEY ? null : items.find(i => `${i.type}:${i.id}` === targetKey) ?? null;
+  const startingCurrency = target?.currency ?? defaultCurrency ?? 'USD';
+
+  const [currency, setCurrency] = useState(startingCurrency);
+  const [accountName, setAccountName] = useState(target?.label ?? 'Agency payout account');
+  const [bankName, setBankName] = useState('');
+  const [country, setCountry] = useState(SANDBOX_COUNTRY_BY_CURRENCY[startingCurrency] ?? 'USA');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [city, setCity] = useState('');
+  const [settlementMethod, setSettlementMethod] = useState<typeof SETTLEMENT_METHODS[number]>('WIRE');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [routingNumber, setRoutingNumber] = useState('');
+  const [accountCategory, setAccountCategory] = useState<'CHECKING' | 'SAVINGS'>('CHECKING');
+  const [iban, setIban] = useState('');
+  const [sortCode, setSortCode] = useState('');
+  const [swiftBic, setSwiftBic] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleTargetChange = (key: string) => {
+    setTargetKey(key);
+    const item = key === AGENCY_PAYOUT_KEY ? null : items.find(i => `${i.type}:${i.id}` === key) ?? null;
+    setAccountName(item?.label ?? 'Agency payout account');
+    if (item) setCurrency(item.currency);
+  };
+
+  const isValid = accountName.trim() && country.trim().length === 3 && addressLine1.trim() && city.trim()
+    && (settlementMethod !== 'WIRE' || (accountNumber.trim() && routingNumber.trim()));
+
+  const handleSubmit = async () => {
+    if (!isValid) return;
+    setSaving(true);
+    try {
+      await ApiService.createWeWireBeneficiary({
+        beneficiary_type: target ? 'provider' : 'agency',
+        label: target ? target.label : 'Agency',
+        currency,
+        account_name: accountName.trim(),
+        bank_name: bankName.trim() || undefined,
+        country: country.trim().toUpperCase(),
+        address_line1: addressLine1.trim(),
+        city: city.trim(),
+        settlement_method: settlementMethod,
+        account_number: accountNumber.trim() || undefined,
+        routing_number: routingNumber.trim() || undefined,
+        account_category: settlementMethod === 'WIRE' ? accountCategory : undefined,
+        iban: iban.trim() || undefined,
+        sort_code: sortCode.trim() || undefined,
+        swift_bic: swiftBic.trim() || undefined,
+      });
+      toastAction(`Payout account added for ${target ? target.label : 'the agency'}`);
+      onCreated();
+      onClose();
+    } catch (error) {
+      toastAction(error instanceof Error ? error.message : 'Failed to add payout account');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#5B6172', marginBottom: 4, display: 'block' };
+  const fieldStyle: React.CSSProperties = { marginBottom: 12 };
+
+  return (
+    <div className="td-refine-overlay" onClick={e => { if (e.target === e.currentTarget && !saving) onClose(); }}>
+      <div className="td-refine-modal" style={{ maxHeight: '85vh', overflowY: 'auto' }}>
+        <div className="td-refine-modal-header">
+          <span className="td-refine-modal-title">Add payout account</span>
+          <button onClick={onClose} className="td-refine-modal-close" disabled={saving}>✕</button>
+        </div>
+
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Who is this account for?</label>
+          <select className="td-call-input" style={{ width: '100%' }} value={targetKey} onChange={e => handleTargetChange(e.target.value)}>
+            {items.map(item => (
+              <option key={`${item.type}:${item.id}`} value={`${item.type}:${item.id}`}>{item.label} ({item.currency})</option>
+            ))}
+            <option value={AGENCY_PAYOUT_KEY}>The agency</option>
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ ...fieldStyle, flex: 1 }}>
+            <label style={labelStyle}>Account holder name</label>
+            <input className="td-call-input" style={{ width: '100%' }} value={accountName} onChange={e => setAccountName(e.target.value)} />
+          </div>
+          <div style={{ ...fieldStyle, width: 90 }}>
+            <label style={labelStyle}>Currency</label>
+            {target ? (
+              <input className="td-call-input" style={{ width: '100%' }} value={currency} disabled />
+            ) : (
+              <select className="td-call-input" style={{ width: '100%' }} value={currency} onChange={e => setCurrency(e.target.value)}>
+                {Object.keys(SANDBOX_COUNTRY_BY_CURRENCY).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             )}
           </div>
-        );
-      })}
+        </div>
 
-      <div className="td-cost-divider" />
-      <p style={{ fontWeight: 600, fontSize: 13, margin: '8px 0' }}>Pay the agency</p>
-      {(() => {
-        const agencyBens = currencyBeneficiaries('agency');
-        const key = 'agency';
-        const draftAmount = amountDrafts[key] ?? (heldBalance > 0 ? String(heldBalance) : '');
-        const draftBeneficiary = beneficiaryDrafts[key] ?? agencyBens[0]?.id ?? '';
-        if (agencyBens.length === 0) {
-          return <p style={{ fontSize: 12, color: '#B7791F' }}>No {currency} agency payout account yet — add one in Settings &gt; Payments.</p>;
-        }
-        return (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <select className="td-call-input" value={draftBeneficiary} onChange={e => setBeneficiaryDrafts(d => ({ ...d, [key]: e.target.value }))} style={{ flex: 1 }}>
-              {agencyBens.map(b => <option key={b.id} value={b.id}>{b.account_name}</option>)}
-            </select>
-            <input
-              className="td-call-input"
-              type="number"
-              value={draftAmount}
-              onChange={e => setAmountDrafts(d => ({ ...d, [key]: e.target.value }))}
-              style={{ width: 100 }}
-            />
-            <button
-              className="td-action-btn"
-              style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }}
-              disabled={payingId === key || !draftBeneficiary || Number(draftAmount) <= 0 || Number(draftAmount) > heldBalance}
-              onClick={() => handlePay(key, draftBeneficiary, Number(draftAmount))}
-            >
-              {payingId === key ? 'Paying…' : 'Pay agency'}
-            </button>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Bank name</label>
+          <input className="td-call-input" style={{ width: '100%' }} value={bankName} onChange={e => setBankName(e.target.value)} placeholder="Optional" />
+        </div>
+
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ ...fieldStyle, flex: 1 }}>
+            <label style={labelStyle}>Address line 1</label>
+            <input className="td-call-input" style={{ width: '100%' }} value={addressLine1} onChange={e => setAddressLine1(e.target.value)} />
           </div>
-        );
-      })()}
+          <div style={{ ...fieldStyle, flex: 1 }}>
+            <label style={labelStyle}>City</label>
+            <input className="td-call-input" style={{ width: '100%' }} value={city} onChange={e => setCity(e.target.value)} />
+          </div>
+          <div style={{ ...fieldStyle, width: 80 }}>
+            <label style={labelStyle}>Country</label>
+            <input className="td-call-input" style={{ width: '100%' }} value={country} onChange={e => setCountry(e.target.value.toUpperCase())} maxLength={3} placeholder="ISO3" />
+          </div>
+        </div>
+
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Settlement method</label>
+          <select className="td-call-input" style={{ width: '100%' }} value={settlementMethod} onChange={e => setSettlementMethod(e.target.value as typeof SETTLEMENT_METHODS[number])}>
+            {SETTLEMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ ...fieldStyle, flex: 1 }}>
+            <label style={labelStyle}>Account number</label>
+            <input className="td-call-input" style={{ width: '100%' }} value={accountNumber} onChange={e => setAccountNumber(e.target.value)} />
+          </div>
+          {settlementMethod === 'WIRE' ? (
+            <>
+              <div style={{ ...fieldStyle, flex: 1 }}>
+                <label style={labelStyle}>Routing number</label>
+                <input className="td-call-input" style={{ width: '100%' }} value={routingNumber} onChange={e => setRoutingNumber(e.target.value)} />
+              </div>
+              <div style={{ ...fieldStyle, width: 120 }}>
+                <label style={labelStyle}>Account type</label>
+                <select className="td-call-input" style={{ width: '100%' }} value={accountCategory} onChange={e => setAccountCategory(e.target.value as 'CHECKING' | 'SAVINGS')}>
+                  <option value="CHECKING">Checking</option>
+                  <option value="SAVINGS">Savings</option>
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ ...fieldStyle, flex: 1 }}>
+                <label style={labelStyle}>IBAN</label>
+                <input className="td-call-input" style={{ width: '100%' }} value={iban} onChange={e => setIban(e.target.value)} placeholder="Optional" />
+              </div>
+              <div style={{ ...fieldStyle, flex: 1 }}>
+                <label style={labelStyle}>Sort code</label>
+                <input className="td-call-input" style={{ width: '100%' }} value={sortCode} onChange={e => setSortCode(e.target.value)} placeholder="Optional" />
+              </div>
+              <div style={{ ...fieldStyle, flex: 1 }}>
+                <label style={labelStyle}>SWIFT/BIC</label>
+                <input className="td-call-input" style={{ width: '100%' }} value={swiftBic} onChange={e => setSwiftBic(e.target.value)} placeholder="Optional" />
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="td-refine-modal-actions">
+          <button onClick={onClose} className="td-action-btn" style={{ background: '#fff', color: '#5B6172', borderColor: '#DDE0E8' }} disabled={saving}>
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="td-action-btn"
+            style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}
+            disabled={saving || !isValid}
+          >
+            {saving ? 'Adding…' : 'Add account'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -827,12 +1071,38 @@ export default function TripDetail() {
       : (typeof apiTrip.created_by === 'object' && apiTrip.created_by
         ? apiTrip.created_by.display_name
         : 'Traveler');
+
+    // The hero's "value" figure: the actual computed cost of this trip's confirmed itinerary
+    // (falling back to the first option if none is confirmed yet) — flights + accommodation +
+    // activities + the 5% service fee, same formula as computedCosts/computeOptionCost below.
+    // Previously this read Trip.budget, a free-text estimate entered at trip creation that has
+    // no relationship to what the itinerary actually costs (and was always shown as GHS
+    // regardless of the itinerary's real currency) — computed inline here rather than reusing
+    // computedCosts/selectedItinerary since those are declared later in this component and
+    // would throw a temporal-dead-zone error if referenced this early.
+    const heroItinerary = apiTrip.itineraries?.find(i => i.status === ItineraryStatus.CONFIRMED) ?? apiTrip.itineraries?.[0];
+    let heroValue = '';
+    if (heroItinerary) {
+      const flightsCost = (heroItinerary.itinerary_flights ?? []).reduce((s, f) => s + (f.cost ?? 0), 0);
+      const staysCost = (heroItinerary.itinerary_accommodation ?? []).reduce((s, a) => s + (a.cost ?? 0), 0);
+      const activitiesCost = (heroItinerary.itinerary_days ?? []).reduce((sum, d) =>
+        sum + (d.destinations ?? []).reduce((s2, dst) => s2 + Number(dst.cost ?? 0), 0), 0);
+      const firstDestCurrency = heroItinerary.itinerary_days?.flatMap(d => d.destinations ?? []).find(dst => dst.currency)?.currency;
+      const heroCurrency = heroItinerary.itinerary_flights?.[0]?.currency
+        ?? heroItinerary.itinerary_accommodation?.[0]?.currency
+        ?? firstDestCurrency
+        ?? 'GHS';
+      const heroSubtotal = flightsCost + staysCost + activitiesCost;
+      const heroTotal = heroSubtotal + Math.round(heroSubtotal * 0.05);
+      heroValue = heroTotal > 0 ? format(heroTotal, heroCurrency) : '';
+    }
+
     return {
       name: apiTrip.trip_name,
       traveler: trav,
       dates: fmtDateRange(apiTrip.start_date, apiTrip.end_date),
       where: apiTrip.description?.split('.')[0] ?? apiTrip.trip_name,
-      value: apiTrip.budget ? format(Number(apiTrip.budget), 'GHS') : '',
+      value: heroValue,
       status: sm.display as TripStatusLabel,
       statusBg: sm.bg,
       statusFg: sm.fg,

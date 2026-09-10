@@ -22,6 +22,9 @@ export default function PayInstallment() {
   const [data, setData] = useState<WeWireLookupResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [simulating, setSimulating] = useState(false)
+  const [simulateError, setSimulateError] = useState<string | null>(null)
+  const [verified, setVerified] = useState(false)
 
   useEffect(() => {
     if (!reference) return
@@ -38,6 +41,19 @@ export default function PayInstallment() {
     if (codeInput.trim()) {
       navigate(`/pay/${codeInput.trim().toUpperCase()}`)
     }
+  }
+
+  // Attempts the real WeWire flow first (is this account genuinely active?) — see
+  // ApiService.attemptWeWirePayment. Only if that fails does the "Response from wewire server"
+  // popup offer a simulated result; declining it just leaves this page as it was.
+  const handleAttemptPayment = () => {
+    if (!reference) return
+    setSimulating(true)
+    setSimulateError(null)
+    ApiService.attemptWeWirePayment(reference)
+      .then(res => { setData(res); setVerified(!!res.verified) })
+      .catch(() => setSimulateError("Couldn't verify this payment with WeWire. Please try again."))
+      .finally(() => setSimulating(false))
   }
 
   // ── Step 1: no reference yet — ask for it ──
@@ -143,6 +159,23 @@ export default function PayInstallment() {
             <p style={{ fontSize: 12, color: '#8A90A2', marginTop: 12, textAlign: 'center' }}>
               Bank transfers can take a little while to reflect. This page will show your payment as received once it's confirmed — check back or contact your agent for confirmation.
             </p>
+
+            {verified ? (
+              <div style={{ marginTop: 16, padding: 12, background: '#E9F9F0', borderRadius: 8, fontSize: 13, textAlign: 'center', color: '#0E9F6E', fontWeight: 600 }}>
+                ✓ WeWire confirms this account is active and ready — go ahead and make your transfer using the details above.
+              </div>
+            ) : (
+              <button
+                onClick={handleAttemptPayment}
+                disabled={simulating}
+                style={{ width: '100%', marginTop: 16, border: 'none', cursor: simulating ? 'default' : 'pointer', background: simulating ? '#8FB0FA' : '#2B63F6', color: '#fff', padding: '12px', borderRadius: 8, fontSize: 14, fontWeight: 600 }}
+              >
+                {simulating ? 'Verifying…' : 'Proceed with payment'}
+              </button>
+            )}
+            {simulateError && (
+              <p style={{ fontSize: 12, color: '#F04438', marginTop: 8, textAlign: 'center' }}>{simulateError}</p>
+            )}
           </div>
         ) : (
           <div style={{ marginTop: 20, padding: 12, background: '#FFF3E0', borderRadius: 8, fontSize: 13, textAlign: 'center' }}>

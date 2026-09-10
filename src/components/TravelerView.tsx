@@ -50,12 +50,9 @@ export default function TravelerView() {
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [payModalOpen, setPayModalOpen] = useState(false);
-  const [payView, setPayView] = useState<'choice' | 'custom'>('choice');
   const [payOutstandingRaw, setPayOutstandingRaw] = useState(0);
   const [payInvoiceCurrency, setPayInvoiceCurrency] = useState('GHS');
-  const [payAmount, setPayAmount] = useState('');
   const [payError, setPayError] = useState<string | null>(null);
-  const [payingWithMoolre, setPayingWithMoolre] = useState(false);
 
   useEffect(() => {
     if (!tripId || !isRealId) { setLoading(false); return; }
@@ -98,10 +95,10 @@ export default function TravelerView() {
   const itineraries: ItineraryResponse[] = apiTrip?.itineraries ?? [];
   const isAgent = !!(ctx as unknown as { user?: unknown }).user;
 
-  // All prices on this page are shown in GHS regardless of the currency they were recorded
-  // in (flights/stays/activities can each carry their own currency) — Moolre only settles in
-  // GHS, so converting everything to GHS up front keeps what the traveler sees consistent
-  // with what they'll actually be charged.
+  // All prices on this page are shown in GHS regardless of the currency they were recorded in
+  // (flights/stays/activities can each carry their own currency) — keeping everything in GHS
+  // here is just for a consistent display; the actual payment page (see handleContinueToPayment
+  // below) shows the real invoice currency and amount.
   const toGHS = (amount: number, from: string) => currencyCtx.convert(amount, from, 'GHS');
   const fmtGHS = (amount: number) => `GHS ${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 
@@ -124,7 +121,15 @@ export default function TravelerView() {
   const handleAcceptOption = async (itin: ItineraryResponse, letter: string) => {
     setAccepting(true);
     try {
-      if (isRealId) await ApiService.updateItinerary(itin.itinerary_id, { status: ItineraryStatus.CONFIRMED });
+      // Public endpoint — updateItinerary() is authenticated and would 401 for a traveler with
+      // no Meridian account. This is also what auto-creates the trip's default WeWire payment
+      // plans on the backend, so re-fetch the trip afterward to pick those up (see
+      // handleContinueToPayment below).
+      if (isRealId && tripId) {
+        await ApiService.acceptPublicItinerary(tripId, itin.itinerary_id);
+        const refreshed = await ApiService.getPublicTrip(tripId);
+        setApiTrip(refreshed);
+      }
     } catch { /* optimistic */ }
     finally {
       setAccepting(false);
@@ -134,44 +139,33 @@ export default function TravelerView() {
   };
 
   // `outstandingRaw`/`invoiceCurrency` stay in the itinerary's own currency (whatever the
-  // backend's outstanding-balance check compares against) — only the choice/custom UI works
-  // in GHS. See handleSubmitCustom for where a GHS entry gets converted back before sending.
+  // backend's outstanding-balance check compares against) — payOutstandingGHS below is only
+  // for the modal's display.
   const openPayModal = (outstandingRaw: number, invoiceCurrency: string) => {
     setPayOutstandingRaw(outstandingRaw);
     setPayInvoiceCurrency(invoiceCurrency);
-    setPayView('choice');
-    setPayAmount('');
     setPayError(null);
     setPayModalOpen(true);
   };
 
   const payOutstandingGHS = toGHS(payOutstandingRaw, payInvoiceCurrency);
 
-  const startMoolrePayment = async (amountInInvoiceCurrency: number) => {
-    if (!tripId || !isRealId) { setPayError('Payment is not available for this trip.'); return; }
-    setPayError(null);
-    setPayingWithMoolre(true);
-    try {
-      const checkout = await ApiService.initiatePublicMoolreTripPayment(tripId, Math.round(amountInInvoiceCurrency * 100) / 100);
-      window.location.href = checkout.authorization_url;
-    } catch (err) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setPayError(message ?? 'Could not start the payment. Please try again.');
-      setPayingWithMoolre(false);
+  // WeWire has no hosted checkout (see WeWireService docblock on the backend) — there's no
+  // "amount" to submit up front like Moolre's redirect required. Instead, send the traveler to
+  // the Meridian-hosted /pay/{reference} page (PayInstallment.tsx), which shows the company's
+  // WeWire virtual account bank details for them to transfer into directly. Two reference codes
+  // are available (see DefaultPaymentPlanService on the backend) — one for paying the whole
+  // outstanding balance in one transfer, one for spreading it across 3 installments — so the
+  // traveler picks which to use here rather than an amount.
+  const fullPlanReference = apiTrip?.payment_plans?.find(p => p.plan_type === 'full')?.payment_reference;
+  const installmentsPlanReference = apiTrip?.payment_plans?.find(p => p.plan_type === 'installments')?.payment_reference;
+
+  const handleContinueToPayment = (reference: string | undefined) => {
+    if (!reference) {
+      setPayError("Your agency hasn't set up online payment for this trip yet. Please contact them directly to pay.");
+      return;
     }
-  };
-
-  const handlePayFull = () => {
-    if (payOutstandingRaw <= 0) { setPayError('This trip has no outstanding balance.'); return; }
-    startMoolrePayment(payOutstandingRaw);
-  };
-
-  const handleSubmitCustom = () => {
-    const amount = Number(payAmount);
-    if (!payAmount.trim() || Number.isNaN(amount) || amount <= 0) { setPayError('Enter a valid amount.'); return; }
-    if (payOutstandingGHS >= 50 && amount <= 50) { setPayError('Custom payments must be more than GHS 50.'); return; }
-    if (amount > payOutstandingGHS + 0.01) { setPayError(`Amount can't exceed the outstanding balance of ${fmtGHS(payOutstandingGHS)}.`); return; }
-    startMoolrePayment(currencyCtx.convert(amount, 'GHS', payInvoiceCurrency));
+    navigate(`/pay/${reference}`);
   };
 
   const openFeedback = (letter: string | null = null) => {
@@ -470,8 +464,8 @@ export default function TravelerView() {
                             </div>
                             {isRealId && (() => {
                               // Backend's outstanding balance spans every itinerary on the trip
-                              // (not just this accepted option) — see MoolrePaymentController::
-                              // calculateOutstanding — so use it once it's loaded rather than
+                              // (not just this accepted option) — see TripController::
+                              // buildCostsResponse — so use it once it's loaded rather than
                               // this card's own total, which would drift once anything's paid.
                               const outstandingRaw = tripCosts ? tripCosts.summary.outstanding : cost.totalRaw;
                               return outstandingRaw > 0 ? (
@@ -584,69 +578,44 @@ export default function TravelerView() {
         </div>
       )}
 
-      {/* Pay modal */}
+      {/* Pay modal — lets the traveler pick which reference code to pay through, then sends
+          them to the WeWire-backed /pay/{reference} page (see handleContinueToPayment above). */}
       {payModalOpen && (
-        <div className="tv__pay-backdrop" onClick={e => { if (e.target === e.currentTarget && !payingWithMoolre) setPayModalOpen(false); }}>
+        <div className="tv__pay-backdrop" onClick={e => { if (e.target === e.currentTarget) setPayModalOpen(false); }}>
           <div className="tv__pay-card">
-            {payView === 'choice' ? (
+            <div className="tv__pay-title">Pay for your trip</div>
+            <p className="tv__pay-sub">Outstanding balance: {fmtGHS(payOutstandingGHS)}</p>
+            {fullPlanReference || installmentsPlanReference ? (
               <>
-                <div className="tv__pay-title">Pay for your trip</div>
-                <p className="tv__pay-sub">Outstanding balance: {fmtGHS(payOutstandingGHS)}</p>
-                <div className="tv__pay-option" onClick={handlePayFull}>
-                   Pay in full — {fmtGHS(payOutstandingGHS)}
-                </div>
-                <div className="tv__pay-option" onClick={() => { setPayError(null); setPayView('custom'); }}>
-                  Pay Your Own Amount
-                </div>
-                {payError && <div className="tv__pay-error">{payError}</div>}
-                <div className="tv__pay-actions">
-                  <button
-                    className="tv__feedback-cancel"
-                    onClick={() => setPayModalOpen(false)}
-                    disabled={payingWithMoolre}
-                  >
-                    Cancel
-                  </button>
-                </div>
+                <p className="tv__pay-sub">Choose how you'd like to pay:</p>
+                {fullPlanReference && (
+                  <div className="tv__pay-option" onClick={() => handleContinueToPayment(fullPlanReference)}>
+                    Pay in full — {fmtGHS(payOutstandingGHS)}
+                  </div>
+                )}
+                {installmentsPlanReference && (
+                  <div className="tv__pay-option" onClick={() => handleContinueToPayment(installmentsPlanReference)}>
+                    Pay in 3 installments
+                  </div>
+                )}
               </>
             ) : (
-              <>
-                <div className="tv__pay-title">Custom payment</div>
-                <p className="tv__pay-sub">
-                  {payOutstandingGHS < 50
-                    ? `Enter an amount up to ${fmtGHS(payOutstandingGHS)}.`
-                    : `Enter an amount more than GHS 50, up to ${fmtGHS(payOutstandingGHS)}.`}
-                </p>
-                <div className="tv__pay-amount-field">
-                  <span className="tv__pay-amount-prefix">GHS</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={payAmount}
-                    onChange={e => setPayAmount(e.target.value)}
-                    placeholder="Amount"
-                    autoFocus
-                  />
-                </div>
-                {payError && <div className="tv__pay-error">{payError}</div>}
-                <div className="tv__pay-actions">
-                  <button
-                    className="tv__feedback-cancel"
-                    onClick={() => { setPayError(null); setPayView('choice'); }}
-                    disabled={payingWithMoolre}
-                  >
-                    Back
-                  </button>
-                  <button
-                    className="tv__feedback-submit"
-                    onClick={handleSubmitCustom}
-                    disabled={payingWithMoolre || !payAmount.trim()}
-                  >
-                    {payingWithMoolre ? 'Redirecting…' : 'Continue to payment'}
-                  </button>
-                </div>
-              </>
+              <p className="tv__pay-sub">
+                You'll be taken to a secure page with your agency's bank transfer details and a
+                reference code to include with your payment.
+              </p>
             )}
+            {payError && <div className="tv__pay-error">{payError}</div>}
+            <div className="tv__pay-actions">
+              <button className="tv__feedback-cancel" onClick={() => setPayModalOpen(false)}>
+                Cancel
+              </button>
+              {!fullPlanReference && !installmentsPlanReference && (
+                <button className="tv__feedback-submit" onClick={() => handleContinueToPayment(undefined)}>
+                  Continue to payment
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -121,6 +121,7 @@ function FinancialsShot() {
 
 const featureRows = [
   {
+    n: '01',
     label: 'AI trip generation',
     title: 'A full itinerary, drafted and ready to edit',
     body: 'Meridian reads the enquiry — chat, email or a call summary — and drafts flight, stay and activity options within budget and preferences. Swap a hotel, change dates, adjust the budget: every detail is yours to edit before it ever reaches your traveler.',
@@ -129,6 +130,7 @@ const featureRows = [
     reverse: false,
   },
   {
+    n: '02',
     label: 'Connected channels',
     title: 'Enquiries from every channel become a trip',
     body: 'WhatsApp Business, Gmail and Instagram messages are pulled into one inbox and automatically turned into a draft trip — so generation starts the moment an enquiry lands.',
@@ -137,6 +139,7 @@ const featureRows = [
     reverse: true,
   },
   {
+    n: '03',
     label: 'Payments & reporting',
     title: 'Get paid without the back-and-forth',
     body: 'Once the itinerary is edited and sent, collect deposits or full balances through Paystack or Moolre, and watch revenue, outstanding balances and payouts roll up automatically.',
@@ -144,6 +147,29 @@ const featureRows = [
     shot: <FinancialsShot />,
     reverse: false,
   },
+]
+
+const stats = [
+  { n: 'Minutes', label: 'From enquiry to a full draft itinerary' },
+  { n: '100%', label: 'Editable before anything is sent' },
+  { n: '3', label: 'Channels feed straight into a draft' },
+  { n: '2', label: 'Payment providers, one reconciled ledger' },
+]
+
+const wewireCapabilities = [
+  { title: 'Multi-currency virtual accounts', body: 'Dedicated receiving accounts in GHS, USD, GBP and more, so travelers can pay you directly with nothing to reconcile by hand.' },
+  { title: 'Live currency conversion', body: "Every amount on your dashboard converts using WeWire's live mid-market rates, not a rate sheet someone forgot to update." },
+  { title: 'Automated payouts', body: "Move held trip revenue straight to your agency's own bank account whenever you're ready." },
+  { title: 'Webhook-verified reconciliation', body: 'Inbound transfers are matched to the right trip and installment automatically, the moment WeWire confirms them.' },
+  { title: 'Business KYC & onboarding', body: 'Get verified as a WeWire sub-customer straight from Settings — no separate portal to log into.' },
+  { title: 'Beneficiary management', body: 'Register and manage the payout accounts your agency gets paid out to.' },
+]
+
+const amenities = [
+  { title: 'One inbox, every channel', body: 'WhatsApp, Gmail and Instagram land in a single thread per traveler.' },
+  { title: 'AI-drafted itineraries', body: 'Flights, stays and activities proposed in minutes, not hours.' },
+  { title: 'Payments built in', body: 'Deposits and balances collected through Paystack or Moolre.' },
+  { title: 'Team seats & roles', body: 'Admin, agent, finance and read-only access for your whole team.' },
 ]
 
 const steps = [
@@ -221,35 +247,61 @@ function Landing() {
 
       <main>
         <section className="landing-hero">
-          <div className="landing-hero-copy">
-            <h1>AI drafts the itinerary. You make it perfect.</h1>
-            <p>
-              Every enquiry becomes a full trip plan — flights, stays and activities drafted
-              in minutes, with every detail editable before it goes to your traveler.
-              Messaging, payments and trip tracking come along for free.
-            </p>
-            <div className="landing-hero-actions">
-              <Link to="/signup" className="btn-primary landing-cta">Start free trial</Link>
-              <Link to="/login" className="btn-secondary landing-cta">Sign in</Link>
-            </div>
-            <p className="landing-hero-note">No credit card required · 14-day free trial</p>
+          <span className="landing-eyebrow">Welcome, travel agencies</span>
+          <h1>
+            An <span className="landing-highlight">itinerary</span><br />
+            you don't have to rebuild from scratch.
+          </h1>
+          <p className="landing-hero-copy-text">
+            Every enquiry becomes a full trip plan — flights, stays and activities drafted
+            in minutes, with every detail editable before it goes to your traveler.
+            Messaging, payments and trip tracking come along for free.
+          </p>
+          <div className="landing-hero-actions">
+            <Link to="/signup" className="btn-primary landing-cta landing-pill-btn">Start free trial</Link>
+            <Link to="/login" className="btn-secondary landing-cta landing-pill-btn">Sign in</Link>
           </div>
+          <p className="landing-hero-note">No credit card required · 14-day free trial</p>
 
           <div className="landing-hero-visual">
             <ItineraryShot />
           </div>
         </section>
 
-        <section className="landing-stats">
-          <div><strong>Minutes</strong><span>From enquiry to a full draft itinerary</span></div>
-          <div><strong>100%</strong><span>Editable before anything is sent</span></div>
-          <div><strong>3</strong><span>Channels feed straight into a draft</span></div>
+        <section id="wewire" className="landing-section landing-wewire-section">
+          <span className="landing-eyebrow">Payments infrastructure</span>
+          <h2>Built on a live WeWire integration.</h2>
+          <p className="landing-section-sub">Every dollar, cedi or pound that moves through Meridian runs on WeWire — here's what's actually connected.</p>
+          <div className="landing-wewire-grid">
+            {wewireCapabilities.map((c) => (
+              <div key={c.title} className="landing-amenity">
+                <span className="landing-check landing-check--lg">✓</span>
+                <h3>{c.title}</h3>
+                <p>{c.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="landing-stats-strip">
+          <span className="landing-eyebrow">Trusted by travel agencies</span>
+          <h2>Built for how agencies actually work.</h2>
+          <div className="landing-stats">
+            {stats.map((s) => (
+              <div key={s.label}><strong>{s.n}</strong><span>{s.label}</span></div>
+            ))}
+          </div>
         </section>
 
         <section id="features" className="landing-feature-rows">
+          <div className="landing-feature-rows-head">
+            <span className="landing-eyebrow">What Meridian does</span>
+            <h2>Three ways Meridian works for you.</h2>
+          </div>
           {featureRows.map((f) => (
             <div key={f.title} className={`landing-feature-row${f.reverse ? ' landing-feature-row--reverse' : ''}`}>
               <div className="landing-feature-row-copy">
+                <span className="landing-feature-num">({f.n})</span>
                 <span className="landing-feature-label">{f.label}</span>
                 <h2>{f.title}</h2>
                 <p>{f.body}</p>
@@ -264,8 +316,31 @@ function Landing() {
           ))}
         </section>
 
+        <section className="landing-mid-banner">
+          <span className="landing-eyebrow landing-eyebrow--light">Simple pricing</span>
+          <h2>Your itinerary, on autopilot.<br />14 days free, on us.</h2>
+          <p>Start drafting trips today. No contracts, cancel anytime.</p>
+          <a href="#pricing" className="btn-primary landing-cta landing-pill-btn">See plans</a>
+        </section>
+
+        <section className="landing-section">
+          <span className="landing-eyebrow">The workspace</span>
+          <h2>Not the trip-planning tool you remember.</h2>
+          <p className="landing-section-sub">A nicer way to spend the parts of the day between enquiry and payout.</p>
+          <div className="landing-amenities-grid">
+            {amenities.map((a) => (
+              <div key={a.title} className="landing-amenity">
+                <span className="landing-check landing-check--lg">✓</span>
+                <h3>{a.title}</h3>
+                <p>{a.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section id="how-it-works" className="landing-section landing-section-alt">
-          <h2>How it works</h2>
+          <span className="landing-eyebrow">How it works</span>
+          <h2>Your first trip. Three steps. That's it.</h2>
           <p className="landing-section-sub">From first message to booked trip in three steps.</p>
           <div className="landing-steps">
             {steps.map((s) => (
@@ -302,7 +377,8 @@ function Landing() {
         </section>
 
         <section id="faq" className="landing-section landing-section-alt">
-          <h2>Frequently asked questions</h2>
+          <span className="landing-eyebrow">Frequently asked questions</span>
+          <h2>Questions, answered.</h2>
           <p className="landing-section-sub">Can't find what you're looking for? Reach out to our team.</p>
           <div className="faq-list">
             {faqs.map((f, i) => (
@@ -319,9 +395,9 @@ function Landing() {
         </section>
 
         <section className="landing-cta-banner">
-          <h2>Ready to bring your agency into one workspace?</h2>
+          <h2>A workspace that doesn't leave your itineraries buried in inboxes.</h2>
           <p>Start your free 14-day trial — no credit card required.</p>
-          <Link to="/signup" className="btn-primary landing-cta">Start free trial</Link>
+          <Link to="/signup" className="btn-primary landing-cta landing-pill-btn">Start free trial</Link>
         </section>
       </main>
 
@@ -344,6 +420,7 @@ function Landing() {
           </div>
         </div>
         <div className="landing-footer-bottom">
+          <span>Built for travel agencies everywhere</span>
           <span>© {new Date().getFullYear()} Meridian. All rights reserved.</span>
         </div>
       </footer>

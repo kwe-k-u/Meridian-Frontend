@@ -15,7 +15,6 @@
 .main-layout__body {
   flex: 1;
   padding: 28px;
-  overflow: auto;
   background: var(--bg);
 }
 

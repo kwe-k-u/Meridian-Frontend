@@ -5,7 +5,7 @@ import '../../styles/CreateTripModal.css';
 import { ApiService } from '../../services/api-service';
 import { useAuth } from '../../contexts/AuthContext';
 import { MERIDIAN_AI_PROVIDER_KEY } from '../../pages/Settings';
-import type { CustomerResponse } from '../../types/app';
+import type { CustomerResponse, TripDetailsExtraction } from '../../types/app';
 import { TripStatus } from '../../types/app';
 
 // ── CreateTripModal ──────────────────────────────────────────────────────────
@@ -19,7 +19,7 @@ const keyframes = `
 @keyframes ctm-fade-in { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:translateY(0) } }
 `;
 
-type Phase = 'customer' | 'mode' | 'draft' | 'chat' | 'generating' | 'done';
+type Phase = 'customer' | 'mode' | 'draft' | 'chat' | 'extracting' | 'generating' | 'done';
 type ChatMsg = { role: 'ai' | 'agent'; text: string };
 
 function parseTrip(text: string): { destinations: string[]; budget: string } {
@@ -42,10 +42,18 @@ function parseTrip(text: string): { destinations: string[]; budget: string } {
 
 export default function CreateTripModal() {
   const navigate = useNavigate();
-  const { createOpen, createStep, createFromConvo, createdTripId, closeCreate, startSearch } = useApp();
+  const { createOpen, createStep, createFromConvo, createFromConversationId, createdTripId, closeCreate, startSearch } = useApp();
   const { user } = useAuth();
 
   const [phase, setPhase] = useState<Phase>('customer');
+
+  // "Create trip from this chat" — AI prefill (see ConversationController::extractTripDetails).
+  // extractedNotes/extractionError surface in the draft form's banner once loaded/failed.
+  // extractedCustomerId is looked up against `customers` separately (see the effect below)
+  // rather than trusting extractTripDetails' partial customer shape as a full CustomerResponse.
+  const [extractedNotes, setExtractedNotes] = useState<string[]>([]);
+  const [extractionError, setExtractionError] = useState('');
+  const [extractedCustomerId, setExtractedCustomerId] = useState<string | null>(null);
 
   // Customer selection
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
@@ -116,11 +124,67 @@ export default function CreateTripModal() {
       setEndDate('');
       setBudget('');
       setDestinations([]);
+      setExtractedNotes([]);
+      setExtractionError('');
+      setExtractedCustomerId(null);
       return;
     }
     setLoadingCustomers(true);
     ApiService.getCustomers().then(r => setCustomers(r.data ?? [])).catch(() => {}).finally(() => setLoadingCustomers(false));
   }, [createOpen]);
+
+  // "Create trip from this chat" — skips the customer/mode/draft setup screens: reads the
+  // conversation, prefills the draft form's own fields from what the AI found, and lands
+  // straight on that form (reusing its existing UI) for the agent to review and confirm.
+  useEffect(() => {
+    if (!createOpen || !createFromConversationId) return;
+    let cancelled = false;
+    setPhase('extracting');
+    setExtractionError('');
+
+    ApiService.extractTripDetails(createFromConversationId)
+      .then((details: TripDetailsExtraction) => {
+        if (cancelled) return;
+        setTripName(details.trip_name);
+        setDescription(details.description);
+        setDestinations(details.destinations);
+        setStartDate(details.start_date ?? '');
+        setEndDate(details.end_date ?? '');
+        setBudget(details.budget != null ? String(details.budget) : '');
+        setExtractedNotes(details.notes ?? []);
+
+        if (details.customer) {
+          setExtractedCustomerId(details.customer.customer_id);
+        } else {
+          setIsGuest(true);
+          setGuestName(details.traveler_name ?? '');
+        }
+
+        setPhase('draft');
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setExtractionError(err instanceof Error ? err.message : "Couldn't read this conversation to prefill the trip.");
+        setPhase('customer');
+      });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createOpen, createFromConversationId]);
+
+  // Resolves extractedCustomerId (a bare id from extractTripDetails' partial customer shape)
+  // against the full CustomerResponse list once both are loaded — order between the two
+  // fetches above isn't guaranteed, so this can't just happen inline in the effect above.
+  useEffect(() => {
+    if (!extractedCustomerId || customers.length === 0) return;
+    const match = customers.find(c => c.customer_id === extractedCustomerId);
+    if (match) {
+      setSelectedCustomer(match);
+      setIsGuest(false);
+      setCustSearch(`${match.first_name} ${match.last_name}`);
+    }
+    setExtractedCustomerId(null);
+  }, [extractedCustomerId, customers]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -270,6 +334,24 @@ export default function CreateTripModal() {
 
   // ── Render ───────────────────────────────────────────────────
 
+  if (effectivePhase === 'extracting') {
+    return (
+      <>
+        <style>{keyframes}</style>
+        <div className="ctm-backdrop" onClick={closeCreate}>
+          <div className="ctm-card" onClick={e => e.stopPropagation()}>
+            <div className="ctm-centered">
+              <div className="ctm-star">✦</div>
+              <h2 className="ctm-load-title">Reading the conversation…</h2>
+              <p className="ctm-load-sub">Meridian is pulling the trip details out of this chat.</p>
+              <div className="ctm-progress-wrap"><div className="ctm-progress-bar" /></div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   // Steps 2 and 3 (generating + done) reuse existing styles
   if (effectivePhase === 'generating') {
     return (
@@ -330,6 +412,11 @@ export default function CreateTripModal() {
               <div className="ctm-body">
                 {createFromConvo && (
                   <div className="ctm-badge"><span>💬</span><span>Creating from {createFromConvo}'s chat</span></div>
+                )}
+                {extractionError && (
+                  <p style={{ color: '#D64545', fontSize: 13, margin: '0 0 12px' }}>
+                    {extractionError} You can still fill in the details manually below.
+                  </p>
                 )}
                 <h2 className="ctm-title">Who is this trip for?</h2>
                 <p className="ctm-sub">Select a traveler from your client list, search to create a new one, or continue as a guest.</p>
@@ -505,6 +592,17 @@ export default function CreateTripModal() {
           {effectivePhase === 'draft' && (
             <>
               <div className="ctm-body">
+                {createFromConversationId && (
+                  <div className="ctm-badge"><span>✦</span><span>Prefilled by Meridian from {createFromConvo ? `${createFromConvo}'s` : 'this'} chat — review before creating</span></div>
+                )}
+                {extractedNotes.length > 0 && (
+                  <div style={{ background: '#FFF8E6', border: '1px solid #F5D98B', borderRadius: 8, padding: '10px 12px', margin: '8px 0 4px', fontSize: 13 }}>
+                    <strong>Double-check:</strong>
+                    <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                      {extractedNotes.map((n, i) => <li key={i}>{n}</li>)}
+                    </ul>
+                  </div>
+                )}
                 <h2 className="ctm-title">Trip details — <span style={{ color: '#2B63F6' }}>{travelerName}</span></h2>
                 <div className="ctm-field-group">
                   <div className="ctm-field">
@@ -570,7 +668,7 @@ export default function CreateTripModal() {
                 </div>
               </div>
               <div className="ctm-footer">
-                <button className="ctm-btn-secondary" onClick={() => setPhase('mode')}>← Back</button>
+                <button className="ctm-btn-secondary" onClick={() => setPhase(createFromConversationId ? 'customer' : 'mode')}>← Back</button>
                 <button
                   className="ctm-btn-primary"
                   style={{ opacity: tripName.trim() ? 1 : 0.5 }}

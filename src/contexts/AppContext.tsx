@@ -82,6 +82,7 @@ export interface AppContextType {
   createOpen: boolean;
   createStep: number;
   createFromConvo: string | null;
+  createFromConversationId: string | null;
   createdTripId: string | null;
   genItinOpen: boolean;
   connectOpen: boolean;
@@ -145,7 +146,7 @@ export interface AppContextType {
   recordPayment: () => void;
   sendReminder: () => void;
   downloadInvoice: () => void;
-  createTripFromConvo: (convoName?: string) => void;
+  createTripFromConvo: (conversationId: string, convoName?: string) => void;
 
   setNewUser: () => void;
   setEstablished: () => void;
@@ -184,6 +185,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [createStep, setCreateStep] = useState(1);
   const [createFromConvo, setCreateFromConvo] = useState<string | null>(null);
+  const [createFromConversationId, setCreateFromConversationId] = useState<string | null>(null);
   const [createdTripId, setCreatedTripId] = useState<string | null>(null);
   // GenerateItineraryModal visibility.
   const [genItinOpen, setGenItinOpen] = useState(false);
@@ -296,9 +298,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setActiveOption('A');
   }, []);
 
-  const createTripFromConvo = useCallback((convoName?: string) => {
+  const createTripFromConvo = useCallback((conversationId: string, convoName?: string) => {
     setCreateOpen(true);
     setCreateFromConvo(convoName ?? '');
+    setCreateFromConversationId(conversationId);
   }, []);
 
   const openGenItin = useCallback(() => setGenItinOpen(true), []);
@@ -308,12 +311,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCreateOpen(true);
     setCreateStep(1);
     setCreateFromConvo(null);
+    setCreateFromConversationId(null);
   }, []);
 
   const closeCreate = useCallback(() => {
     setCreateOpen(false);
     setCreateStep(1);
     setCreateFromConvo(null);
+    setCreateFromConversationId(null);
     setCreatedTripId(null);
   }, []);
 
@@ -578,7 +583,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const ctx = useMemo<AppContextType>(() => ({
-    createOpen, createStep, createFromConvo, createdTripId, genItinOpen,
+    createOpen, createStep, createFromConvo, createFromConversationId, createdTripId, genItinOpen,
     connectOpen, connectChannel, connectStep,
     openInvoice, toast: toastMsg,
     activeOption, builderTab, activeCall,
@@ -610,7 +615,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     getFlights, getStays, getActivities,
     getCallLogs, getSettingsTabs,
   }), [
-    createOpen, createStep, createFromConvo, createdTripId, genItinOpen,
+    createOpen, createStep, createFromConvo, createFromConversationId, createdTripId, genItinOpen,
     connectOpen, connectChannel, connectStep,
     openInvoice, toastMsg,
     activeOption, builderTab, activeCall,

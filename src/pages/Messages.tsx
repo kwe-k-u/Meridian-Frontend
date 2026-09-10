@@ -467,7 +467,11 @@ function RightPanel({ convo, onBack, onOpenLinkModal }: { convo: Conversation | 
         <div className="msgs-create-card-desc">
           Create a trip from this conversation and Meridian will extract the brief and draft itinerary options.
         </div>
-        <button onClick={() => ctx.createTripFromConvo(convo.name)} className="msgs-create-btn">
+        <button
+          onClick={() => convo.conversation_id && ctx.createTripFromConvo(convo.conversation_id, convo.name)}
+          className="msgs-create-btn"
+          disabled={!convo.conversation_id}
+        >
           Create trip from this chat
         </button>
         <button onClick={onOpenLinkModal} className="msgs-create-btn-secondary">

@@ -31,11 +31,15 @@ import PayInstallment from './pages/PayInstallment'
 import PaymentsOnboarding from './pages/onboarding/PaymentsOnboarding'
 import MainLayout from './components/Layout/MainLayout'
 import ProtectedRoute from './components/ProtectedRoute'
+import WeWireFallbackModal from './components/modals/WeWireFallbackModal'
 
 function App() {
   return (
     <AuthProvider>
       <CurrencyProvider>
+        {/* Mounted once at the root, driven by src/services/wewire-fallback.ts — any page that
+            calls a WeWire-backed endpoint can trigger the "Response from wewire server" popup. */}
+        <WeWireFallbackModal />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<AuthPage />} />

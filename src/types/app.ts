@@ -611,14 +611,21 @@ export interface WeWireBeneficiaryResponse {
   label: string | null;
   wewire_beneficiary_id: string | null;
   currency: string;
+  country: string | null;
   account_name: string;
   bank_name: string | null;
+  address_line1: string | null;
+  city: string | null;
   account_number: string | null;
   iban: string | null;
   sort_code: string | null;
   routing_number: string | null;
+  account_category: 'CHECKING' | 'SAVINGS' | null;
   swift_bic: string | null;
   settlement_method: string | null;
+  // True when created via the "Response from wewire server" fallback popup rather than a
+  // genuine WeWire response — see WeWireBeneficiaryController::store.
+  is_simulated: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -629,6 +636,9 @@ export interface VirtualAccountResponse {
   currency: string;
   wewire_account_id: string | null;
   status: VirtualAccountStatus;
+  // True when this account was created from a simulated fallback (WeWire's live API failed and
+  // the user accepted the "Response from wewire server" popup) rather than a real response.
+  is_simulated: boolean;
   account_number: string | null;
   iban: string | null;
   sort_code: string | null;
@@ -650,12 +660,20 @@ export interface InstallmentResponse {
   status: InstallmentStatus;
 }
 
+// A trip can have up to one plan per `plan_type` at once (see the backend's
+// unique(trip_id, plan_type)) — 'full' and 'installments' are auto-created when an itinerary is
+// accepted (DefaultPaymentPlanService), so the traveler can choose which to pay through on the
+// public /pay/:reference page (see TravelerView.tsx); 'custom' is the original staff-hand-built
+// plan from TripDetail.tsx's payment plan panel (ApiService.createPaymentPlan).
+export type PaymentPlanType = 'full' | 'installments' | 'custom';
+
 export interface PaymentPlanResponse {
   id: string;
   trip_id: string;
   payment_reference: string;
   total_amount: number;
   currency: string;
+  plan_type: PaymentPlanType;
   status: PaymentPlanStatus;
   created_by: string | null;
   created_at: string;
@@ -682,6 +700,10 @@ export interface WeWireLookupResponse {
     sort_code: string | null;
     routing_number: string | null;
   } | null;
+  // Present (true) only on the response from ApiService.attemptWeWirePayment when WeWire's
+  // live account-status check genuinely succeeded — no payment was simulated, it's just
+  // confirmation the account is real and ready for the customer to transfer into.
+  verified?: boolean;
 }
 
 export interface WeWireInboundResponse {
@@ -718,6 +740,9 @@ export interface WeWireDisbursementResponse {
   currency: string;
   fee: number | null;
   status: DisbursementStatus;
+  // True when this disbursement was recorded from a simulated fallback (WeWire's live payout
+  // call failed and the user accepted the "Response from wewire server" popup).
+  is_simulated: boolean;
   failure_reason: string | null;
   initiated_at: string;
   settled_at: string | null;
@@ -908,6 +933,13 @@ export interface TripResponse {
   start_date: string | null;
   end_date: string | null;
   budget: string | null;
+  // Only present on GET /trips (list) — the confirmed itinerary's actual computed cost
+  // (flights + accommodation + activities + 5% fee), falling back to the first option if none
+  // is confirmed yet, and null if there's no itinerary at all. Use this instead of `budget`
+  // (a free-text estimate typed in at trip creation, unrelated to what the itinerary actually
+  // costs) whenever showing a trip's "value" — see TripController::index / Trips.tsx.
+  computed_total?: number | null;
+  computed_currency?: string | null;
   status: TripStatus;
   created_at: string;
   updated_at: string;
@@ -928,7 +960,10 @@ export interface TripResponse {
       paid_at: string | null;
     };
   }[];
-  payment_plan?: PaymentPlanResponse | null;
+  // Populated on the public GET /public/trips/{trip} response (TripController::publicShow) —
+  // every payment plan set up for this trip, so the traveler can pick a plan_type to pay
+  // through (see TravelerView.tsx). Not loaded on the authenticated trip endpoints.
+  payment_plans?: PaymentPlanResponse[];
 }
 
 export interface DestinationResponse {
@@ -1200,4 +1235,22 @@ export interface GmailThreadPreview {
 export interface GmailThreadBrowseResponse {
   threads: GmailThreadPreview[];
   next_page_token: string | null;
+}
+
+// Returned by ConversationController::extractTripDetails — "Create trip from this chat"'s AI
+// prefill. `customer` is the conversation's already-matched client record (if any, matched by
+// email in PollGmailAccountJob), separate from the AI's own `traveler_name` guess — prefer the
+// real record over the guess when both are present.
+export interface TripDetailsExtraction {
+  trip_name: string;
+  description: string;
+  destinations: string[];
+  start_date: string | null;
+  end_date: string | null;
+  budget: number | null;
+  currency: string | null;
+  traveler_count: number | null;
+  traveler_name: string | null;
+  notes: string[];
+  customer: { customer_id: string; first_name: string; last_name: string; email: string | null } | null;
 }

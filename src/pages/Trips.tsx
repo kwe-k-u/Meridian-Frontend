@@ -265,7 +265,7 @@ export default function Trips() {
               </div>
 
               <div className="trip-value trip-cell">
-                {t.budget ? format(Number(t.budget), 'GHS') : '—'}
+                {t.computed_total ? format(t.computed_total, t.computed_currency ?? 'GHS') : '—'}
               </div>
 
               {/* Overview button */}
@@ -304,7 +304,7 @@ export default function Trips() {
                     {sm.display}
                   </div>
                   <div className="trip-value">
-                    {t.budget ? `GHS ${Number(t.budget).toLocaleString()}` : '—'}
+                    {t.computed_total ? format(t.computed_total, t.computed_currency ?? 'GHS') : '—'}
                   </div>
                 </div>
               </div>
@@ -436,17 +436,17 @@ export default function Trips() {
                 <div className="tov-stat-label">Travelers</div>
               </div>
               <div className="tov-stat">
-                <div className="tov-stat-num">{overviewTrip.budget ? `GHS ${Number(overviewTrip.budget).toLocaleString()}` : '—'}</div>
-                <div className="tov-stat-label">Trip budget</div>
+                <div className="tov-stat-num">{overviewTrip.computed_total ? format(overviewTrip.computed_total, overviewTrip.computed_currency ?? 'GHS') : '—'}</div>
+                <div className="tov-stat-label">Trip value</div>
               </div>
               {overviewCosts && (
                 <>
                   <div className="tov-stat">
-                    <div className="tov-stat-num tov-stat-num--green">GHS {Number(overviewCosts.summary.total_paid).toLocaleString()}</div>
+                    <div className="tov-stat-num tov-stat-num--green">{format(Number(overviewCosts.summary.total_paid), overviewTrip.computed_currency ?? 'GHS')}</div>
                     <div className="tov-stat-label">Paid</div>
                   </div>
                   <div className="tov-stat">
-                    <div className="tov-stat-num tov-stat-num--red">GHS {Number(overviewCosts.summary.outstanding).toLocaleString()}</div>
+                    <div className="tov-stat-num tov-stat-num--red">{format(Number(overviewCosts.summary.outstanding), overviewTrip.computed_currency ?? 'GHS')}</div>
                     <div className="tov-stat-label">Outstanding</div>
                   </div>
                 </>
@@ -495,9 +495,9 @@ export default function Trips() {
                         </div>
                       ))}
                       <div className="tov-payment-summary">
-                        <div className="tov-ps-row"><span>Total paid</span><span className="tov-ps-paid">GHS {Number(overviewCosts.summary.total_paid).toLocaleString()}</span></div>
-                        {overviewCosts.summary.total_pending > 0 && <div className="tov-ps-row"><span>Pending</span><span className="tov-ps-pending">GHS {Number(overviewCosts.summary.total_pending).toLocaleString()}</span></div>}
-                        <div className="tov-ps-row tov-ps-row--outstanding"><span>Outstanding</span><span>GHS {Number(overviewCosts.summary.outstanding).toLocaleString()}</span></div>
+                        <div className="tov-ps-row"><span>Total paid</span><span className="tov-ps-paid">{format(Number(overviewCosts.summary.total_paid), overviewTrip.computed_currency ?? 'GHS')}</span></div>
+                        {overviewCosts.summary.total_pending > 0 && <div className="tov-ps-row"><span>Pending</span><span className="tov-ps-pending">{format(Number(overviewCosts.summary.total_pending), overviewTrip.computed_currency ?? 'GHS')}</span></div>}
+                        <div className="tov-ps-row tov-ps-row--outstanding"><span>Outstanding</span><span>{format(Number(overviewCosts.summary.outstanding), overviewTrip.computed_currency ?? 'GHS')}</span></div>
                       </div>
                     </>
                   ) : (

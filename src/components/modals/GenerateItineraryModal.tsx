@@ -33,7 +33,8 @@ export default function GenerateItineraryModal() {
   const ttsRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Refresh the trip list from the real API every time the modal opens, so "Draft"/"AI
-  // drafting"/"Inquiry" filtering below reflects real trips (falls back to mock data on failure).
+  // drafting"/"Inquiry" filtering below reflects real trips (shows an empty list on failure —
+  // there's no mock trip list to fall back to).
   useEffect(() => {
     if (genItinOpen) fetchTripsList();
   }, [genItinOpen, fetchTripsList]);

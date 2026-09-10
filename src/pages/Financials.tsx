@@ -21,6 +21,16 @@ const fmtDate = (d: string | null) => {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+// Payment methods are free text for manually-recorded transactions (e.g. "Cash", "Bank
+// Transfer") but a fixed literal for gateway-processed ones — MoolrePaymentController always
+// stores 'moolre' (see initiateTripPayment/initiateSubscriptionPayment). Give that one a
+// recognizable label + pill instead of showing the raw lowercase string like every other method.
+const methodLabel = (method: string | null) => {
+  if (!method) return '—';
+  if (method === 'moolre') return 'Moolre';
+  return method.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
 // ── Financials ─────────────────────────────────────────────────
 // Purpose: Displays revenue/outstanding/refund stats, monthly chart, and
 //          transaction table.
@@ -210,7 +220,13 @@ export default function Financials() {
                 <span className="td-gray">
                   {tx.trip_payment?.trip?.trip_name || '—'}
                 </span>
-                <span className="td-gray">{tx.payment_method || '—'}</span>
+                <span className="td-gray">
+                  {tx.payment_method === 'moolre' ? (
+                    <span className="method-pill method-pill-moolre">Moolre</span>
+                  ) : (
+                    methodLabel(tx.payment_method)
+                  )}
+                </span>
                 <span>
                   <span className="status-pill" style={{ background: sm.bg, color: sm.fg }}>
                     {tx.status}

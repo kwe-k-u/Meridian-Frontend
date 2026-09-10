@@ -204,6 +204,19 @@
   cursor: default;
 }
 
+.method-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.method-pill-moolre {
+  background: #E6EEFF;
+  color: #2B63F6;
+}
+
 /* ── Financials Responsive ── */
 @media (max-width: 768px) {
   .financials-page {

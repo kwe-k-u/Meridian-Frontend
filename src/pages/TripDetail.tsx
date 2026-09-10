@@ -3204,8 +3204,8 @@ export default function TripDetail() {
                             {isAccepted ? (
                               <button
                                 className="td-sidebar-opt-btn"
-                                disabled={isBusy}
-                                onClick={() => handleAcceptItinerary(opt.itineraryId)}
+                                disabled={isBusy || !opt.itineraryId}
+                                onClick={() => opt.itineraryId && handleAcceptItinerary(opt.itineraryId)}
                               >
                                 Accepted
                               </button>
@@ -3213,15 +3213,15 @@ export default function TripDetail() {
                               <>
                                 <button
                                   className="td-sidebar-opt-btn td-sidebar-opt-btn--accept"
-                                  disabled={isBusy}
-                                  onClick={() => handleAcceptItinerary(opt.itineraryId)}
+                                  disabled={isBusy || !opt.itineraryId}
+                                  onClick={() => opt.itineraryId && handleAcceptItinerary(opt.itineraryId)}
                                 >
                                   Accept
                                 </button>
                                 <button
                                   className="td-sidebar-opt-btn td-sidebar-opt-btn--decline"
-                                  disabled={isBusy}
-                                  onClick={() => handleDeclineItinerary(opt.itineraryId)}
+                                  disabled={isBusy || !opt.itineraryId}
+                                  onClick={() => opt.itineraryId && handleDeclineItinerary(opt.itineraryId)}
                                 >
                                   Decline
                                 </button>

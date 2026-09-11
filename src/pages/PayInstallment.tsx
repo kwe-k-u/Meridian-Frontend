@@ -109,6 +109,11 @@ export default function PayInstallment() {
   }
 
   const account = data.payment_account
+  // GHS virtual accounts on WeWire are mobile money accounts (MTN/Vodafone/AirtelTigo), not bank
+  // accounts — there's no IBAN/sort code/routing number for this currency, so the pay page should
+  // read as "pay with Mobile Money" rather than the generic "bank transfer" copy used for the
+  // other (genuinely bank-account) currencies.
+  const isMobileMoney = account?.currency === 'GHS'
 
   return (
     <div className="pc-container">
@@ -145,19 +150,27 @@ export default function PayInstallment() {
           </div>
         ) : account ? (
           <div style={{ marginTop: 20 }}>
-            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Pay by bank transfer</p>
+            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{isMobileMoney ? 'Pay with Mobile Money' : 'Pay by bank transfer'}</p>
             <div style={{ background: '#F7F8FA', borderRadius: 8, padding: 16, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {account.account_number && <div><strong>Account number:</strong> {account.account_number}</div>}
-              {account.iban && <div><strong>IBAN:</strong> {account.iban}</div>}
-              {account.sort_code && <div><strong>Sort code:</strong> {account.sort_code}</div>}
-              {account.routing_number && <div><strong>Routing number:</strong> {account.routing_number}</div>}
+              {isMobileMoney ? (
+                account.account_number && <div><strong>Mobile Money number:</strong> {account.account_number}</div>
+              ) : (
+                <>
+                  {account.account_number && <div><strong>Account number:</strong> {account.account_number}</div>}
+                  {account.iban && <div><strong>IBAN:</strong> {account.iban}</div>}
+                  {account.sort_code && <div><strong>Sort code:</strong> {account.sort_code}</div>}
+                  {account.routing_number && <div><strong>Routing number:</strong> {account.routing_number}</div>}
+                </>
+              )}
               <div><strong>Currency:</strong> {account.currency}</div>
             </div>
             <div style={{ marginTop: 12, padding: 12, background: '#FFF8E1', borderRadius: 8, fontSize: 13 }}>
-              <strong>Important:</strong> Include the reference code <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{data.payment_reference}</span> in your transfer description, or your payment may not be matched to this trip automatically.
+              <strong>Important:</strong> Include the reference code <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{data.payment_reference}</span> {isMobileMoney ? 'in your mobile money payment note' : 'in your transfer description'}, or your payment may not be matched to this trip automatically.
             </div>
             <p style={{ fontSize: 12, color: '#8A90A2', marginTop: 12, textAlign: 'center' }}>
-              Bank transfers can take a little while to reflect. This page will show your payment as received once it's confirmed — check back or contact your agent for confirmation.
+              {isMobileMoney
+                ? "Mobile money payments are usually quick, but can still take a little while to reflect. This page will show your payment as received once it's confirmed — check back or contact your agent for confirmation."
+                : "Bank transfers can take a little while to reflect. This page will show your payment as received once it's confirmed — check back or contact your agent for confirmation."}
             </p>
 
             {verified ? (

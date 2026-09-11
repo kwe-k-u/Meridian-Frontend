@@ -3,8 +3,8 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext'
 import { useAuth } from '../contexts/AuthContext'
 import { ApiService } from '../services/api-service'
-import type { SettingsTab, CompanyResponse, CompanyUser, VirtualAccountResponse, WeWireBeneficiaryResponse, WeWireInboundResponse, WeWireDisbursementResponse, FundHandling, WeWireKycStatus, GmailStatusResponse } from '../types/app'
-import { WEWIRE_SUPPORTED_CURRENCIES, WEWIRE_MAX_ACCOUNTS } from '../types/app'
+import type { SettingsTab, CompanyResponse, CompanyUser, VirtualAccountResponse, WeWireBeneficiaryResponse, WeWireInboundResponse, WeWireDisbursementResponse, WeWireCryptoWalletResponse, FundHandling, WeWireKycStatus, GmailStatusResponse } from '../types/app'
+import { WEWIRE_SUPPORTED_CURRENCIES, WEWIRE_MAX_ACCOUNTS, CRYPTO_WALLET_ASSETS, CRYPTO_WALLET_CHAINS } from '../types/app'
 import DemoBanner from '../components/DemoBanner'
 import '../styles/Settings.css'
 
@@ -801,6 +801,7 @@ function PaymentAccounts() {
   const { toastAction } = useApp();
   const navigate = useNavigate();
   const [accounts, setAccounts] = useState<VirtualAccountResponse[]>([]);
+  const [wallets, setWallets] = useState<WeWireCryptoWalletResponse[]>([]);
   const [beneficiaries, setBeneficiaries] = useState<WeWireBeneficiaryResponse[]>([]);
   const [inbound, setInbound] = useState<WeWireInboundResponse[]>([]);
   const [disbursements, setDisbursements] = useState<WeWireDisbursementResponse[]>([]);
@@ -810,6 +811,10 @@ function PaymentAccounts() {
   const [addingCurrency, setAddingCurrency] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  // Crypto wallets — "asset/chain" combo string (e.g. "USDC/BASE") since a wallet is keyed by
+  // both, not just one dropdown's worth of choice.
+  const [addingWalletCombo, setAddingWalletCombo] = useState('');
+  const [requestingWallet, setRequestingWallet] = useState(false);
 
   // Add-beneficiary form (payout account — for the agency itself, or a specific trip service
   // provider like an airline or hotel). Currently the only way to add one from the UI.
@@ -832,14 +837,15 @@ function PaymentAccounts() {
     Promise.all([
       ApiService.getWeWireStatus(),
       ApiService.getWeWireAccounts(),
+      ApiService.getWeWireWallets(),
       ApiService.getWeWireBeneficiaries(),
       ApiService.getWeWireInboundQueue('unmatched'),
       ApiService.getWeWireDisbursements(),
     ])
-      .then(([status, acc, ben, inb, dis]) => {
+      .then(([status, acc, wal, ben, inb, dis]) => {
         setWewireSubcustomerId(status.wewire_subcustomer_id);
         setWewireKycStatus(status.wewire_kyc_status);
-        setAccounts(acc); setBeneficiaries(ben); setInbound(inb.data ?? []); setDisbursements(dis.data ?? []);
+        setAccounts(acc); setWallets(wal); setBeneficiaries(ben); setInbound(inb.data ?? []); setDisbursements(dis.data ?? []);
       })
       .catch(() => toastAction('Failed to load payment accounts'))
       .finally(() => setLoading(false));
@@ -848,6 +854,13 @@ function PaymentAccounts() {
   useEffect(() => { load(); }, []);
 
   const availableCurrencies = WEWIRE_SUPPORTED_CURRENCIES.filter(c => !accounts.some(a => a.currency === c));
+
+  // Every (asset, chain) combo the company doesn't already have a wallet for.
+  const availableWalletCombos = CRYPTO_WALLET_ASSETS.flatMap(asset =>
+    CRYPTO_WALLET_CHAINS
+      .filter(chain => !wallets.some(w => w.asset === asset && w.chain === chain))
+      .map(chain => `${asset}/${chain}`)
+  );
 
   const handleAddAccount = async () => {
     if (!addingCurrency) return;
@@ -861,6 +874,22 @@ function PaymentAccounts() {
       toastAction(error instanceof Error ? error.message : 'Failed to request account');
     } finally {
       setRequesting(false);
+    }
+  };
+
+  const handleAddWallet = async () => {
+    const [asset, chain] = addingWalletCombo.split('/');
+    if (!asset || !chain) return;
+    setRequestingWallet(true);
+    try {
+      await ApiService.createWeWireWallet(asset, chain);
+      toastAction(`${asset} on ${chain} wallet requested`);
+      setAddingWalletCombo('');
+      load();
+    } catch (error) {
+      toastAction(error instanceof Error ? error.message : 'Failed to request wallet');
+    } finally {
+      setRequestingWallet(false);
     }
   };
 
@@ -1034,6 +1063,44 @@ function PaymentAccounts() {
           </select>
           <button className="btn-save" onClick={handleAddAccount} disabled={requesting || !addingCurrency}>
             {requesting ? 'Requesting...' : 'Add account'}
+          </button>
+        </div>
+      )}
+
+      <div className="head-row" style={{ marginTop: 32 }}>
+        <p className="head-title">Crypto wallets</p>
+      </div>
+      <p className="field-hint">
+        Stablecoin deposit addresses (USDC/USDT) travelers can pay into instead of a bank
+        transfer — offered alongside a USD payment link. Unlike a bank transfer, a crypto deposit
+        can't be auto-matched to a specific trip (most chains have no reference/memo field), so
+        it always lands in the reconciliation queue below for you to assign by hand.
+      </p>
+      <div className="table-card">
+        <div className="th-row">
+          <span className="th-text">Asset</span>
+          <span className="th-text">Chain</span>
+          <span className="th-text">Status</span>
+          <span className="th-text">Deposit address</span>
+        </div>
+        {wallets.length === 0 && <div className="tr"><span className="name-text">No crypto wallets yet.</span></div>}
+        {wallets.map(w => (
+          <div key={w.id} className="tr">
+            <span className="name-text">{w.asset}</span>
+            <span className="email-text">{w.chain}</span>
+            <span className="active-text">{w.status}</span>
+            <span className="email-text">{w.deposit_address || '— pending provisioning —'}</span>
+          </div>
+        ))}
+      </div>
+      {availableWalletCombos.length > 0 && (
+        <div className="invite-row">
+          <select className="field-input" value={addingWalletCombo} onChange={e => setAddingWalletCombo(e.target.value)}>
+            <option value="" disabled>Select asset / chain</option>
+            {availableWalletCombos.map(combo => <option key={combo} value={combo}>{combo.replace('/', ' on ')}</option>)}
+          </select>
+          <button className="btn-save" onClick={handleAddWallet} disabled={requestingWallet || !addingWalletCombo}>
+            {requestingWallet ? 'Requesting...' : 'Add wallet'}
           </button>
         </div>
       )}

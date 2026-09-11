@@ -27,6 +27,7 @@ import type {
   VirtualAccountResponse, WeWireBeneficiaryResponse, PaymentPlanResponse, WeWireLookupResponse,
   WeWireInboundResponse, WeWireKycStatus, FundHandling,
   WeWireDisbursementResponse, DisbursementStatus, TripBalanceResponse, BeneficiaryType,
+  WeWireCryptoWalletResponse,
 } from '../types/app';
 import { TripStatus, ItineraryStatus, FlightStatus, AccommodationStatus, TransactionStatus, CallActionItemStatus } from '../types/app';
 
@@ -787,6 +788,25 @@ export class ApiService {
     return res.data;
   }
 
+  // ── WeWire crypto wallets — same shape as the bank/mobile-money virtual accounts above,
+  // just for stablecoin deposits. See WeWireCryptoWalletController.
+  public static async getWeWireWallets(): Promise<WeWireCryptoWalletResponse[]> {
+    const res = await axios.get(`${ApiService.BASE_URL}/wewire/wallets`);
+    return res.data;
+  }
+
+  // WeWire's own catalog of which (asset, chain) pairs are currently offered — shape isn't
+  // fully pinned down (WeWire's docs don't give a full example), so this is passed through
+  // as-is; the caller should treat it defensively.
+  public static async getWeWireSupportedWalletAssets(): Promise<unknown> {
+    const res = await axios.get(`${ApiService.BASE_URL}/wewire/wallets/supported-assets`);
+    return res.data;
+  }
+
+  public static async createWeWireWallet(asset: string, chain: string): Promise<WeWireCryptoWalletResponse> {
+    return ApiService.postWithWeWireFallback(`${ApiService.BASE_URL}/wewire/wallets`, { asset, chain });
+  }
+
   public static async getWeWireBeneficiaries(type?: BeneficiaryType): Promise<WeWireBeneficiaryResponse[]> {
     const res = await axios.get(`${ApiService.BASE_URL}/wewire/beneficiaries`, { params: type ? { type } : {} });
     return res.data;
@@ -870,8 +890,8 @@ export class ApiService {
   // returns `{ ...lookup, verified: true }` with nothing simulated; a failed check goes through
   // the same "Response from wewire server" popup as every other WeWire-backed action
   // (postWithWeWireFallback), and only settles a simulated payment if the customer accepts it.
-  public static async attemptWeWirePayment(reference: string): Promise<WeWireLookupResponse> {
-    return ApiService.postWithWeWireFallback(`${ApiService.BASE_URL}/public/payments/wewire/simulate/${reference}`, {});
+  public static async attemptWeWirePayment(reference: string, currency?: string): Promise<WeWireLookupResponse> {
+    return ApiService.postWithWeWireFallback(`${ApiService.BASE_URL}/public/payments/wewire/simulate/${reference}`, currency ? { currency } : {});
   }
 
   // ── Paystack payments (https://paystack.com/docs/) ──

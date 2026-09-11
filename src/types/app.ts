@@ -642,6 +642,27 @@ export interface VirtualAccountResponse {
   updated_at: string;
 }
 
+// ── WeWire crypto wallets ── Stablecoin deposit addresses, one per (asset, chain) pair — see
+// WeWireCryptoWallet on the backend. Only ever offered alongside a USD payment plan (stablecoins
+// are pegged ~1:1 to USD).
+export type CryptoWalletStatus = 'requested' | 'active' | 'failed';
+export const CRYPTO_WALLET_ASSETS = ['USDC', 'USDT'] as const;
+export const CRYPTO_WALLET_CHAINS = ['BASE', 'ETHEREUM', 'POLYGON', 'TRON'] as const;
+
+export interface WeWireCryptoWalletResponse {
+  id: string;
+  company_id: string;
+  asset: string;
+  chain: string;
+  network: string;
+  wewire_wallet_id: string | null;
+  deposit_address: string | null;
+  status: CryptoWalletStatus;
+  is_simulated: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface InstallmentResponse {
   id: string;
   payment_plan_id: string;
@@ -685,13 +706,27 @@ export interface WeWireLookupResponse {
   outstanding: number;
   status: PaymentPlanStatus;
   installments: (InstallmentResponse & { paid_amount: number; outstanding: number })[];
-  payment_account: {
+  // One entry per currency the traveler may choose to pay in (currently USD and GHS),
+  // always present regardless of whether that currency's account is actually provisioned yet —
+  // the traveler picks a currency first, then sees whether it's ready to receive payment.
+  payment_options: {
     currency: string;
-    account_number: string | null;
-    iban: string | null;
-    sort_code: string | null;
-    routing_number: string | null;
-  } | null;
+    outstanding: number;
+    account: {
+      currency: string;
+      account_number: string | null;
+      iban: string | null;
+      sort_code: string | null;
+      routing_number: string | null;
+    } | null;
+  }[];
+  // Alternative stablecoin deposit addresses, always offered as a third choice regardless of
+  // the plan's own currency. Unlike a bank transfer, a crypto deposit can't be auto-matched to
+  // this specific trip (no memo/reference field on most chains) — it lands in the same manual
+  // reconciliation queue as an unmatched bank transfer instead.
+  payment_wallets: { asset: string; chain: string; network: string; address: string | null }[];
+  // Outstanding balance converted to USD, for display alongside the crypto wallet option.
+  crypto_outstanding: number;
   // Present (true) only on the response from ApiService.attemptWeWirePayment when WeWire's
   // live account-status check genuinely succeeded — no payment was simulated, it's just
   // confirmation the account is real and ready for the customer to transfer into.

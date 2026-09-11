@@ -209,8 +209,24 @@ export default function PayInstallment() {
             {choice && choice !== 'CRYPTO' && (
               <div style={{ border: '1px solid #EEF0F4', borderRadius: 10, padding: 16 }}>
                 {!account ? (
+                  // No account for this currency exists at all yet — rather than a dead end,
+                  // "Proceed anyway" still runs the same live-check-then-fallback flow every
+                  // other option gets (see handleAttemptPayment). WeWire has nothing real to
+                  // check here, so the "Response from wewire server" popup fires immediately,
+                  // shows why, and offers to settle a simulated payment instead — same UX the
+                  // fallback popup gives every other WeWire-backed action in this app.
                   <div style={{ padding: 12, background: '#FFF3E0', borderRadius: 8, fontSize: 13, textAlign: 'center' }}>
-                    Your agency hasn't finished setting up payments in {choice} yet. Please contact them directly, or choose a different payment option above.
+                    <p style={{ margin: 0 }}>Your agency hasn't finished setting up payments in {choice} yet. Please contact them directly, or choose a different payment option above.</p>
+                    <button
+                      onClick={handleAttemptPayment}
+                      disabled={simulating}
+                      style={{ width: '100%', marginTop: 12, border: 'none', cursor: simulating ? 'default' : 'pointer', background: simulating ? '#8FB0FA' : '#2B63F6', color: '#fff', padding: '12px', borderRadius: 8, fontSize: 14, fontWeight: 600 }}
+                    >
+                      {simulating ? 'Checking with WeWire…' : 'Proceed anyway'}
+                    </button>
+                    {simulateError && (
+                      <p style={{ fontSize: 12, color: '#F04438', marginTop: 8, textAlign: 'center' }}>{simulateError}</p>
+                    )}
                   </div>
                 ) : (
                   <>

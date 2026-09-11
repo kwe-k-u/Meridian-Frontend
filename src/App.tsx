@@ -26,7 +26,6 @@ import Settings from './pages/Settings'
 import Help from './pages/Help'
 import GuideArticle from './pages/GuideArticle'
 import TravelerView from './components/TravelerView'
-import TravelerPaymentCallback from './pages/TravelerPaymentCallback'
 import PayInstallment from './pages/PayInstallment'
 import PaymentsOnboarding from './pages/onboarding/PaymentsOnboarding'
 import MainLayout from './components/Layout/MainLayout'
@@ -47,7 +46,6 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route element={<AppProvider><Outlet /></AppProvider>}>
             <Route path="/travel/:tripId" element={<TravelerView />} />
-            <Route path="/travel/:tripId/payment-callback" element={<TravelerPaymentCallback />} />
             {/* The customer-facing WeWire "payment link" page — no Meridian account required,
                 same public trust model as /travel/:tripId (see App.tsx module comment). */}
             <Route path="/pay" element={<PayInstallment />} />

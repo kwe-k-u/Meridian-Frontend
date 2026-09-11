@@ -9,8 +9,8 @@
 // for whichever screen ends up needing them (e.g. a fuller "edit itinerary metadata" UI;
 // updateItinerary itself IS used now, but only for its start_city field — see TripDetail.tsx's
 // inline start-city editor). recordSubscriptionPayment is similarly unused now that
-// Pricing.tsx pays through Moolre (initiateMoolreSubscriptionPayment) instead of recording a
-// payment as already-completed — kept for a possible future "record an offline payment" flow.
+// Pricing.tsx pays through Paystack (initiatePaystackSubscriptionPayment) instead of recording
+// a payment as already-completed — kept for a possible future "record an offline payment" flow.
 
 import axios from 'axios';
 import { confirmWeWireFallback, extractWeWireFallback } from './wewire-fallback';
@@ -20,7 +20,7 @@ import type {
   CustomerResponse, TransactionResponse, TripResponse, TripCostResponse, ItineraryResponse, GenerateItineraryApiResponse,
   ItineraryDayResponse, ItineraryFlightResponse, ItineraryAccommodationResponse,
   DestinationResponse, AirportResponse, CompanyResponse, CallResponse, CallActionItemResponse,
-  SubscriptionTierResponse, CompanySubscriptionResponse, MoolreCheckoutResponse, PaystackCheckoutResponse,
+  SubscriptionTierResponse, CompanySubscriptionResponse, PaystackCheckoutResponse,
   SuggestReplyResponse,
   FlightSearchResponse, HotelSearchResponse, CurrencyRatesResponse, GmailStatusResponse,
   ConversationResponse, MessageResponse, GmailThreadBrowseResponse, TripDetailsExtraction,
@@ -753,29 +753,9 @@ export class ApiService {
     return res.data;
   }
 
-  // ── Moolre payments (https://docs.moolre.com/) ──
-  // Both initiate* calls create a pending Transaction server-side and return a hosted
-  // checkout URL to redirect the customer to — see MoolrePaymentController. Payment
-  // completion is confirmed by polling checkMoolrePaymentStatus() from the page the customer
-  // lands back on (the Moolre webhook is best-effort and can't reach a local dev server).
-  public static async initiateMoolreTripPayment(tripId: string, amount: number, notes?: string): Promise<MoolreCheckoutResponse> {
-    const res = await axios.post(`${ApiService.BASE_URL}/payments/moolre/trip`, { trip_id: tripId, amount, notes });
-    return res.data;
-  }
-
-  public static async initiateMoolreSubscriptionPayment(subscriptionId: string, amount: number): Promise<MoolreCheckoutResponse> {
-    const res = await axios.post(`${ApiService.BASE_URL}/payments/moolre/subscription`, { subscription_id: subscriptionId, amount });
-    return res.data;
-  }
-
-  public static async checkMoolrePaymentStatus(transactionId: string): Promise<TransactionResponse> {
-    const res = await axios.get(`${ApiService.BASE_URL}/payments/moolre/${transactionId}/status`);
-    return res.data;
-  }
-
   // ── WeWire payments (https://docs.wewire.com/) ──
-  // Multi-currency virtual accounts (up to 3 per company) and trip installment plans. Unlike
-  // Moolre, WeWire has no hosted checkout link — collection happens via the company's own
+  // Multi-currency virtual accounts (up to 3 per company) and trip installment plans. WeWire
+  // has no hosted checkout link — collection happens via the company's own
   // virtual account bank details, shown on the public /pay/:reference page (see
   // lookupWeWirePaymentByReference below) and reconciled server-side by reference code.
   public static async registerWeWireSubCustomer(data: { email: string; country: string; business_type: string }): Promise<{ wewire_subcustomer_id: string; wewire_kyc_status: WeWireKycStatus }> {
@@ -895,11 +875,11 @@ export class ApiService {
   }
 
   // ── Paystack payments (https://paystack.com/docs/) ──
-  // Used for tour operator subscription payments — see PaystackPaymentController. Unlike the
-  // Moolre subscription flow, this single call both creates the (pending) subscription and
-  // starts the hosted checkout, since a subscription shouldn't be marked active until payment
-  // is confirmed. Payment completion is confirmed by polling checkPaystackPaymentStatus() from
-  // the page the customer lands back on (see PaymentCallback.tsx).
+  // Used for tour operator subscription payments — see PaystackPaymentController. This single
+  // call both creates the (pending) subscription and starts the hosted checkout, since a
+  // subscription shouldn't be marked active until payment is confirmed. Payment completion is
+  // confirmed by polling checkPaystackPaymentStatus() from the page the customer lands back on
+  // (see PaymentCallback.tsx).
   public static async initiatePaystackSubscriptionPayment(tierId: string): Promise<PaystackCheckoutResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/payments/paystack/subscription`, { tier_id: tierId });
     return res.data;
@@ -929,16 +909,6 @@ export class ApiService {
   // TripController::acceptItinerary / DefaultPaymentPlanService).
   public static async acceptPublicItinerary(tripId: string, itineraryId: string): Promise<ItineraryResponse> {
     const res = await axios.post(`${ApiService.BASE_URL}/public/trips/${tripId}/itineraries/${itineraryId}/accept`);
-    return res.data;
-  }
-
-  public static async initiatePublicMoolreTripPayment(tripId: string, amount: number): Promise<MoolreCheckoutResponse> {
-    const res = await axios.post(`${ApiService.BASE_URL}/public/payments/moolre/trip`, { trip_id: tripId, amount });
-    return res.data;
-  }
-
-  public static async checkPublicMoolrePaymentStatus(transactionId: string): Promise<TransactionResponse> {
-    const res = await axios.get(`${ApiService.BASE_URL}/public/payments/moolre/${transactionId}/status`);
     return res.data;
   }
 

@@ -151,8 +151,9 @@ export default function TravelerView() {
   const payOutstandingGHS = toGHS(payOutstandingRaw, payInvoiceCurrency);
 
   // WeWire has no hosted checkout (see WeWireService docblock on the backend) — there's no
-  // "amount" to submit up front like Moolre's redirect required. Instead, send the traveler to
-  // the Meridian-hosted /pay/{reference} page (PayInstallment.tsx), which shows the company's
+  // "amount" to submit up front the way a hosted checkout redirect would need. Instead, send
+  // the traveler to the Meridian-hosted /pay/{reference} page (PayInstallment.tsx), which shows
+  // the company's
   // WeWire virtual account bank details for them to transfer into directly. Two reference codes
   // are available (see DefaultPaymentPlanService on the backend) — one for paying the whole
   // outstanding balance in one transfer, one for spreading it across 3 installments — so the

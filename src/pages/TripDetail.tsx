@@ -894,7 +894,6 @@ export default function TripDetail() {
   const [paymentCurrency, setPaymentCurrency] = useState('GHS');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
-  const [payingWithMoolre, setPayingWithMoolre] = useState(false);
   // Sidebar tab (Options / Cost summary / Payments / Agent activity) — these used to be two
   // always-open cards (with Payments nested inside Cost summary), switched to a single tabbed
   // card so the user can flip between them instead of scrolling a long stacked sidebar. Options
@@ -1464,7 +1463,7 @@ export default function TripDetail() {
   // immediately — this app has no separate pending-payment-then-confirm flow yet.
   // The agent can enter the amount in whichever currency they actually collected it in
   // (paymentCurrency) — converted to GHS here so every recorded payment stays comparable
-  // regardless of what currency it was typed in, same as the Moolre flow below.
+  // regardless of what currency it was typed in.
   const handleRecordPayment = async () => {
     if (!apiTrip) return;
     const amount = Number(paymentAmount);
@@ -1489,24 +1488,28 @@ export default function TripDetail() {
     }
   };
 
-  // Starts a real mobile-money collection via Moolre (see MoolrePaymentController): creates a
-  // pending transaction server-side and redirects the browser to Moolre's hosted checkout
-  // page. On success the browser navigates away, so there's no "finally" to reset the loading
-  // state — it only needs resetting if the request itself fails before any redirect happens.
-  // Moolre only settles in GHS, so the chosen-currency amount is converted before sending.
-  const handlePayWithMoolre = async () => {
-    if (!apiTrip) return;
-    const amount = Number(paymentAmount);
-    if (!paymentAmount.trim() || Number.isNaN(amount) || amount <= 0) return;
-    setPayingWithMoolre(true);
-    try {
-      const amountGHS = convert(amount, paymentCurrency, 'GHS');
-      const checkout = await ApiService.initiateMoolreTripPayment(apiTrip.trip_id, Math.round(amountGHS));
-      window.location.href = checkout.authorization_url;
-    } catch {
-      ctx.toastAction('Could not start the Moolre payment.');
-      setPayingWithMoolre(false);
+  // "Pay with Mobile Money" — WeWire's virtual account accepts both bank transfer and mobile
+  // money into the same account (see WeWireService docblock), so there's no separate "mobile
+  // money" API call the way the old Moolre hosted-checkout redirect had. Instead this opens the
+  // Meridian-hosted /pay/{reference} page (PayInstallment.tsx) in a new tab, showing the
+  // account details + reference code for the customer (or the agent, on their behalf) to
+  // complete the transfer through — same reconciliation path as any other WeWire collection.
+  // Picks whichever of the trip's payment plans matches the currency selected in this form,
+  // preferring the 'full' one (a single lump-sum reference) since this panel is for recording
+  // one payment now, not spreading it across installments.
+  const handlePayWithMobileMoney = () => {
+    const plans = apiTrip?.payment_plans ?? [];
+    const candidates = plans.filter(p => p.currency === paymentCurrency);
+    const plan = candidates.find(p => p.plan_type === 'full')
+      ?? candidates.find(p => p.plan_type === 'installments')
+      ?? candidates[0];
+
+    if (!plan) {
+      ctx.toastAction(`No ${paymentCurrency} WeWire payment plan for this trip yet — set one up in the Payments tab first.`);
+      return;
     }
+
+    window.open(`/pay/${plan.payment_reference}`, '_blank', 'noopener,noreferrer');
   };
 
   // "+ Add item to this day" button. If the day already exists as a real backend row, this
@@ -3306,16 +3309,16 @@ export default function TripDetail() {
                                 Cancel
                               </button>
                               <button
-                                onClick={handlePayWithMoolre}
-                                disabled={payingWithMoolre || savingPayment || !paymentAmount.trim()}
+                                onClick={handlePayWithMobileMoney}
+                                disabled={!paymentAmount.trim()}
                                 className="td-action-btn"
                                 style={{ background: '#2B63F6', color: '#fff', borderColor: '#2B63F6' }}
                               >
-                                {payingWithMoolre ? 'Redirecting…' : 'Pay with Mobile Money'}
+                                Pay with Mobile Money
                               </button>
                               <button
                                 onClick={handleRecordPayment}
-                                disabled={savingPayment || payingWithMoolre || !paymentAmount.trim()}
+                                disabled={savingPayment || !paymentAmount.trim()}
                                 className="td-action-btn"
                                 style={{ background: '#13B981', color: '#fff', borderColor: '#13B981' }}
                               >

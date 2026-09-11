@@ -22,9 +22,10 @@ const fmtDate = (d: string | null) => {
 };
 
 // Payment methods are free text for manually-recorded transactions (e.g. "Cash", "Bank
-// Transfer") but a fixed literal for gateway-processed ones — MoolrePaymentController always
-// stores 'moolre' (see initiateTripPayment/initiateSubscriptionPayment). Give that one a
-// recognizable label + pill instead of showing the raw lowercase string like every other method.
+// Transfer") but a fixed literal for gateway-processed ones (e.g. 'wewire', see
+// WeWirePaymentController::reconcile). 'moolre' can still show up on transactions recorded
+// before that provider was removed — kept recognizable rather than falling through to the raw
+// lowercase string like every other method.
 const methodLabel = (method: string | null) => {
   if (!method) return '—';
   if (method === 'moolre') return 'Moolre';

@@ -575,17 +575,9 @@ export interface TransactionResponse {
   } | null;
 }
 
-// Returned by MoolrePaymentController::initiateTripPayment/initiateSubscriptionPayment —
-// `authorization_url` is Moolre's hosted checkout page to redirect the customer to.
-export interface MoolreCheckoutResponse {
-  transaction_id: string;
-  authorization_url: string;
-}
-
 // ── WeWire ── Multi-currency virtual accounts, up to 3 per company (one per currency), and
 // the trip installment plans/public collection page built on top of them. WeWire has no
-// hosted checkout link product, so there's no MoolreCheckoutResponse equivalent — see
-// WeWireLookupResponse instead.
+// hosted checkout link product — see WeWireLookupResponse instead.
 
 export type VirtualAccountStatus = 'requested' | 'pending' | 'active' | 'denied' | 'suspended' | 'closed';
 export type FundHandling = 'hold' | 'disburse';

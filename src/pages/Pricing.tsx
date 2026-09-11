@@ -11,8 +11,7 @@ import '../styles/Pricing.css'
 // API: ApiService.getSubscriptionTiers, .getCompanySubscriptions,
 //      .initiatePaystackSubscriptionPayment (creates the pending subscription and redirects to
 //      Paystack's hosted checkout — see PaymentCallback.tsx for how the payment is confirmed
-//      once the customer returns). Moolre remains available on the backend for subscription
-//      payments but is no longer surfaced here — Paystack is the default going forward.
+//      once the customer returns).
 //
 // Falls back to AppContext's mock getPlans() if the real tier fetch fails or returns no
 // active tiers — the monthly/annual billing toggle only affects that mock fallback pricing

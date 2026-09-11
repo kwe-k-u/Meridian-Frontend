@@ -6,19 +6,16 @@ import { TransactionStatus } from '../types/app'
 import '../styles/PaymentCallback.css'
 
 // ── PaymentCallback ────────────────────────────────────────────
-// Purpose: Landing page the customer is redirected to after paying (or cancelling) on the
-//          provider's hosted checkout page — see MoolrePaymentController::requestCheckoutLink
-//          / PaystackPaymentController::initiateSubscriptionPayment, whose redirect URLs point
-//          here as `/app/payments/callback?ref=<transaction_id>&provider=<moolre|paystack>`.
+// Purpose: Landing page the customer is redirected to after paying (or cancelling) on
+//          Paystack's hosted checkout page — see PaystackPaymentController::
+//          initiateSubscriptionPayment, whose redirect URL points here as
+//          `/app/payments/callback?ref=<transaction_id>`.
 // State: transaction, pollCount ref, status ('checking' | 'completed' | 'failed' | 'pending').
-// API: ApiService.checkMoolrePaymentStatus / .checkPaystackPaymentStatus, chosen by the
-//      `provider` query param (defaults to 'moolre' for back-compat with older redirect links
-//      that predate Paystack support).
+// API: ApiService.checkPaystackPaymentStatus.
 //
-// Both providers' webhooks are best-effort (they can't reach a plain localhost backend during
+// Paystack's webhook is best-effort (it can't reach a plain localhost backend during
 // development), so this page is the actual confirmation mechanism: it polls our own backend,
-// which in turn asks the provider directly with our API keys — see
-// MoolrePaymentController::status / PaystackPaymentController::status.
+// which in turn asks Paystack directly with our API keys — see PaystackPaymentController::status.
 
 const MAX_POLLS = 10
 const POLL_INTERVAL_MS = 3000
@@ -26,8 +23,6 @@ const POLL_INTERVAL_MS = 3000
 export default function PaymentCallback() {
   const [searchParams] = useSearchParams()
   const ref = searchParams.get('ref')
-  const provider = searchParams.get('provider') === 'paystack' ? 'paystack' : 'moolre'
-  const providerName = provider === 'paystack' ? 'Paystack' : 'Moolre'
   const [transaction, setTransaction] = useState<TransactionResponse | null>(null)
   const [error, setError] = useState(false)
   const pollCount = useRef(0)
@@ -39,9 +34,7 @@ export default function PaymentCallback() {
 
     const poll = async () => {
       try {
-        const tx = provider === 'paystack'
-          ? await ApiService.checkPaystackPaymentStatus(ref)
-          : await ApiService.checkMoolrePaymentStatus(ref)
+        const tx = await ApiService.checkPaystackPaymentStatus(ref)
         if (cancelled) return
         setTransaction(tx)
         pollCount.current += 1
@@ -55,14 +48,14 @@ export default function PaymentCallback() {
     poll()
 
     return () => { cancelled = true; clearTimeout(timeoutId) }
-  }, [ref, provider])
+  }, [ref])
 
   const backLink = transaction?.trip_payment?.trip_id
     ? { to: `/app/trips/${transaction.trip_payment.trip_id}`, label: 'Back to trip' }
     : { to: '/app/pricing', label: 'Back to Pricing' }
 
   let heading = 'Confirming your payment…'
-  let body = `We're checking with ${providerName} — this only takes a few seconds.`
+  let body = "We're checking with Paystack — this only takes a few seconds."
   let icon = '⏳'
 
   if (error) {
@@ -75,7 +68,7 @@ export default function PaymentCallback() {
     icon = '✅'
   } else if (transaction?.status === TransactionStatus.FAILED) {
     heading = 'Payment failed'
-    body = `${providerName} reported this payment didn't go through. No charge should have been made — you can try again.`
+    body = "Paystack reported this payment didn't go through. No charge should have been made — you can try again."
     icon = '❌'
   } else if (transaction && pollCount.current >= MAX_POLLS) {
     heading = 'Still processing'

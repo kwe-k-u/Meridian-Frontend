@@ -142,7 +142,7 @@ const featureRows = [
     n: '03',
     label: 'Payments & reporting',
     title: 'Get paid without the back-and-forth',
-    body: 'Once the itinerary is edited and sent, collect deposits or full balances through Paystack or Moolre, and watch revenue, outstanding balances and payouts roll up automatically.',
+    body: 'Once the itinerary is edited and sent, collect deposits or full balances through WeWire, and watch revenue, outstanding balances and payouts roll up automatically.',
     bullets: ['Deposit and balance payment links', 'Automatic invoice reconciliation', 'Monthly revenue and payout reporting'],
     shot: <FinancialsShot />,
     reverse: false,
@@ -168,7 +168,7 @@ const wewireCapabilities = [
 const amenities = [
   { title: 'One inbox, every channel', body: 'WhatsApp, Gmail and Instagram land in a single thread per traveler.' },
   { title: 'AI-drafted itineraries', body: 'Flights, stays and activities proposed in minutes, not hours.' },
-  { title: 'Payments built in', body: 'Deposits and balances collected through Paystack or Moolre.' },
+  { title: 'Payments built in', body: 'Deposits and balances collected through WeWire.' },
   { title: 'Team seats & roles', body: 'Admin, agent, finance and read-only access for your whole team.' },
 ]
 
@@ -204,7 +204,7 @@ const faqs: FaqEntry[] = [
   { q: 'How does the itinerary drafting work?', status: 'live', a: 'Create a trip and tell Meridian the budget, travel style, dates and any notes — typed in or described in your own words — and it drafts flight, stay and activity options for you to review. This is live today. Automatically turning an inbound WhatsApp, Gmail or Instagram message straight into a draft trip is what we\'re building next (see the channels question below).' },
   { q: 'Can I edit the itinerary Meridian drafts?', status: 'live', a: 'Yes — every option is fully editable. Swap a hotel, change dates, adjust the budget, or add and remove activities, before you send anything to a traveler.' },
   { q: 'Which channels can Meridian connect to?', status: 'progress', a: 'We\'re building WhatsApp Business, Gmail and Instagram DM connections so every enquiry lands in one inbox automatically, already linked to a trip. That\'s not live yet — for now, you create trips directly inside Meridian and draft the itinerary from there. Once channel connections ship, an inbound message will land in the inbox and turn into a draft trip on its own.' },
-  { q: 'Can I collect payments through Meridian?', status: 'live', a: 'Yes — send a deposit or balance payment link and your traveler pays through Moolre, reconciled against the trip automatically. Paystack support is on the roadmap and not connected yet; once it ships you\'ll be able to choose either provider.' },
+  { q: 'Can I collect payments through Meridian?', status: 'live', a: 'Yes — send a deposit or balance payment reference and your traveler pays via bank transfer into your WeWire virtual account, reconciled against the trip automatically. Subscription billing runs through Paystack.' },
   { q: 'Is there a free trial?', status: null, a: 'New workspaces get full access with no credit card and nothing locked while you get set up. We\'re still building the 14-day trial timer and the automatic switch to a paid plan afterwards — for now, nothing is time-limited or paused automatically.' },
   { q: 'Can my whole team use one account?', status: 'live', a: 'Yes. The Growth and Enterprise plans include multiple team seats with role-based permissions (admin, agent, finance, read-only), so everyone sees only what they need to.' },
   { q: 'What happens after my trial ends?', status: null, a: 'This is part of the trial timer we\'re building (see above) — once it ships, choosing a plan will carry everything over as-is, and a workspace that doesn\'t upgrade will be paused rather than deleted.' },

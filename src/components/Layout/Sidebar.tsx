@@ -92,11 +92,6 @@ export default function Sidebar({ isOpen, onClose }: Props) {
                   <path d={item.icon}/>
                 </svg>
                 <span className="nav-item-label">{item.label}</span>
-                {item.badge && (
-                  <span className="nav-badge">
-                    {item.badge}
-                  </span>
-                )}
               </div>
             );
           })}

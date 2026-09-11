@@ -1124,6 +1124,10 @@ export interface TripCostResponse {
   }[];
   summary: {
     total_cost: number;
+    // The currency total_cost/total_paid/total_pending/outstanding are all expressed in —
+    // the confirmed (or first) itinerary's own currency; any payment recorded in a different
+    // currency is converted into this one server-side before being summed in.
+    currency: string;
     total_paid: number;
     total_pending: number;
     outstanding: number;
